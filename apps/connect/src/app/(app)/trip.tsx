@@ -21,6 +21,7 @@ import { callingPill, groupRoster, rosterMeta } from '@/features/trip-pack/roste
 import { type ScheduleStep, tripSchedule } from '@/features/trip-pack/schedule';
 import type { TripPack } from '@/features/trip-pack/trip-pack';
 import { resolveTripView, type TripView } from '@/features/trips/trip-view';
+import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { useNow } from '@/lib/use-now';
 
@@ -185,6 +186,7 @@ function Schedule({ now, pack }: { now: number; pack: TripPack }) {
 }
 
 function Contacts({ pack }: { pack: TripPack }) {
+  const me = useStaff().name.trim().toLowerCase();
   if (pack.contacts.length === 0) {
     return (
       <Surface>
@@ -201,7 +203,13 @@ function Contacts({ pack }: { pack: TripPack }) {
           leading={<Avatar name={contact.name} />}
           subtitle={[contact.role, contact.note].filter(Boolean).join(' · ')}
           title={contact.name}
-          trailing={contact.phone ? <CallButton name={contact.name} phone={contact.phone} /> : undefined}
+          trailing={
+            contact.name.trim().toLowerCase() === me ? (
+              <StatusPill kind="live" label="You" />
+            ) : contact.phone ? (
+              <CallButton name={contact.name} phone={contact.phone} />
+            ) : undefined
+          }
         />
       ))}
     </ListCard>

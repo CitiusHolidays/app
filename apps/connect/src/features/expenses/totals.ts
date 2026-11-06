@@ -81,3 +81,12 @@ export function formatAmount(amount: number, currency: string, locale?: string) 
   }
   return new Intl.NumberFormat(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(amount);
 }
+
+/**
+ * The server rows to list under "Submitted": an expense still being handled on this phone is shown
+ * once, in the phone's list with its status and actions, not again as a server draft.
+ */
+export function submittedRows(outbox: OutboxItem[], server: ExpenseRow[]): ExpenseRow[] {
+  const pending = new Set(outbox.filter((item) => item.status !== 'done' && item.expenseId).map((item) => item.expenseId));
+  return server.filter((row) => !pending.has(row.id));
+}

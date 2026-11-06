@@ -8,7 +8,7 @@ import { formatDateRange, Icon, IconTile, ListCard, Placeholder, QuietState, Row
 import { formatMoney } from '@/features/expenses/format';
 import type { OutboxItem } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
-import { categorySplit, formatAmount, type SpendEntry, spendEntries, totalsByCurrency } from '@/features/expenses/totals';
+import { categorySplit, formatAmount, spendEntries, submittedRows, totalsByCurrency, type SpendEntry } from '@/features/expenses/totals';
 import { useStaffSession } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 
@@ -201,6 +201,7 @@ export default function Expenses() {
   const mine = items.filter((item) => !selected || item.jobCardId === selected.id);
   const serverRows = canQuery && server ? server.page : null;
   const entries = spendEntries(mine, serverRows);
+  const submitted = serverRows ? submittedRows(mine, serverRows) : [];
   return (
     <Screen kicker={selected?.jobCode} title="Expenses">
       <SpendCard
@@ -237,14 +238,14 @@ export default function Expenses() {
             <Placeholder lines={3} />
           </Surface>
         ) : null}
-        {canQuery && server && server.isDone && server.page.length === 0 ? (
+        {canQuery && server && server.isDone && submitted.length === 0 ? (
           <Surface>
-            <QuietState text="No expenses on this trip yet." />
+            <QuietState text={mine.length > 0 ? 'Nothing else submitted for this trip yet.' : 'No expenses on this trip yet.'} />
           </Surface>
         ) : null}
-        {canQuery && server && server.page.length > 0 ? (
+        {canQuery && server && submitted.length > 0 ? (
           <ListCard>
-            {server.page.map((row, index) => {
+            {submitted.map((row, index) => {
               const pill = approvalPill(row);
               const title = row.particulars || row.category;
               const day = row.expenseDate || row.createdAt.slice(0, 10);
@@ -254,7 +255,7 @@ export default function Expenses() {
                   accessibilityLabel={[formatMoney(row.amount, row.currency), title, row.particulars ? row.category : null, date, pill.label].filter(Boolean).join(', ')}
                   detail={<StatusPill kind={pill.kind} label={pill.label} />}
                   key={row.id}
-                  last={index === server.page.length - 1}
+                  last={index === submitted.length - 1}
                   leading={<IconTile icon={iconFor(row.category)} />}
                   subtitle={[row.particulars ? row.category : null, date].filter(Boolean).join(' · ')}
                   title={title}

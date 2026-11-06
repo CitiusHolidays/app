@@ -21,6 +21,7 @@ jest.mock('@/features/trips/trips-context', () => ({
   useTrips: () => ({ pack: mockPack, packLoading: false, packProblem: null, refreshPack: async () => undefined, selected: mockJobCard }),
 }));
 jest.mock('@/features/gate/session', () => ({
+  useStaff: () => ({ name: 'Test Tour Manager', roles: ['Tour Manager'], staffId: 'staff_1' }),
   useStaffSession: () => ({ gate: { kind: 'staff', offline: false }, online: true }),
 }));
 
@@ -34,7 +35,7 @@ describe('trip screen', () => {
     mockParams.view = 'contacts';
     await renderWithTheme(<TripPackScreen />);
     expect(screen.getByRole('tab', { name: 'Contacts' })).toBeSelected();
-    expect(screen.getByRole('button', { name: 'Call Test Tour Manager' })).toBeOnTheScreen();
+    expect(screen.getByText('Ops Person')).toBeOnTheScreen();
     expect(screen.queryByText('Asha Example')).not.toBeOnTheScreen();
   });
 
@@ -64,5 +65,12 @@ describe('trip screen', () => {
     );
     expect(screen.getByRole('tab', { name: 'Schedule' })).toBeSelected();
     expect(screen.getByText('Arrive Denpasar.')).toBeOnTheScreen();
+  });
+
+  it('marks the signed-in tour manager as You instead of offering a call', async () => {
+    mockParams.view = 'contacts';
+    await renderWithTheme(<TripPackScreen />);
+    expect(await screen.findByLabelText('You')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Call Test Tour Manager' })).toBeNull();
   });
 });

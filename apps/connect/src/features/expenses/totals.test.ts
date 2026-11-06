@@ -1,7 +1,7 @@
 import type { ExpenseRow } from '@citius/backend';
 
 import type { OutboxItem } from './outbox';
-import { categorySplit, formatAmount, spendEntries, totalsByCurrency } from './totals';
+import { categorySplit, formatAmount, spendEntries, submittedRows, totalsByCurrency } from './totals';
 
 function serverRow(overrides: Partial<ExpenseRow> & Pick<ExpenseRow, 'id' | 'amount'>): ExpenseRow {
   return {
@@ -86,5 +86,18 @@ describe('trip spend', () => {
   it('formats the figure with the currency’s own decimals and no sign', () => {
     expect(formatAmount(1250.5, 'INR', 'en-GB')).toBe('1,250.50');
     expect(formatAmount(1250, 'JPY', 'en-GB')).toBe('1,250');
+  });
+});
+
+describe('submittedRows', () => {
+  it('lists an expense once: a server draft still being handled on this phone is left to the phone list', () => {
+    const server = [serverRow({ amount: 1250, id: 'exp_stuck' }), serverRow({ amount: 300, id: 'exp_other' })];
+    const outbox = [queued({ amount: 1250, expenseId: 'exp_stuck', id: 'q_1', status: 'needsAttention' })];
+    expect(submittedRows(outbox, server).map((row) => row.id)).toEqual(['exp_other']);
+  });
+
+  it('shows the server row again once the phone has finished with it', () => {
+    const server = [serverRow({ amount: 1250, id: 'exp_done' })];
+    expect(submittedRows([queued({ amount: 1250, expenseId: 'exp_done', id: 'q_1', status: 'done' })], server)).toHaveLength(1);
   });
 });

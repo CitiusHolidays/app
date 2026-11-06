@@ -63,6 +63,26 @@ describe('buildTripPack', () => {
   });
 });
 
+describe('buildTripPack labels and contacts', () => {
+  it('drops the Job Card code from batch names that repeat it', () => {
+    const named = batches.map((batch) => ({ ...batch, batchReference: `${commandCenter.jobCard.jobCode} / ${batch.batchCode}` }));
+    const pack = buildTripPack({ batches: named, commandCenter, complete: true, savedAt: SAVED_AT, tourManagers, travellers });
+    expect(pack.batches.map((batch) => batch.label)).toEqual(['B1', 'B2']);
+    expect(pack.roster.find((entry) => entry.id === 't_2')?.batchLabel).toBe('B1');
+  });
+
+  it('lists a tour manager assigned to several batches once', () => {
+    const twice = [
+      ...tourManagers,
+      { ...tourManagers[0]!, id: 'tm_3', reportingInstructions: 'Lobby at 07:30', travelBatchId: 'tb_2' },
+    ];
+    const pack = buildTripPack({ batches, commandCenter, complete: true, savedAt: SAVED_AT, tourManagers: twice, travellers });
+    expect(pack.contacts.filter((contact) => contact.name === 'Test Tour Manager')).toEqual([
+      { name: 'Test Tour Manager', note: 'Lobby at 07:30', phone: '+919000000009', role: 'Tour manager · Bus 1, Bus 2' },
+    ]);
+  });
+});
+
 describe('trip pack TTL', () => {
   it(`expires ${TRIP_PACK_TTL_DAYS} days after the end of the trip's last day`, () => {
     const expiresAt = packExpiresAt({ savedAt: SAVED_AT, travelEndDate: '2026-11-10' });

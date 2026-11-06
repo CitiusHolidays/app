@@ -66,8 +66,15 @@ export function dialable(phone: string | undefined | null) {
   return trimmed.replace(/[()\s]/g, '').startsWith('+') ? `+${digits}` : digits;
 }
 
-function batchLabel(batch: Pick<TravelBatchRow, 'batchCode' | 'batchReference'>) {
-  return batch.batchReference.trim() || batch.batchCode.trim() || 'Batch';
+/** "JC-001 / B01" reads as "B01" inside its own trip: the Job Card code is already on screen. */
+function batchLabel(batch: Pick<TravelBatchRow, 'batchCode' | 'batchReference'>, jobCode = '') {
+  const label = batch.batchReference.trim() || batch.batchCode.trim() || 'Batch';
+  const code = jobCode.trim();
+  if (code && label.startsWith(code)) {
+    const rest = label.slice(code.length).replace(/^[\s/:·\-–—]+/, '').trim();
+    if (rest) return rest;
+  }
+  return label;
 }
 
 const byText = (left: string, right: string) => left.localeCompare(right, undefined, { sensitivity: 'base' });
@@ -104,7 +111,7 @@ export function isPackExpired(pack: Pick<TripPack, 'expiresAt'>, now: number) {
 export function buildTripPack(source: TripPackSource): TripPack {
   const { jobCard, proposal } = source.commandCenter;
   const batches = source.batches
-    .map((batch) => ({ id: batch.id, label: batchLabel(batch) }))
+    .map((batch) => ({ id: batch.id, label: batchLabel(batch, jobCard.jobCode) }))
     .sort((left, right) => byText(left.label, right.label));
   const labelById = new Map(batches.map((batch) => [batch.id, batch.label]));
   const batchOrder = new Map(batches.map((batch, index) => [batch.id, index]));
@@ -129,20 +136,25 @@ export function buildTripPack(source: TripPackSource): TripPack {
       return batchDelta || byText(left.name, right.name);
     });
 
-  const tourManagerContacts: TripContact[] = source.tourManagers
-    .filter((row) => row.status === 'Assigned')
-    .map((row) => {
-      const batch = row.travelBatchId ? labelById.get(row.travelBatchId) : undefined;
-      const contact: TripContact = { name: row.name, role: batch ? `Tour manager · ${batch}` : 'Tour manager' };
-      const phone = dialable(row.phone);
-      if (row.reportingInstructions.trim()) {
-        contact.note = row.reportingInstructions.trim();
-      }
-      if (phone) {
-        contact.phone = phone;
-      }
-      return contact;
-    });
+  // One contact per person: a tour manager assigned to several batches is one entry naming them all.
+  const byPerson = new Map<string, { batches: string[]; name: string; notes: string[]; phone: string }>();
+  for (const row of source.tourManagers.filter((candidate) => candidate.status === 'Assigned')) {
+    const phone = dialable(row.phone);
+    const key = `${row.name.trim().toLowerCase()}|${phone}`;
+    const entry = byPerson.get(key) ?? { batches: [], name: row.name, notes: [], phone };
+    const batch = row.travelBatchId ? labelById.get(row.travelBatchId) : undefined;
+    if (batch && !entry.batches.includes(batch)) entry.batches.push(batch);
+    const note = row.reportingInstructions.trim();
+    if (note && !entry.notes.includes(note)) entry.notes.push(note);
+    byPerson.set(key, entry);
+  }
+  const tourManagerContacts: TripContact[] = [...byPerson.values()].map((entry) => {
+    const sorted = [...entry.batches].sort(byText);
+    const contact: TripContact = { name: entry.name, role: sorted.length ? `Tour manager · ${sorted.join(', ')}` : 'Tour manager' };
+    if (entry.notes.length) contact.note = entry.notes.join(' ');
+    if (entry.phone) contact.phone = entry.phone;
+    return contact;
+  });
   const officeContacts: TripContact[] = [
     { name: jobCard.operationsOwnerName, role: 'Operations' },
     { name: jobCard.ticketingOwnerName, role: 'Ticketing' },

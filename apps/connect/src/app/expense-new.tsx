@@ -184,11 +184,11 @@ export default function NewExpense() {
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {receipt ? (
             <View style={{ flex: 1 }}>
-              <Button label="Retake photo" onPress={() => void takePhoto()} variant="secondary" />
+              <Button label="Retake" onPress={() => void takePhoto()} variant="secondary" />
             </View>
           ) : null}
           <View style={{ flex: 1 }}>
-            <Button label="Choose from library" onPress={() => void choosePhoto()} variant="secondary" />
+            <Button label={receipt ? 'Library' : 'Choose from library'} onPress={() => void choosePhoto()} variant="secondary" />
           </View>
         </View>
       </View>
