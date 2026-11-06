@@ -64,6 +64,9 @@
       "dependencies": {
         "convex": "^1.49.0",
       },
+      "devDependencies": {
+        "@types/node": "^26.6.6",
+      },
     },
     "packages/core": {
       "name": "@citius/core",

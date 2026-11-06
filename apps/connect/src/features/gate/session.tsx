@@ -1,6 +1,7 @@
 import { staffApi, TOUR_MANAGER_ROLE } from '@citius/backend';
 import { useConvexAuth, useQuery } from 'convex/react';
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { clients } from '@/lib/clients';
@@ -26,7 +27,8 @@ function useHasCachedSession(isAuthenticated: boolean) {
   const [cached, setCached] = useState<{ for: boolean; value: boolean } | null>(null);
   useEffect(() => {
     let active = true;
-    const auth = clients?.auth as { getCookie?: () => Promise<string> } | undefined;
+    // Only the Expo plugin stores a session cookie on the device; the web preview has none.
+    const auth = Platform.OS === 'web' ? undefined : (clients?.auth as { getCookie?: () => Promise<string> } | undefined);
     (auth?.getCookie?.() ?? Promise.resolve(''))
       .then((cookie) => {
         if (active) setCached({ for: isAuthenticated, value: Boolean(cookie) });

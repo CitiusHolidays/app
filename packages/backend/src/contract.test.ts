@@ -1,6 +1,4 @@
 /**
- * @jest-environment node
- *
  * Contract check against the website backend, read-only. Set CITIUS_WEBSITE_DIR to a checkout of
  * CitiusHolidays/website to run it; without it the suite is skipped.
  */
