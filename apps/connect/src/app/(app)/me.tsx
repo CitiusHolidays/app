@@ -49,7 +49,8 @@ export default function Me() {
           : 'This build cannot encrypt saved data, so nothing is kept after the app closes and offline use is off.'}
       </Text>
       <Text variant="secondary" tone="muted">
-        No passport or visa files are ever saved here, only their status.
+        Receipt photos wait in the app&apos;s cache, which is left out of phone backups, and are deleted once the expense
+        is sent. No passport or visa files are ever saved here, only their status.
       </Text>
       <Button busy={busy} label="Sign out" onPress={confirmSignOut} variant="secondary" />
     </Screen>

@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import SignIn from '@/app/sign-in';
 import { renderWithTheme } from '@/test/render';
@@ -35,5 +36,18 @@ describe('sign-in screen', () => {
     await fireEvent.changeText(screen.getByLabelText('Password'), 'wrong');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('That email and password do not match a Citius account.')).toBeOnTheScreen();
+  });
+
+  it('reads the error out to VoiceOver on iOS, where live regions do not exist', async () => {
+    expect(Platform.OS).toBe('ios');
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    mockSignInEmail.mockResolvedValue({ error: { status: 429 } });
+    await renderWithTheme(<SignIn />);
+    await fireEvent.changeText(screen.getByLabelText('Work email'), 'tm.one@example.test');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'wrong');
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    await screen.findByText('Too many attempts. Wait a minute, then try again.');
+    expect(announce).toHaveBeenCalledWith('Too many attempts. Wait a minute, then try again.');
+    announce.mockRestore();
   });
 });

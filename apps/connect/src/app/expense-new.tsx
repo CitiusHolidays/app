@@ -16,15 +16,19 @@ import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
 import { logEvent } from '@/lib/safe-log';
+import { useAnnounce } from '@/lib/use-announce';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Receipt photo, amount and currency, saved to the outbox at once; it sends when online. */
 export default function NewExpense() {
   const staff = useStaff();
-  const { selected } = useTrips();
+  const { chosen, trips } = useTrips();
   const { enqueue } = useOutbox();
   const [itemId] = useState(() => localId('exp'));
+  // Only a trip the tour manager picked, never a default guess. It must be in their trip list.
+  const [tripId, setTripId] = useState<string | null>(chosen?.id ?? null);
+  const trip = trips.find((candidate) => candidate.id === tripId) ?? null;
   const [receipt, setReceipt] = useState<ReceiptFile | null>(null);
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<ExpenseCurrency>('INR');
@@ -32,6 +36,7 @@ export default function NewExpense() {
   const [expenseDate, setExpenseDate] = useState(() => localDay(Date.now()));
   const [particulars, setParticulars] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  useAnnounce(problem);
   const [busy, setBusy] = useState(false);
 
   const keep = async (result: ImagePicker.ImagePickerResult) => {
@@ -78,8 +83,9 @@ export default function NewExpense() {
       !category && 'a category',
       !DATE_PATTERN.test(expenseDate) && 'a date as YYYY-MM-DD',
     ].filter(Boolean);
-    if (!selected) {
-      setProblem('Choose a trip on Today first.');
+    if (!trip) {
+      setProblem('Choose the trip this expense is for.');
+      haptic('error');
       return;
     }
     if (missing.length || !receipt || !value || !category) {
@@ -92,9 +98,10 @@ export default function NewExpense() {
       createOutboxItem({
         draft: { amount: value, category, currency, expenseDate, paidBy: staff.name, particulars: particulars.trim() },
         id: itemId,
-        jobCardId: selected.id,
+        jobCardId: trip.id,
         now: Date.now(),
         receipt,
+        staffId: staff.staffId,
       })
     );
     haptic('success');
@@ -103,9 +110,20 @@ export default function NewExpense() {
 
   return (
     <Screen>
-      <Text variant="secondary" tone="muted">
-        {selected ? `For ${selected.jobCode} · ${selected.clientName}` : 'Choose a trip on Today first.'}
-      </Text>
+      {trips.length > 0 ? (
+        <ChipRow label="Trip">
+          {trips.map((candidate) => (
+            <Chip
+              key={candidate.id}
+              label={`${candidate.jobCode} · ${candidate.clientName}`}
+              onPress={() => setTripId(candidate.id)}
+              selected={candidate.id === tripId}
+            />
+          ))}
+        </ChipRow>
+      ) : (
+        <Text tone="muted">No trips are assigned to you, so there is no trip to file an expense against.</Text>
+      )}
       {receipt ? (
         <Image
           accessibilityLabel="Receipt photo"

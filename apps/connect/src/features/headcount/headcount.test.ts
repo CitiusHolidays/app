@@ -54,6 +54,12 @@ describe('headcount', () => {
     expect(headcountAnswer(summarize(state, roster))).toBe('All 3 here');
   });
 
+  it('never says everyone is here when the roster did not fully load', () => {
+    let state = startHeadcount('jc1', MORNING);
+    for (const id of ['a', 'b', 'c']) state = togglePresent(state, id);
+    expect(headcountAnswer(summarize(state, roster), { complete: false })).toBe('3 of 3 here');
+  });
+
   it('keys local days by the device calendar', () => {
     expect(localDay(new Date(2026, 0, 5, 23, 59).getTime())).toBe('2026-01-05');
   });

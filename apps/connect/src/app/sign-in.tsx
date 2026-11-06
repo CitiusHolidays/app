@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Screen, TextField } from '@/components/kit';
 import { clients } from '@/lib/clients';
 import { logEvent } from '@/lib/safe-log';
+import { useAnnounce } from '@/lib/use-announce';
 
 /** Staff sign in with their existing email and password. There is no sign-up in this app. */
 export default function SignIn() {
@@ -12,6 +13,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  useAnnounce(problem);
 
   const submit = async () => {
     if (!clients || busy) return;

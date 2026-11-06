@@ -2,8 +2,18 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import type { ReceiptFile } from './outbox';
 
-/** Receipts live in the app's documents folder until their expense is submitted. */
+/**
+ * Receipts wait in the app's cache folder until their expense is submitted. Unlike documents,
+ * the cache is left out of iCloud and Android Auto Backup, so receipt photos never leave the
+ * phone in a backup. The OS may clear the cache when storage runs very low; the outbox then
+ * asks the tour manager to add the expense again (see "Receipt file missing").
+ */
 function receiptsDirectory() {
+  return new Directory(Paths.cache, 'receipts');
+}
+
+/** Where earlier builds kept receipts (backed up); emptied on sign-out. */
+function legacyReceiptsDirectory() {
   return new Directory(Paths.document, 'receipts');
 }
 
@@ -49,9 +59,10 @@ export function deleteReceipt(receipt: ReceiptFile) {
 }
 
 export function deleteAllReceipts() {
-  const directory = receiptsDirectory();
-  if (directory.exists) {
-    directory.delete();
+  for (const directory of [receiptsDirectory(), legacyReceiptsDirectory()]) {
+    if (directory.exists) {
+      directory.delete();
+    }
   }
 }
 

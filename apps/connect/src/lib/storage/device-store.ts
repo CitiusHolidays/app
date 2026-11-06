@@ -51,16 +51,26 @@ async function openKeyed() {
 }
 
 /**
+ * SQLCipher reports a wrong key as SQLITE_NOTADB ("file is not a database") on the first read.
+ * Only that error proves the stored key cannot open the file.
+ */
+export function isWrongKeyError(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  return /file is not a database|SQLITE_NOTADB/i.test(message);
+}
+
+/**
  * Opens the encrypted store. If the database cannot be read with the stored key (for example the
  * key was removed), the cache is deleted and recreated: it only holds data the server can resend,
- * plus the expense outbox, whose receipt files live separately.
+ * plus the expense outbox, whose receipt files live separately. Any other error (a locked file,
+ * low disk) is passed on and the app runs from memory, so a transient failure deletes nothing.
  */
 export async function openDeviceStore(): Promise<KeyValueStore> {
   let db: SQLite.SQLiteDatabase;
   try {
     db = await openKeyed();
   } catch (error) {
-    if (error instanceof EncryptionUnavailableError) {
+    if (!isWrongKeyError(error)) {
       throw error;
     }
     await SQLite.deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);

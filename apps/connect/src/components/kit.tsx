@@ -129,7 +129,11 @@ export function TextField({ hint, label, style, ...rest }: TextInputProps & { hi
   );
 }
 
-/** A tappable row with a title, a subline and an optional trailing element. */
+/**
+ * A row with a title, a subline and an optional trailing element. With `onPress` the whole row is
+ * one button. Without it, the text is one accessibility element and the trailing element (a Call
+ * button, say) stays separately reachable: an `accessible` wrapper would hide it from VoiceOver.
+ */
 export function Row({
   accessibilityLabel,
   onPress,
@@ -144,29 +148,37 @@ export function Row({
   trailing?: ReactNode;
 }) {
   const theme = useAppTheme();
-  const body = (
-    <View style={[styles.row, { borderBottomColor: theme.color.border, minHeight: theme.minTarget }]}>
-      <View style={styles.rowText}>
-        <Text variant="bodyStrong">{title}</Text>
-        {subtitle ? (
-          <Text variant="secondary" tone="muted">
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {trailing}
-    </View>
+  const text = (
+    <>
+      <Text variant="bodyStrong">{title}</Text>
+      {subtitle ? (
+        <Text variant="secondary" tone="muted">
+          {subtitle}
+        </Text>
+      ) : null}
+    </>
   );
+  const rowStyle = [styles.row, { borderBottomColor: theme.color.border, minHeight: theme.minTarget }];
   if (!onPress) {
     return (
-      <View accessible accessibilityLabel={accessibilityLabel}>
-        {body}
+      <View style={rowStyle}>
+        <View
+          accessible
+          accessibilityLabel={accessibilityLabel ?? [title, subtitle].filter(Boolean).join(', ')}
+          style={styles.rowText}
+        >
+          {text}
+        </View>
+        {trailing}
       </View>
     );
   }
   return (
     <PressableScale accessibilityLabel={accessibilityLabel ?? title} accessibilityRole="button" onPress={onPress}>
-      {body}
+      <View style={rowStyle}>
+        <View style={styles.rowText}>{text}</View>
+        {trailing}
+      </View>
     </PressableScale>
   );
 }
@@ -197,7 +209,7 @@ export function CallButton({ name, phone }: { name: string; phone: string }) {
   );
 }
 
-/** Static grey bars at real size while something loads; no shimmer (D9). */
+/** Static grey bars at real size while something loads; no shimmer. */
 export function Placeholder({ lines = 3 }: { lines?: number }) {
   const theme = useAppTheme();
   return (

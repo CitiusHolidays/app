@@ -1,6 +1,6 @@
 /**
  * Shared craft layer: spacing, motion, haptic moments, type roles and the accessibility floor.
- * Palettes, radii and density are per app (FRONTEND-HANDOFF D11): the staff palette lives in
+ * Palettes, radii and density are per app: the staff palette lives in
  * `staffTheme`; the customer app adds its own theme later without touching these.
  */
 
@@ -13,7 +13,7 @@ export const space = {
   xxl: 32,
 } as const;
 
-/** Motion stance D9: feedback, not performance. Values are in milliseconds. */
+/** Motion is feedback, not performance. Values are in milliseconds. */
 export const motion = {
   contentInsert: 200,
   easeOut: [0.23, 1, 0.32, 1] as const,
@@ -40,7 +40,7 @@ export interface AppTheme {
     warningSoft: string;
   };
   radius: { control: number; surface: number };
-  /** Minimum touch target in points (staff 44, customer 48; D10). */
+  /** Minimum touch target in points (staff 44, customer 48). */
   minTarget: number;
   /** Side margin of the phone frame. */
   frame: number;

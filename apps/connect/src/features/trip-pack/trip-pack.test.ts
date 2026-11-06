@@ -3,8 +3,8 @@ import { batches, commandCenter, tourManagers, travellers } from './fixtures';
 
 const SAVED_AT = new Date(2026, 10, 6, 7, 12).getTime();
 
-function build() {
-  return buildTripPack({ batches, commandCenter, savedAt: SAVED_AT, tourManagers, travellers });
+function build(complete = true) {
+  return buildTripPack({ batches, commandCenter, complete, savedAt: SAVED_AT, tourManagers, travellers });
 }
 
 describe('buildTripPack', () => {
@@ -48,6 +48,11 @@ describe('buildTripPack', () => {
       { name: 'Ops Person', role: 'Operations' },
       { name: 'Ticketing Person', role: 'Ticketing' },
     ]);
+  });
+
+  it('records whether every roster and contact page was loaded', () => {
+    expect(build().complete).toBe(true);
+    expect(build(false).complete).toBe(false);
   });
 
   it('labels batches by reference, sorted', () => {

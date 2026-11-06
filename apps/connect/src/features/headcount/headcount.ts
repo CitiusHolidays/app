@@ -73,10 +73,16 @@ export function summarize(state: HeadcountState, roster: RosterEntry[], batchId?
   };
 }
 
-/** The Today answer: "38 of 41 here", or "All 41 here". */
-export function headcountAnswer(summary: Pick<HeadcountSummary, 'expected' | 'present'>) {
-  if (summary.expected > 0 && summary.present === summary.expected) {
+/**
+ * The Today answer: "38 of 41 here", or "All 41 here". Over a roster that did not fully load,
+ * "All" would be a promise the app cannot keep, so it is never said.
+ */
+export function headcountAnswer(summary: Pick<HeadcountSummary, 'expected' | 'present'>, roster: { complete: boolean } = { complete: true }) {
+  if (roster.complete && summary.expected > 0 && summary.present === summary.expected) {
     return `All ${summary.expected} here`;
   }
   return `${summary.present} of ${summary.expected} here`;
 }
+
+/** Shown beside any count taken over a roster that did not fully load. */
+export const PARTIAL_ROSTER_NOTICE = 'Not every traveller could be loaded. Refresh the trip pack before relying on this count.';

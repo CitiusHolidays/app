@@ -1,6 +1,6 @@
 /**
- * Push notifications are not built yet (plan item P9: content-free pushes, provider decided in
- * spike Q6). When they are, this is the only place that changes:
+ * Push notifications are not built yet (pushes will carry no content; the provider is still to be
+ * chosen). When they are, this is the only place that changes:
  *
  * 1. `registerForPush` asks permission, gets the device token and sends it to a new Convex
  *    mutation (to be added on the website backend).

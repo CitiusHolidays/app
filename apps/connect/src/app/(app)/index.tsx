@@ -1,13 +1,10 @@
-import { staffApi } from '@citius/backend';
 import { Banner, Button, StatusPill, space, Surface, Text } from '@citius/ui';
-import { useQuery } from 'convex/react';
 import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { FreshnessStamp } from '@/components/freshness';
 import { CallButton, formatDateRange, Placeholder, Row, Screen, SectionTitle } from '@/components/kit';
-import { useStaff, useStaffSession } from '@/features/gate/session';
-import { headcountAnswer, summarize } from '@/features/headcount/headcount';
+import { headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
 import { useHeadcount } from '@/features/headcount/use-headcount';
 import { dayOfTrip, tripPhase } from '@/features/trips/trips';
 import { type TripSummary, useTrips } from '@/features/trips/trips-context';
@@ -44,17 +41,23 @@ function HeadcountAnswer() {
     );
   }
   const summary = summarize(state, pack.roster);
+  const answer = headcountAnswer(summary, pack);
   const missingShown = summary.missing.slice(0, MISSING_SHOWN);
   return (
     <Surface style={{ gap: space.md }}>
-      <View accessible accessibilityLabel={`${headcountAnswer(summary)} at ${summary.stopLabel}`}>
+      <View accessible accessibilityLabel={`${answer} at ${summary.stopLabel}`}>
         <Text variant="answer" tabular>
-          {headcountAnswer(summary)}
+          {answer}
         </Text>
         <Text variant="secondary" tone="muted">
           {summary.stopLabel}
         </Text>
       </View>
+      {pack.complete ? null : (
+        <Text tone="warning" variant="secondary">
+          {PARTIAL_ROSTER_NOTICE}
+        </Text>
+      )}
       {summary.missing.length > 0 ? (
         <View>
           <Text variant="bodyStrong" tone="warning">
@@ -90,9 +93,22 @@ function HeadcountAnswer() {
   );
 }
 
-function TourManagerToday() {
-  const { packProblem, pack, refreshPack, refreshTrips, refreshing, selectTrip, selected, trips, tripsLoaded, tripsProblem, tripsSavedAt } =
-    useTrips();
+/** "Is everyone here?" for the trip on tour, and the tour manager's trips. */
+export default function Today() {
+  const {
+    packProblem,
+    pack,
+    refreshPack,
+    refreshTrips,
+    refreshing,
+    selectTrip,
+    selected,
+    trips,
+    tripsComplete,
+    tripsLoaded,
+    tripsProblem,
+    tripsSavedAt,
+  } = useTrips();
   const now = useNow();
   return (
     <Screen
@@ -115,8 +131,13 @@ function TourManagerToday() {
       <HeadcountAnswer />
       <SectionTitle>Your trips</SectionTitle>
       {!tripsLoaded ? <Placeholder lines={4} /> : null}
-      {tripsLoaded && trips.length === 0 ? (
+      {tripsLoaded && tripsComplete && trips.length === 0 ? (
         <Text tone="muted">No trips are assigned to you. Operations assigns tour managers on the Job Card.</Text>
+      ) : null}
+      {tripsLoaded && !tripsComplete ? (
+        <Text tone="warning" variant="secondary">
+          Not every trip could be loaded, so some of yours may be missing here. Pull down to try again.
+        </Text>
       ) : null}
       <View>
         {trips.map((trip) => {
@@ -135,36 +156,4 @@ function TourManagerToday() {
       </View>
     </Screen>
   );
-}
-
-/** Office staff: "What needs my decision today?" as a short dated digest. */
-function OfficeToday() {
-  const staff = useStaff();
-  const notifications = useQuery(staffApi.listNotifications.ref, { limit: 20 });
-  const unread = (notifications ?? []).filter((item) => !item.readAt).slice(0, 5);
-  return (
-    <Screen title="My work today">
-      <Text variant="secondary" tone="muted">
-        Signed in as {staff.name} · {staff.roles.join(', ') || 'No role yet'}
-      </Text>
-      {notifications === undefined ? <Placeholder lines={3} /> : null}
-      {notifications && unread.length === 0 ? <Text>Nothing new needs you. Your inbox is up to date.</Text> : null}
-      {unread.map((item) => (
-        <Row
-          key={item.id}
-          onPress={() => router.push({ params: { id: item.id }, pathname: '/notification/[id]' })}
-          subtitle={item.body}
-          title={item.title}
-        />
-      ))}
-      <Text variant="secondary" tone="muted">
-        Trip-day tools (trip pack, headcount, announcements) appear for tour managers.
-      </Text>
-    </Screen>
-  );
-}
-
-export default function Today() {
-  const { isTourManager } = useStaffSession();
-  return isTourManager ? <TourManagerToday /> : <OfficeToday />;
 }

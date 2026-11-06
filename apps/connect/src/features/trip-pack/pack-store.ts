@@ -9,6 +9,10 @@ export async function savePack(store: KeyValueStore, pack: TripPack) {
   await store.setJSON(key(pack.jobCardId), pack);
 }
 
+export async function deletePack(store: KeyValueStore, jobCardId: string) {
+  await store.delete(key(jobCardId));
+}
+
 /** Returns the saved pack, or null when there is none, it expired (deleted now) or its format is old. */
 export async function loadPack(store: KeyValueStore, jobCardId: string, now: number) {
   const pack = await store.getJSON<TripPack>(key(jobCardId));

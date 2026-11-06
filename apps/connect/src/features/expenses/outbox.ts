@@ -28,6 +28,11 @@ export interface ReceiptFile {
 export interface OutboxItem {
   attempts: number;
   createdAt: number;
+  /**
+   * Set (and saved) just before the create request is sent. Once set, the server may hold the
+   * expense even if the app never heard back, so the next attempt looks it up by ref first.
+   */
+  createStartedAt?: number;
   draft: ExpenseDraft;
   expenseId?: string;
   id: string;
@@ -37,6 +42,8 @@ export interface OutboxItem {
   problem?: string;
   receipt: ReceiptFile;
   stage: OutboxStage;
+  /** The staff member who queued it; only they may send it. */
+  staffId: string;
   status: OutboxStatus;
   storageId?: string;
   updatedAt: number;
@@ -45,7 +52,10 @@ export interface OutboxItem {
 export interface OutboxDeps {
   attachProof: (args: { expenseId: string; fileName: string; fileSize: number; mimeType: string; storageId: string }) => Promise<void>;
   createExpense: (args: CreateExpenseArgs) => Promise<string>;
-  /** Finds an expense this device already created for the item (matched on the ref in its notes). */
+  /**
+   * Finds an expense this device already created for the item (matched on the ref in its notes).
+   * Best effort: it searches a bounded number of pages of the trip's expenses.
+   */
   findExpenseByRef: (jobCardId: string, ref: string) => Promise<string | null>;
   generateUploadUrl: (expenseId: string) => Promise<string>;
   now: () => number;
@@ -66,6 +76,7 @@ export function createOutboxItem(input: {
   jobCardId: string;
   now: number;
   receipt: ReceiptFile;
+  staffId: string;
 }): OutboxItem {
   return {
     attempts: 0,
@@ -76,13 +87,15 @@ export function createOutboxItem(input: {
     nextAttemptAt: input.now,
     receipt: input.receipt,
     stage: 'queued',
+    staffId: input.staffId,
     status: 'pending',
     updatedAt: input.now,
   };
 }
 
-export function dueItems(items: OutboxItem[], now: number) {
-  return items.filter((item) => item.status === 'pending' && item.nextAttemptAt <= now);
+/** Pending items whose time has come, queued by this staff member. Nobody sends another's. */
+export function dueItems(items: OutboxItem[], now: number, staffId: string) {
+  return items.filter((item) => item.staffId === staffId && item.status === 'pending' && item.nextAttemptAt <= now);
 }
 
 export function retryNow(item: OutboxItem, now: number): OutboxItem {
@@ -96,6 +109,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
   [/not assigned to you|job card not found/i, 'This trip is no longer assigned to you.'],
   [/file type|mime/i, 'This receipt file type is not accepted. Take a new photo.'],
   [/15 MB|between 1 byte/i, 'This receipt file is too large. Take a new photo.'],
+  [/receipt file missing/i, 'The receipt photo is no longer on this phone. Delete this expense and add it again.'],
   [/forbidden/i, 'Your account is not allowed to submit this expense.'],
 ];
 
@@ -116,20 +130,25 @@ function backoff(attempts: number) {
 async function advance(item: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> {
   switch (item.stage) {
     case 'queued': {
-      const existing = item.attempts > 0 ? await deps.findExpenseByRef(item.jobCardId, refFor(item)) : null;
-      const expenseId =
-        existing ??
-        (await deps.createExpense({
-          amount: item.draft.amount,
-          category: item.draft.category,
-          currency: item.draft.currency,
-          expenseDate: item.draft.expenseDate,
-          jobCardId: item.jobCardId,
-          notes: refFor(item),
-          paidBy: item.draft.paidBy,
-          particulars: item.draft.particulars,
-        }));
-      return { ...item, expenseId, stage: 'created' };
+      const existing =
+        item.createStartedAt !== undefined ? await deps.findExpenseByRef(item.jobCardId, refFor(item)) : null;
+      if (existing) {
+        return { ...item, expenseId: existing, stage: 'created' };
+      }
+      // Saved before sending: if the app dies mid-request, the next run knows to look first.
+      const inFlight = { ...item, createStartedAt: deps.now() };
+      await deps.save(inFlight);
+      const expenseId = await deps.createExpense({
+        amount: item.draft.amount,
+        category: item.draft.category,
+        currency: item.draft.currency,
+        expenseDate: item.draft.expenseDate,
+        jobCardId: item.jobCardId,
+        notes: refFor(item),
+        paidBy: item.draft.paidBy,
+        particulars: item.draft.particulars,
+      });
+      return { ...inFlight, expenseId, stage: 'created' };
     }
     case 'created': {
       const expenseId = requireExpenseId(item);
@@ -177,11 +196,19 @@ export async function processItem(start: OutboxItem, deps: OutboxDeps): Promise<
       }
     } catch (error) {
       const now = deps.now();
+      // A create that may have reached the server must be looked up next time, whatever failed.
+      const tried = item.stage === 'queued' && item.createStartedAt === undefined ? { ...item, createStartedAt: now } : item;
       if (isServerRefusal(error)) {
-        return { ...item, problem: refusalMessage(error), status: 'needsAttention', updatedAt: now };
+        const stuck: OutboxItem = { ...tried, problem: refusalMessage(error), status: 'needsAttention', updatedAt: now };
+        if (item.stage === 'uploaded') {
+          // The server deletes an uploaded file it refuses to attach, so a retry must upload again.
+          const { storageId: _deleted, ...rest } = stuck;
+          return { ...rest, stage: 'created' };
+        }
+        return stuck;
       }
       const attempts = item.attempts + 1;
-      return { ...item, attempts, nextAttemptAt: now + backoff(attempts), updatedAt: now };
+      return { ...tried, attempts, nextAttemptAt: now + backoff(attempts), updatedAt: now };
     }
   }
   return item;

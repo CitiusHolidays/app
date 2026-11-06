@@ -1,99 +1,162 @@
-import { staffApi, TOUR_MANAGER_ROLE } from '@citius/backend';
+import { type PortalAccess, staffApi } from '@citius/backend';
 import { useConvexAuth, useQuery } from 'convex/react';
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { useAppStore, useStoredValue } from '@/lib/app-store';
+import { clearLocalAuthSession } from '@/lib/auth-storage';
 import { clients } from '@/lib/clients';
 import { useOnline } from '@/lib/network';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
 import { deleteAllReceipts } from '@/features/expenses/receipt-files';
 
-import { type Gate, resolveGate, type VerifiedStaff } from './resolve-gate';
+import {
+  type AuthSessionState,
+  type Gate,
+  resolveGate,
+  sessionRejectedByServer,
+  type VerifiedStaff,
+  verificationStep,
+} from './resolve-gate';
+import { signOutDevice } from './sign-out';
 
 const VERIFIED_KEY = 'session:verifiedStaff';
 
 interface StaffSession {
   gate: Gate;
-  isTourManager: boolean;
   online: boolean;
+  /** Access was withdrawn: deletes the cached verification and everything saved on this phone. */
+  revoke: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const SessionContext = createContext<StaffSession | null>(null);
 
-function useHasCachedSession(isAuthenticated: boolean) {
-  const [cached, setCached] = useState<{ for: boolean; value: boolean } | null>(null);
+const NO_SESSION: AuthSessionState = { data: null, error: null, isPending: false };
+const noSession = () => NO_SESSION;
+/** Better Auth's session state; `clients` is fixed at start-up, so the hook choice never changes. */
+const useAuthSession: () => AuthSessionState = clients ? clients.auth.useSession : noSession;
+
+function useHasCachedSession(isAuthenticated: boolean, epoch: number) {
+  const [cached, setCached] = useState<{ for: string; value: boolean } | null>(null);
+  const checkFor = `${isAuthenticated}:${epoch}`;
   useEffect(() => {
     let active = true;
     // Only the Expo plugin stores a session cookie on the device; the web preview has none.
     const auth = Platform.OS === 'web' ? undefined : (clients?.auth as { getCookie?: () => Promise<string> } | undefined);
     (auth?.getCookie?.() ?? Promise.resolve(''))
       .then((cookie) => {
-        if (active) setCached({ for: isAuthenticated, value: Boolean(cookie) });
+        if (active) setCached({ for: checkFor, value: Boolean(cookie) });
       })
       .catch(() => {
-        if (active) setCached({ for: isAuthenticated, value: false });
+        if (active) setCached({ for: checkFor, value: false });
       });
     return () => {
       active = false;
     };
-  }, [isAuthenticated]);
-  return cached?.for === isAuthenticated ? cached.value : null;
+  }, [checkFor]);
+  return cached?.for === checkFor ? cached.value : null;
 }
 
 export function StaffSessionProvider({ children }: { children: ReactNode }) {
-  const { live, store } = useAppStore();
+  const { live } = useAppStore();
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const authSession = useAuthSession();
   const online = useOnline();
   const access = useQuery(staffApi.getMyPortalAccess.ref, isAuthenticated ? {} : 'skip');
   const [storedVerified, , verifiedLoaded] = useStoredValue<VerifiedStaff | null>(VERIFIED_KEY, null);
-  const hasCachedSession = useHasCachedSession(isAuthenticated);
+  const [authEpoch, setAuthEpoch] = useState(0);
+  const hasCachedSession = useHasCachedSession(isAuthenticated, authEpoch);
+  const [signingOut, setSigningOut] = useState(false);
   const now = useNow();
-  const [sessionVerified, setSessionVerified] = useState<VerifiedStaff | null>(null);
+  // Wipes and verification writes run one at a time, in order.
+  const queue = useRef<Promise<void>>(Promise.resolve());
 
-  const verifiedNow = access?.allowed && access.staffId ? access : null;
-  if (verifiedNow && sessionVerified?.staffId !== verifiedNow.staffId) {
-    setSessionVerified({ name: verifiedNow.name, roles: verifiedNow.roles, staffId: verifiedNow.staffId ?? '', verifiedAt: now });
-  }
+  const serially = useCallback((task: () => Promise<void>) => {
+    const run = queue.current.then(task, task);
+    queue.current = run.catch((error: unknown) => logEvent('session.task-failed', error));
+    return run;
+  }, []);
 
+  const wipeLocalData = useCallback(async () => {
+    await live.wipe();
+    deleteAllReceipts();
+  }, [live]);
+
+  const latestAccess = useRef(access);
   useEffect(() => {
-    if (sessionVerified) {
-      live.set(VERIFIED_KEY, sessionVerified);
-    }
-  }, [live, sessionVerified]);
+    latestAccess.current = access;
+  }, [access]);
 
-  const gate = resolveGate({
-    access: access ?? undefined,
-    authLoading: isLoading || !verifiedLoaded || hasCachedSession === null,
-    hasCachedSession: Boolean(hasCachedSession),
-    isAuthenticated,
-    lastVerified: sessionVerified ?? storedVerified,
-    now,
-    online,
-  });
+  /** Applies a server answer: save the verification, or wipe if access was withdrawn. */
+  const applyAccess = useCallback(
+    async (answer: PortalAccess) => {
+      const stored = live.snapshot(VERIFIED_KEY)?.value as VerifiedStaff | null | undefined;
+      const step = verificationStep(answer, stored, Date.now());
+      if (step.kind === 'revoke') {
+        logEvent('session.access-revoked');
+        await wipeLocalData();
+      } else if (step.kind === 'store') {
+        if (step.wipeFirst) {
+          await wipeLocalData();
+        }
+        await live.set(VERIFIED_KEY, step.record);
+      }
+    },
+    [live, wipeLocalData]
+  );
+
+  // Every fresh server answer is a verification.
+  useEffect(() => {
+    if (access && verifiedLoaded) {
+      void serially(() => applyAccess(access));
+    }
+  }, [access, applyAccess, serially, verifiedLoaded]);
+
+  const revoke = useCallback(
+    () =>
+      serially(async () => {
+        logEvent('session.access-revoked');
+        await wipeLocalData();
+        // If the server still says this is a tour manager, start again from an empty phone.
+        const answer = latestAccess.current;
+        if (answer) await applyAccess(answer);
+      }),
+    [applyAccess, serially, wipeLocalData]
+  );
 
   const signOut = async () => {
+    setSigningOut(true);
     try {
-      await clients?.auth.signOut();
-    } catch (error) {
-      logEvent('session.sign-out-failed', error);
+      await serially(() =>
+        signOutDevice({
+          clearSession: clearLocalAuthSession,
+          revoke: async () => {
+            await clients?.auth.signOut();
+          },
+          wipeData: wipeLocalData,
+        })
+      );
+    } finally {
+      setAuthEpoch((value) => value + 1);
+      setSigningOut(false);
     }
-    setSessionVerified(null);
-    try {
-      await store.clear();
-    } catch (error) {
-      logEvent('session.clear-failed', error);
-    }
-    live.reset();
-    deleteAllReceipts();
   };
 
-  const isTourManager = gate.kind === 'staff' && gate.staff.roles.includes(TOUR_MANAGER_ROLE);
-  return (
-    <SessionContext.Provider value={{ gate, isTourManager, online, signOut }}>{children}</SessionContext.Provider>
-  );
+  const gate: Gate = signingOut
+    ? { kind: 'loading' }
+    : resolveGate({
+        access: access ?? undefined,
+        authLoading: isLoading || !verifiedLoaded || hasCachedSession === null,
+        hasCachedSession: Boolean(hasCachedSession),
+        isAuthenticated,
+        lastVerified: storedVerified,
+        now,
+        sessionRejected: sessionRejectedByServer(authSession),
+      });
+
+  return <SessionContext.Provider value={{ gate, online, revoke, signOut }}>{children}</SessionContext.Provider>;
 }
 
 export function useStaffSession() {
@@ -104,7 +167,7 @@ export function useStaffSession() {
   return value;
 }
 
-/** The signed-in staff member; only valid inside the staff part of the app. */
+/** The signed-in tour manager; only valid inside the staff part of the app. */
 export function useStaff() {
   const { gate } = useStaffSession();
   if (gate.kind !== 'staff') {

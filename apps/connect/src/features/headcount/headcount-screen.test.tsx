@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 
 import Headcount from '@/app/headcount';
 import { batches, commandCenter, tourManagers, travellers } from '@/features/trip-pack/fixtures';
@@ -10,13 +11,19 @@ jest.mock('@/lib/storage/device-store', () => ({
   openDeviceStore: async () => jest.requireActual('@/lib/storage/memory-store').createMemoryStore(),
 }));
 
-const mockPack = buildTripPack({ batches, commandCenter, savedAt: Date.now(), tourManagers, travellers });
+const mockPack = buildTripPack({ batches, commandCenter, complete: true, savedAt: Date.now(), tourManagers, travellers });
 jest.mock('@/features/trips/trips-context', () => ({
   useTrips: () => ({ pack: mockPack, selected: { id: mockPack.jobCardId } }),
 }));
 
 describe('headcount screen', () => {
-  it('counts travellers as they are tapped and lists who is not marked', async () => {
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+  });
+  afterEach(() => announce.mockRestore());
+
+  it('counts travellers as they are tapped, lists who is not marked, and announces the count on iOS', async () => {
     await renderWithTheme(
       <AppStoreProvider fallback={null}>
         <Headcount />
@@ -26,6 +33,7 @@ describe('headcount screen', () => {
     await fireEvent.press(screen.getByRole('checkbox', { name: 'Asha Example' }));
     expect(await screen.findByText('1 of 3 here')).toBeOnTheScreen();
     expect(screen.getByRole('checkbox', { name: 'Asha Example' })).toBeChecked();
+    expect(announce).toHaveBeenCalledWith('1 of 3 here');
 
     await fireEvent.press(screen.getByRole('radio', { name: 'Bus 2' }));
     expect(await screen.findByText('0 of 1 here')).toBeOnTheScreen();

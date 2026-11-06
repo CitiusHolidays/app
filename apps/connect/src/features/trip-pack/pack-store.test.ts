@@ -5,7 +5,7 @@ import { loadPack, purgeExpiredPacks, savePack } from './pack-store';
 import { buildTripPack } from './trip-pack';
 
 const SAVED_AT = new Date(2026, 10, 6, 7, 12).getTime();
-const pack = buildTripPack({ batches, commandCenter, savedAt: SAVED_AT, tourManagers, travellers });
+const pack = buildTripPack({ batches, commandCenter, complete: true, savedAt: SAVED_AT, tourManagers, travellers });
 
 describe('trip pack store', () => {
   it('returns a saved pack until it expires, then deletes it on read', async () => {

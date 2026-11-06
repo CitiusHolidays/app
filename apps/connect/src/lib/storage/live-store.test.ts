@@ -20,10 +20,38 @@ describe('LiveStore', () => {
     expect(seen).toEqual([{ n: 1 }, { n: 2 }]);
   });
 
-  it('keeps keys loaded but empty after a reset', async () => {
-    const live = new LiveStore(createMemoryStore());
-    live.set('k', 'v');
-    live.reset();
+  it('wipes the store and keeps every key loaded but empty', async () => {
+    const store = createMemoryStore();
+    const live = new LiveStore(store);
+    await live.set('k', 'v');
+    await live.wipe();
     expect(live.snapshot('k')).toEqual({ value: null });
+    expect(await store.getJSON('k')).toBeNull();
+  });
+
+  it('resolves set only once the value is on disk', async () => {
+    const store = createMemoryStore();
+    const live = new LiveStore(store);
+    await live.set('k', { n: 3 });
+    expect(await store.getJSON('k')).toEqual({ n: 3 });
+  });
+
+  it('does not let a read that started before a wipe bring old data back', async () => {
+    const store = createMemoryStore();
+    await store.setJSON('k', 'user A');
+    const live = new LiveStore(store);
+    live.ensureLoaded('k');
+    await live.wipe();
+    await flush();
+    expect(live.snapshot('k')).toEqual({ value: null });
+  });
+
+  it('fences work that started before a wipe', async () => {
+    const live = new LiveStore(createMemoryStore());
+    const stillCurrent = live.fence();
+    expect(stillCurrent()).toBe(true);
+    await live.wipe();
+    expect(stillCurrent()).toBe(false);
+    expect(live.fence()()).toBe(true);
   });
 });

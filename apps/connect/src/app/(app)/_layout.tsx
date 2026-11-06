@@ -1,18 +1,15 @@
 import { staffTheme } from '@citius/ui';
 import { NativeTabs } from 'expo-router/native-tabs';
 
-import { useStaffSession } from '@/features/gate/session';
-
-/** Staff tabs, composed by server role. Tabs never animate between each other (D2). */
+/** Tour manager tabs. Tabs never animate between each other. */
 export default function StaffTabs() {
-  const { isTourManager } = useStaffSession();
   return (
     <NativeTabs labelStyle={{ selected: { color: staffTheme.color.primary } }} tintColor={staffTheme.color.primary}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="today" sf="sun.max" />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger hidden={!isTourManager} name="trip">
+      <NativeTabs.Trigger name="trip">
         <NativeTabs.Trigger.Label>Trip</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="luggage" sf="suitcase" />
       </NativeTabs.Trigger>

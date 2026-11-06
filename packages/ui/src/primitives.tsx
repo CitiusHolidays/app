@@ -83,7 +83,7 @@ export interface PressableScaleProps extends PressableProps {
 }
 
 /**
- * Press feedback D9: scale 0.97 in 120ms on press-in, 160ms back. Reduced motion keeps an opacity
+ * Press feedback: scale 0.97 in 120ms on press-in, 160ms back. Reduced motion keeps an opacity
  * change and drops the scale. Runs as a Reanimated CSS transition on the UI thread.
  */
 export function PressableScale({

@@ -3,7 +3,7 @@ import { useConvex } from 'convex/react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useStaffSession } from '@/features/gate/session';
-import { loadPack, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
+import { deletePack, loadPack, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
 import { buildTripPack, type TripPack } from '@/features/trip-pack/trip-pack';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
@@ -23,6 +23,11 @@ interface TripsCache {
 }
 
 interface TripsValue {
+  /**
+   * The trip the tour manager picked on Today, if it is still in their list. Unlike `selected`
+   * it is never a default guess, so anything filed against a trip (an expense) uses this.
+   */
+  chosen: TripSummary | null;
   pack: TripPack | null;
   packLoading: boolean;
   packProblem: string | null;
@@ -32,6 +37,8 @@ interface TripsValue {
   selectTrip: (jobCardId: string) => void;
   selected: TripSummary | null;
   trips: TripSummary[];
+  /** False when the server had more pages than the app reads: the list may be missing trips. */
+  tripsComplete: boolean;
   tripsLoaded: boolean;
   tripsProblem: string | null;
   tripsSavedAt: number | null;
@@ -58,7 +65,7 @@ const firstPage = (cursor: string | null): PaginationOpts => ({ cursor, numItems
 
 export function TripsProvider({ children }: { children: ReactNode }) {
   const convex = useConvex();
-  const { store } = useAppStore();
+  const { live, store } = useAppStore();
   const { gate, online } = useStaffSession();
   const canReachServer = online && gate.kind === 'staff' && !gate.offline;
   const [cache, setCache, tripsLoaded] = useStoredValue<TripsCache | null>('trips:list', null);
@@ -74,19 +81,24 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const now = useNow();
   const trips = sortTrips(cache?.trips ?? [], now);
-  const selected = trips.find((trip) => trip.id === selectedId) ?? pickDefaultTrip(trips, now);
+  const chosen = trips.find((trip) => trip.id === selectedId) ?? null;
+  const selected = chosen ?? pickDefaultTrip(trips, now);
 
   const refreshTrips = useCallback(async () => {
     if (!canReachServer) {
       return;
     }
     setRefreshing(true);
+    // Signing out (or a change of user) wipes the store; a refresh begun before that must not
+    // write the previous user's trips back.
+    const current = live.fence();
     try {
       const result = await collectPages(
         (cursor) => convex.query(staffApi.listJobCards.ref, { paginationOpts: firstPage(cursor) }),
         MAX_PAGES
       );
-      setCache({ complete: result.complete, savedAt: Date.now(), trips: result.rows.map(toSummary) });
+      if (!current()) return;
+      void setCache({ complete: result.complete, savedAt: Date.now(), trips: result.rows.map(toSummary) });
       setTripsProblem(null);
     } catch (error) {
       logEvent('trips.refresh-failed', error);
@@ -94,7 +106,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [canReachServer, convex, setCache]);
+  }, [canReachServer, convex, live, setCache]);
 
   const selectedTripId = selected?.id ?? null;
 
@@ -103,6 +115,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       return;
     }
     const jobCardId = selectedTripId;
+    const current = live.fence();
     try {
       const [commandCenter, batches, travellers, tourManagers] = await Promise.all([
         convex.query(staffApi.getJobCardCommandCenter.ref, { jobCardId }),
@@ -110,21 +123,28 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         collectPages((cursor) => convex.query(staffApi.listTravellers.ref, { jobCardId, paginationOpts: firstPage(cursor) }), MAX_PAGES),
         collectPages((cursor) => convex.query(staffApi.listTourManagers.ref, { jobCardId, paginationOpts: firstPage(cursor) }), MAX_PAGES),
       ]);
+      if (!current()) return;
       const pack = buildTripPack({
         batches: batches.rows,
         commandCenter,
+        complete: batches.complete && travellers.complete && tourManagers.complete,
         savedAt: Date.now(),
         tourManagers: tourManagers.rows,
         travellers: travellers.rows,
       });
       await savePack(store, pack);
+      if (!current()) {
+        // The wipe ran while the pack was being written; remove what landed after it.
+        await deletePack(store, jobCardId);
+        return;
+      }
       setPackState({ jobCardId, loading: false, pack });
       setPackProblem(null);
     } catch (error) {
       logEvent('pack.refresh-failed', error);
       setPackProblem('Could not update the trip pack. Showing the saved copy.');
     }
-  }, [canReachServer, convex, selectedTripId, store]);
+  }, [canReachServer, convex, live, selectedTripId, store]);
 
   useEffect(() => {
     let active = true;
@@ -155,10 +175,11 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     }
   }, [canReachServer, refreshTrips]);
 
-  const current = packState.jobCardId === selectedTripId ? packState : { loading: true, pack: null };
+  const shown = packState.jobCardId === selectedTripId ? packState : { loading: true, pack: null };
   const value: TripsValue = {
-    pack: current.pack,
-    packLoading: current.loading,
+    chosen,
+    pack: shown.pack,
+    packLoading: shown.loading,
     packProblem,
     refreshPack,
     refreshTrips,
@@ -166,6 +187,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     selectTrip: (jobCardId) => setSelectedId(jobCardId),
     selected,
     trips,
+    tripsComplete: cache?.complete ?? true,
     tripsLoaded,
     tripsProblem,
     tripsSavedAt: cache?.savedAt ?? null,

@@ -66,6 +66,11 @@ export default function TripPackScreen() {
           <Text variant="secondary" tabular tone="muted">
             {pack.roster.filter((entry) => entry.travelling).length} travelling · {pack.batches.length} travel batches
           </Text>
+          {pack.complete ? null : (
+            <Text tone="warning" variant="secondary">
+              Not every traveller or contact could be loaded. Pull down to refresh the trip pack.
+            </Text>
+          )}
           {pack.roster.map((entry) => (
             <Row
               accessibilityLabel={`${entry.name}, ${rosterSubtitle(entry)}, calling ${entry.callingStatus || 'not recorded'}`}

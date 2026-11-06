@@ -3,7 +3,7 @@ import { batches, commandCenter, tourManagers, travellers } from '@/features/tri
 
 import { ackSummary, composeShareText, createAnnouncement, recipientsFor, toggleAck } from './announcements';
 
-const pack = buildTripPack({ batches, commandCenter, savedAt: 0, tourManagers, travellers });
+const pack = buildTripPack({ batches, commandCenter, complete: true, savedAt: 0, tourManagers, travellers });
 
 describe('announcements', () => {
   it('targets the whole trip or one travel batch, travelling people only', () => {

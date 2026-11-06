@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Chip, ChipRow, haptic, Screen, TextField } from '@/components/kit';
-import { headcountAnswer, summarize } from '@/features/headcount/headcount';
+import { headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
 import { useHeadcount } from '@/features/headcount/use-headcount';
 import { useTrips } from '@/features/trips/trips-context';
+import { useAnnounce } from '@/lib/use-announce';
 
 /** Tap each traveller who is here. Works offline; marks stay on this phone for today. */
 export default function Headcount() {
@@ -15,15 +16,17 @@ export default function Headcount() {
   const [batchId, setBatchId] = useState<string | undefined>(undefined);
   const [missingOnly, setMissingOnly] = useState(false);
   const [stopName, setStopName] = useState('');
+  const summary = pack && state ? summarize(state, pack.roster, batchId) : null;
+  const answer = summary && pack ? headcountAnswer(summary, pack) : null;
+  useAnnounce(answer);
 
-  if (!pack || !state) {
+  if (!pack || !state || !summary) {
     return (
       <Screen>
         <Text tone="muted">Save the trip pack first (Trip tab), then take a headcount.</Text>
       </Screen>
     );
   }
-  const summary = summarize(state, pack.roster, batchId);
   const present = new Set(state.stops.at(-1)?.present ?? []);
   const people = pack.roster.filter(
     (entry) => entry.travelling && (!batchId || entry.batchId === batchId) && (!missingOnly || !present.has(entry.id))
@@ -33,12 +36,17 @@ export default function Headcount() {
     <Screen>
       <View accessibilityLiveRegion="polite" accessible>
         <Text variant="answer" tabular>
-          {headcountAnswer(summary)}
+          {answer}
         </Text>
         <Text variant="secondary" tone="muted">
           {summary.stopLabel} · {summary.missing.length} not marked
         </Text>
       </View>
+      {pack.complete ? null : (
+        <Text tone="warning" variant="secondary">
+          {PARTIAL_ROSTER_NOTICE}
+        </Text>
+      )}
       {pack.batches.length > 0 ? (
         <ChipRow label="Travel batch">
           <Chip label="Everyone" onPress={() => setBatchId(undefined)} selected={!batchId} />

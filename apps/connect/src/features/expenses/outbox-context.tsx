@@ -4,7 +4,8 @@ import { AppState } from 'react-native';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
 
 import { useStaffSession } from '@/features/gate/session';
-import { useStoredValue } from '@/lib/app-store';
+import { collectPages } from '@/features/trips/trips';
+import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
 
 import { dueItems, type OutboxDeps, type OutboxItem, outboxKey, processItem, retryNow } from './outbox';
@@ -20,6 +21,8 @@ interface OutboxValue {
 
 const OutboxContext = createContext<OutboxValue | null>(null);
 const RUN_INTERVAL_MS = 30_000;
+/** How far back the duplicate check looks (pages of 100 of the trip's expenses). */
+const REF_LOOKUP_PAGES = 5;
 const KEEP_DONE_MS = 3 * 24 * 60 * 60 * 1000;
 
 function replace(items: OutboxItem[], next: OutboxItem) {
@@ -29,7 +32,9 @@ function replace(items: OutboxItem[], next: OutboxItem) {
 export function OutboxProvider({ children }: { children: ReactNode }) {
   const convex = useConvex();
   const { gate, online } = useStaffSession();
+  const { live } = useAppStore();
   const canSend = online && gate.kind === 'staff' && !gate.offline;
+  const staffId = gate.kind === 'staff' ? gate.staff.staffId : null;
   const [items, setItems, loaded] = useStoredValue<OutboxItem[]>(outboxKey, []);
   const itemsRef = useRef(items);
   const running = useRef(false);
@@ -39,19 +44,30 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const run = useCallback(async () => {
-    if (running.current || !canSend || !loaded) {
+    if (running.current || !canSend || !loaded || !staffId) {
       return;
     }
     running.current = true;
-    const save = async (item: OutboxItem) => setItems((previous) => replace(previous, item));
+    // Sign-out or a change of user wipes the store; this run must not write items back after it.
+    const current = live.fence();
+    const save = async (item: OutboxItem) => {
+      if (!current()) {
+        // Stops processItem before its next request: the item no longer exists on this phone.
+        throw new Error('Outbox was cleared');
+      }
+      await setItems((previous) => replace(previous, item));
+    };
     const deps: OutboxDeps = {
       attachProof: async (args) => {
         await convex.action(staffApi.attachExpenseProof.ref, args);
       },
       createExpense: async (args) => (await convex.mutation(staffApi.createExpense.ref, args)).id,
       findExpenseByRef: async (jobCardId, ref) => {
-        const page = await convex.query(staffApi.listExpenses.ref, { jobCardId, paginationOpts: { cursor: null, numItems: 100 } });
-        return page.page.find((row) => row.notes === ref)?.id ?? null;
+        const { rows } = await collectPages(
+          (cursor) => convex.query(staffApi.listExpenses.ref, { jobCardId, paginationOpts: { cursor, numItems: 100 } }),
+          REF_LOOKUP_PAGES
+        );
+        return rows.find((row) => row.notes === ref)?.id ?? null;
       },
       generateUploadUrl: (expenseId) => convex.action(staffApi.generateExpenseUploadUrl.ref, { expenseId }),
       now: () => Date.now(),
@@ -62,8 +78,10 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
       uploadReceipt,
     };
     try {
-      for (const item of dueItems(itemsRef.current, Date.now())) {
+      for (const item of dueItems(itemsRef.current, Date.now(), staffId)) {
+        if (!current()) break;
         const result = await processItem(item, deps);
+        if (!current()) break;
         await save(result);
         if (result.status === 'done') {
           deleteReceipt(result.receipt);
@@ -77,7 +95,7 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
     } finally {
       running.current = false;
     }
-  }, [canSend, convex, loaded, setItems]);
+  }, [canSend, convex, live, loaded, setItems, staffId]);
 
   useEffect(() => {
     if (!canSend) {

@@ -1,6 +1,7 @@
 import type { CommandCenter, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
 
-export const TRIP_PACK_VERSION = 1;
+/** Version 2 added `complete`; older packs are ignored and fetched again. */
+export const TRIP_PACK_VERSION = 2;
 export const TRIP_PACK_TTL_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -30,6 +31,8 @@ export interface TripContact {
 export interface TripPack {
   batches: { id: string; label: string }[];
   clientName: string;
+  /** False when a batch, traveller or contact list hit the page budget: the roster may be short. */
+  complete: boolean;
   contacts: TripContact[];
   destination: string;
   expiresAt: number;
@@ -47,6 +50,8 @@ export interface TripPack {
 export interface TripPackSource {
   batches: TravelBatchRow[];
   commandCenter: CommandCenter;
+  /** Every list was read to the end. */
+  complete: boolean;
   savedAt: number;
   tourManagers: TourManagerRow[];
   travellers: TravellerRow[];
@@ -146,6 +151,7 @@ export function buildTripPack(source: TripPackSource): TripPack {
   return {
     batches,
     clientName: jobCard.clientName,
+    complete: source.complete,
     contacts: [...tourManagerContacts, ...officeContacts],
     destination: jobCard.destination,
     expiresAt: packExpiresAt({ savedAt: source.savedAt, travelEndDate: jobCard.travelEndDate }),

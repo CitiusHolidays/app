@@ -1,56 +1,51 @@
-# Welcome to your Expo app 👋
+# Citius Connect
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The staff app for Citius Holidays tour managers. A tour manager signs in with their Citius staff
+account and sees only the trips assigned to them: the trip pack (roster, schedule and contacts),
+headcounts, announcements to travellers, and expenses with receipt photos. Trip data is saved on
+the phone in an encrypted store, so the app keeps working offline on tour for up to 14 days after
+the account was last verified with the server.
 
-## Get started
+Only staff with the Tour Manager role can use the app. Other staff are shown a screen that says so.
 
-1. Install dependencies
+The backend is the Citius website's Convex deployment. The functions the app calls are listed in
+`packages/backend`.
+
+## Setup
+
+1. Install dependencies from the repository root:
 
    ```bash
-   npm install
+   bun install
    ```
 
-2. Start the app
+2. Copy `.env.example` to `.env.local` and fill in the two Convex URLs for your deployment.
 
-   ```bash
-   npx expo start
-   ```
+## Run a development build
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Sign-in only works from a development or release build, because the backend trusts the app's
+`citiusconnect://` scheme as its auth origin. Expo Go uses its own scheme, so it is not supported.
 
 ```bash
-npm run reset-project
+bunx expo run:ios
+bunx expo run:android
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## Checks
 
-### Other setup steps
+Run these from `apps/connect`:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+bunx tsc --noEmit
+bunx expo lint
+bunx jest
+```
 
-## Learn more
+`bun run typecheck` from the repository root type-checks every package.
 
-To learn more about developing your project with Expo, look at the following resources:
+The backend contract test compares `packages/backend` with a checkout of the website. It is skipped
+unless `CITIUS_WEBSITE_DIR` points at that checkout:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+CITIUS_WEBSITE_DIR=/path/to/website bunx jest
+```

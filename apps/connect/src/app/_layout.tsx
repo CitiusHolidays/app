@@ -3,9 +3,10 @@ import { staffTheme, Text, ThemeProvider } from '@citius/ui';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import { AppErrorBoundary } from '@/components/error-boundary';
 import { OutboxProvider } from '@/features/expenses/outbox-context';
 import { StaffSessionProvider, useStaffSession } from '@/features/gate/session';
 import { TripsProvider } from '@/features/trips/trips-context';
@@ -43,6 +44,18 @@ function MissingConfiguration() {
   );
 }
 
+/** Trip data and the expense outbox exist only for a verified tour manager. */
+function StaffData({ children, enabled }: { children: ReactNode; enabled: boolean }) {
+  if (!enabled) {
+    return children;
+  }
+  return (
+    <TripsProvider>
+      <OutboxProvider>{children}</OutboxProvider>
+    </TripsProvider>
+  );
+}
+
 function Shell() {
   const { gate } = useStaffSession();
   useEffect(() => {
@@ -55,32 +68,43 @@ function Shell() {
   }
   const staff = gate.kind === 'staff';
   return (
-    <TripsProvider>
-      <OutboxProvider>
-        <Stack
-          screenOptions={{
-            contentStyle: { backgroundColor: staffTheme.color.ground },
-            headerBackButtonDisplayMode: 'minimal',
-            headerTintColor: staffTheme.color.primary,
-          }}
-        >
-          <Stack.Protected guard={gate.kind === 'signedOut'}>
-            <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-          </Stack.Protected>
-          <Stack.Protected guard={gate.kind === 'notStaff'}>
-            <Stack.Screen name="not-staff" options={{ headerShown: false }} />
-          </Stack.Protected>
-          <Stack.Protected guard={staff}>
-            <Stack.Screen name="(app)" options={{ headerShown: false }} />
-            <Stack.Screen name="headcount" options={{ title: 'Headcount' }} />
-            <Stack.Screen name="announce" options={{ presentation: 'modal', title: 'New announcement' }} />
-            <Stack.Screen name="announcement/[id]" options={{ title: 'Announcement' }} />
-            <Stack.Screen name="expense-new" options={{ presentation: 'modal', title: 'New expense' }} />
-            <Stack.Screen name="notification/[id]" options={{ title: 'Notification' }} />
-          </Stack.Protected>
-        </Stack>
-      </OutboxProvider>
-    </TripsProvider>
+    <StaffData enabled={staff}>
+      <Stack
+        screenOptions={{
+          contentStyle: { backgroundColor: staffTheme.color.ground },
+          headerBackButtonDisplayMode: 'minimal',
+          headerTintColor: staffTheme.color.primary,
+        }}
+      >
+        <Stack.Protected guard={gate.kind === 'signedOut'}>
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={gate.kind === 'notStaff'}>
+          <Stack.Screen name="not-staff" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={gate.kind === 'notTourManager'}>
+          <Stack.Screen name="not-tour-manager" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={staff}>
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+          <Stack.Screen name="headcount" options={{ title: 'Headcount' }} />
+          <Stack.Screen name="announce" options={{ presentation: 'modal', title: 'New announcement' }} />
+          <Stack.Screen name="announcement/[id]" options={{ title: 'Announcement' }} />
+          <Stack.Screen name="expense-new" options={{ presentation: 'modal', title: 'New expense' }} />
+          <Stack.Screen name="notification/[id]" options={{ title: 'Notification' }} />
+        </Stack.Protected>
+      </Stack>
+    </StaffData>
+  );
+}
+
+/** A query error (FORBIDDEN after deactivation, say) shows a recover / sign-out screen. */
+function GuardedShell() {
+  const { revoke, signOut } = useStaffSession();
+  return (
+    <AppErrorBoundary onRevoked={revoke} onSignOut={signOut}>
+      <Shell />
+    </AppErrorBoundary>
   );
 }
 
@@ -98,7 +122,7 @@ export default function RootLayout() {
       <ConvexBetterAuthProvider authClient={clients.auth} client={clients.convex}>
         <AppStoreProvider fallback={<Waiting />}>
           <StaffSessionProvider>
-            <Shell />
+            <GuardedShell />
           </StaffSessionProvider>
         </AppStoreProvider>
       </ConvexBetterAuthProvider>

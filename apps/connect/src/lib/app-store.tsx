@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useState, useSyncExternalStore } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { openDeviceStore } from './storage/device-store';
 import type { KeyValueStore } from './storage/kv';
@@ -60,14 +60,20 @@ export function useStoredValue<T>(key: string | null, initial: T) {
   useEffect(() => {
     if (key) live.ensureLoaded(key);
   }, [key, live]);
+  // The fallback is fixed on first render, so `update` keeps one identity per key.
+  const [fallback] = useState(() => initial);
   const loaded = snapshot !== undefined;
-  const value = (loaded && snapshot.value !== null ? snapshot.value : initial) as T;
-  const update = (next: T | ((previous: T) => T)) => {
-    if (!key) return;
-    const current = live.snapshot(key);
-    const base = (current && current.value !== null ? current.value : initial) as T;
-    const resolved = typeof next === 'function' ? (next as (previous: T) => T)(base) : next;
-    live.set(key, resolved);
-  };
+  const value = (loaded && snapshot.value !== null ? snapshot.value : fallback) as T;
+  /** Updates every reader at once; the promise settles when the value is on disk. */
+  const update = useCallback(
+    (next: T | ((previous: T) => T)): Promise<void> => {
+      if (!key) return Promise.resolve();
+      const current = live.snapshot(key);
+      const base = (current && current.value !== null ? current.value : fallback) as T;
+      const resolved = typeof next === 'function' ? (next as (previous: T) => T)(base) : next;
+      return live.set(key, resolved);
+    },
+    [fallback, key, live]
+  );
   return [value, update, loaded] as const;
 }

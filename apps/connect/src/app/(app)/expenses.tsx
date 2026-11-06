@@ -59,7 +59,7 @@ export default function Expenses() {
       <SectionTitle>Submitted for this trip</SectionTitle>
       {!canQuery ? <Text tone="muted">Connect to the internet to see expenses already on the server.</Text> : null}
       {canQuery && server === undefined ? <Text tone="muted">Loading…</Text> : null}
-      {server && server.page.length === 0 ? <Text tone="muted">No expenses on this trip yet.</Text> : null}
+      {server && server.isDone && server.page.length === 0 ? <Text tone="muted">No expenses on this trip yet.</Text> : null}
       {server?.page.map((row) => (
         <Row
           key={row.id}
@@ -73,6 +73,11 @@ export default function Expenses() {
           }
         />
       ))}
+      {server && !server.isDone ? (
+        <Text tone="muted" variant="secondary">
+          More expenses for this trip are on the server than are shown here. Check the full list on the Citius portal.
+        </Text>
+      ) : null}
     </Screen>
   );
 }
