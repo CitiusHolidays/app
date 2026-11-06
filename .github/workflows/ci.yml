@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, lint and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck every package
+        run: bun run typecheck
+
+      - name: Lint
+        working-directory: apps/connect
+        run: bunx expo lint
+
+      - name: Tests
+        working-directory: apps/connect
+        run: bunx jest --ci
+
+      # The contract suite checks every backend function the app calls exists in the website repo's
+      # main branch (public). A pull request can name another website ref in its body as
+      # `website-ref: <branch>` when it depends on unmerged backend work.
+      - name: Pick the website ref
+        id: ref
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          ref="$(printf '%s' "$BODY" | sed -n 's/^website-ref: *\([A-Za-z0-9._\/-]*\).*/\1/p' | head -1)"
+          echo "ref=${ref:-main}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the website
+        uses: actions/checkout@v4
+        with:
+          repository: CitiusHolidays/website
+          ref: ${{ steps.ref.outputs.ref }}
+          path: website
+          sparse-checkout: convex
+
+      - name: Contract suite against the website
+        working-directory: apps/connect
+        env:
+          CITIUS_WEBSITE_DIR: ${{ github.workspace }}/website
+        run: bunx jest --ci contract
