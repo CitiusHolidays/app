@@ -1,0 +1,12 @@
+{
+  "name": "citius-app",
+  "private": true,
+  "packageManager": "bun@1.4.3",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "connect": "bun --cwd apps/connect start",
+    "typecheck": "bun --filter '*' typecheck",
+    "test": "bun --filter '*' test",
+    "lint": "bun --filter '*' lint"
+  }
+}

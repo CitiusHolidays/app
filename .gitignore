@@ -1,0 +1,9 @@
+# Private research and planning material stays local. Only app code and tests go in this repo.
+research/
+.DS_Store
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.env*.local
