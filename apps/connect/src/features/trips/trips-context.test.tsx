@@ -13,6 +13,7 @@ import { TripsProvider, useTrips } from './trips-context';
 let mockStore: KeyValueStore;
 let mockHold: Promise<void> | null = null;
 let mockTravellerPagesDone = true;
+let mockTripPagesDone = true;
 
 const page = <Row,>(rows: Row[], isDone = true) => ({ continueCursor: 'next', isDone, page: rows });
 
@@ -28,7 +29,7 @@ jest.mock('convex/react', () => ({ useConvex: () => mockConvex }));
 async function serverQuery(ref: unknown) {
   const name = getFunctionName(ref as Parameters<typeof getFunctionName>[0]);
   if (mockHold) await mockHold;
-  if (name === 'crm/jobCards:listPage') return page([commandCenter.jobCard]);
+  if (name === 'crm/jobCards:listMyAssignedPage') return page([commandCenter.jobCard], mockTripPagesDone);
   if (name === 'crm/jobCards:getCommandCenter') return commandCenter;
   if (name === 'crm/jobCards:listTravelBatches') return page(batches);
   if (name === 'crm/travellers:listPage') return page(travellers, mockTravellerPagesDone);
@@ -45,7 +46,7 @@ function Probe() {
     handles.live = live;
   });
   return (
-    <Text>{`trips:${value.trips.length} pack:${value.pack ? (value.pack.complete ? 'complete' : 'partial') : 'none'} chosen:${value.chosen?.id ?? 'none'}`}</Text>
+    <Text>{`trips:${value.trips.length}${value.tripsComplete ? '' : ' (partial)'} pack:${value.pack ? (value.pack.complete ? 'complete' : 'partial') : 'none'} chosen:${value.chosen?.id ?? 'none'}`}</Text>
   );
 }
 
@@ -63,10 +64,39 @@ beforeEach(() => {
   mockStore = jest.requireActual('@/lib/storage/memory-store').createMemoryStore();
   mockHold = null;
   mockTravellerPagesDone = true;
+  mockTripPagesDone = true;
   mockQuery.mockImplementation(serverQuery);
 });
 
+const calledNames = () => mockQuery.mock.calls.map(([ref]) => getFunctionName(ref as Parameters<typeof getFunctionName>[0]));
+
 describe('trips provider', () => {
+  it("lists only the tour manager's own assigned trips, never the general Job Card list", async () => {
+    await renderTrips();
+    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    expect(calledNames()).toContain('crm/jobCards:listMyAssignedPage');
+    expect(calledNames()).not.toContain('crm/jobCards:listPage');
+    expect(await mockStore.getJSON('trips:list')).toMatchObject({ complete: true, scope: 'assigned', trips: [{ id: commandCenter.jobCard.id }] });
+  });
+
+  it('keeps paging the assigned list and says when it stopped before the end', async () => {
+    mockTripPagesDone = false;
+    await renderTrips();
+    expect(await screen.findByText('trips:10 (partial) pack:complete chosen:none')).toBeOnTheScreen();
+  });
+
+  it('does not show a trip list saved from the general Job Card list by an earlier version', async () => {
+    mockQuery.mockImplementation(async (ref: unknown) => {
+      if (getFunctionName(ref as Parameters<typeof getFunctionName>[0]) === 'crm/jobCards:listMyAssignedPage') {
+        return new Promise(() => undefined);
+      }
+      return serverQuery(ref);
+    });
+    await mockStore.setJSON('trips:list', { complete: true, savedAt: 1, trips: [{ ...commandCenter.jobCard, id: 'jc_not_mine' }] });
+    await renderTrips();
+    expect(await screen.findByText('trips:0 pack:none chosen:none')).toBeOnTheScreen();
+  });
+
   it('saves the trip list and pack, and never treats the default trip as chosen', async () => {
     await renderTrips();
     expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();

@@ -657,6 +657,43 @@ export function CallButton({ name, phone }: { name: string; phone: string }) {
   );
 }
 
+/** A small pill-shaped action with a label, sized for a thumb, for a row's trailing slot. */
+export function ActionPill({
+  accessibilityLabel,
+  icon,
+  label,
+  onPress,
+}: {
+  accessibilityLabel?: string;
+  icon: { ios: string; md: string };
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+  return (
+    <PressableScale
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityRole="button"
+      hitSlop={4}
+      onPress={onPress}
+      style={{
+        alignItems: 'center',
+        backgroundColor: theme.color.surface,
+        borderColor: theme.color.border,
+        borderRadius: theme.radius.chip,
+        borderWidth: 1,
+        flexDirection: 'row',
+        gap: 6,
+        minHeight: theme.minTarget,
+        paddingHorizontal: space.md,
+      }}
+    >
+      <Icon ios={icon.ios} md={icon.md} size={15} />
+      <Text variant="label">{label}</Text>
+    </PressableScale>
+  );
+}
+
 /** One quiet sentence with one mark: an empty or all-clear state inside its block. */
 export function QuietState({ good, text }: { good?: boolean; text: string }) {
   const theme = useAppTheme();

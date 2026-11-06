@@ -1,9 +1,14 @@
 import { anyApi, type DefaultFunctionArgs, type FunctionReference } from "convex/server";
 
 import type {
+  AnnouncementArgs,
   CommandCenter,
   CreateExpenseArgs,
   ExpenseRow,
+  FieldPassportFile,
+  FieldPassports,
+  FieldPushResult,
+  HeadcountStopArgs,
   IdResult,
   JobCardRow,
   NotificationRow,
@@ -69,7 +74,7 @@ export const staffApi = {
     "mutation",
     "crm/finance",
     "createExpense",
-    "create:expenses; a Job Card must be visible to the caller (getVisibleJob)"
+    "create:expenses; a Job Card must be visible to the caller (getVisibleJob); clientRef replays return the first expense"
   ),
   generateExpenseUploadUrl: define<"action", { expenseId: string }, string>(
     "action",
@@ -95,6 +100,12 @@ export const staffApi = {
     "getDetail",
     "view:jobCards; canSeeJobCardRecord, null when not visible"
   ),
+  getFieldPassportFile: define<"action", { travellerId: string }, FieldPassportFile>(
+    "action",
+    "crm/fieldPassportActions",
+    "getFieldPassportFile",
+    "Tour Manager role; portal file rate limit; own group; trip window (IST); writes a fieldPassportAccessAudit row before reading"
+  ),
   getMyPortalAccess: define<"query", EmptyArgs, PortalAccess>(
     "query",
     "crm/staff",
@@ -111,15 +122,21 @@ export const staffApi = {
     "listExpenses",
     "view:expenses; each row filtered by Job Card visibility or creator/approver"
   ),
-  listJobCards: define<
+  listFieldPassports: define<"query", { jobCardId: string; referenceNow: number }, FieldPassports>(
+    "query",
+    "crm/fieldPassports",
+    "listFieldPassports",
+    "view:travellers; Tour Manager role with an own assignment on the Job Card; own group only; flags and window times, never a file"
+  ),
+  listMyAssignedJobCards: define<
     "query",
     { paginationOpts: PaginationOpts; status?: string },
     PaginationResult<JobCardRow>
   >(
     "query",
     "crm/jobCards",
-    "listPage",
-    "view:jobCards; each row filtered by canSeeJobCardRecord after pagination"
+    "listMyAssignedPage",
+    "view:jobCards; the caller's own Assigned Tour Manager assignments, one row per Job Card, each checked with canSeeJobCardRecord"
   ),
   listNotifications: define<"query", { limit?: number }, NotificationRow[]>(
     "query",
@@ -155,7 +172,19 @@ export const staffApi = {
     "query",
     "crm/travellers",
     "listPage",
-    "view:travellers; each row filtered by canSeeJobCardRecord on its Job Card"
+    "view:travellers; canSeeJobCardRecord; a Tour Manager-only grant sees only their own group (assigned batches, or the whole Job Card for a batchless assignment)"
+  ),
+  pushHeadcountStop: define<"mutation", HeadcountStopArgs, FieldPushResult>(
+    "mutation",
+    "crm/fieldSync",
+    "pushHeadcountStop",
+    "view:travellers; Job Card visible; batch inside the caller's group; upsert keyed by recorder, Job Card and clientStopId"
+  ),
+  recordAnnouncement: define<"mutation", AnnouncementArgs, FieldPushResult>(
+    "mutation",
+    "crm/fieldSync",
+    "recordAnnouncement",
+    "view:travellers; Job Card visible; batch inside the caller's group; upsert keyed by author, Job Card and clientAnnouncementId"
   ),
   submitExpense: define<"mutation", { expenseId: string }, IdResult>(
     "mutation",

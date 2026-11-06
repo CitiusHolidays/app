@@ -12,13 +12,16 @@ export interface Announcement {
   /** Who it was for when it was shared; the checklist does not change if the roster does. */
   recipientIds: string[];
   sharedAt: number;
+  /** When the checklist last changed on the phone; the office keeps the latest. Older entries lack it. */
+  updatedAt?: number;
 }
 
 export const announcementsKey = (jobCardId: string) => `announcements:${jobCardId}`;
 
 export function audienceLabel(pack: TripPack, audience: Audience) {
   if (audience.kind === 'trip') {
-    return 'Whole trip';
+    // The roster is the tour manager's own group (the server narrows it), not the whole Job Card.
+    return 'your group';
   }
   return pack.batches.find((batch) => batch.id === audience.batchId)?.label ?? 'Travel batch';
 }
@@ -49,17 +52,18 @@ export function createAnnouncement(input: {
     jobCardId: input.pack.jobCardId,
     recipientIds: recipientsFor(input.pack, input.audience).map((entry) => entry.id),
     sharedAt: input.now,
+    updatedAt: input.now,
   };
 }
 
-export function toggleAck(announcement: Announcement, travellerId: string): Announcement {
+export function toggleAck(announcement: Announcement, travellerId: string, now?: number): Announcement {
   if (!announcement.recipientIds.includes(travellerId)) {
     return announcement;
   }
   const acknowledgedIds = announcement.acknowledgedIds.includes(travellerId)
     ? announcement.acknowledgedIds.filter((id) => id !== travellerId)
     : [...announcement.acknowledgedIds, travellerId];
-  return { ...announcement, acknowledgedIds };
+  return now === undefined ? { ...announcement, acknowledgedIds } : { ...announcement, acknowledgedIds, updatedAt: now };
 }
 
 export function ackSummary(announcement: Announcement) {

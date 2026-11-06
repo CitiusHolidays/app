@@ -5,9 +5,11 @@ export interface HeadcountStop {
   label: string;
   present: string[];
   startedAt: number;
+  /** When this stop last changed on the phone; the office keeps the latest. Older stops lack it. */
+  updatedAt?: number;
 }
 
-/** One trip, one local day. Kept on the device only; it never syncs. */
+/** One trip, one local day. The phone keeps the record; each stop is also sent to the office. */
 export interface HeadcountState {
   day: string;
   jobCardId: string;
@@ -34,7 +36,7 @@ export function startHeadcount(jobCardId: string, now: number): HeadcountState {
   return {
     day: localDay(now),
     jobCardId,
-    stops: [{ id: `stop-${now}`, label: 'Start of day', present: [], startedAt: now }],
+    stops: [{ id: `stop-${now}`, label: 'Start of day', present: [], startedAt: now, updatedAt: now }],
   };
 }
 
@@ -46,18 +48,19 @@ function currentStop(state: HeadcountState) {
   return stop;
 }
 
-export function togglePresent(state: HeadcountState, travellerId: string): HeadcountState {
+export function togglePresent(state: HeadcountState, travellerId: string, now?: number): HeadcountState {
   const stop = currentStop(state);
   const present = stop.present.includes(travellerId)
     ? stop.present.filter((id) => id !== travellerId)
     : [...stop.present, travellerId];
-  return { ...state, stops: [...state.stops.slice(0, -1), { ...stop, present }] };
+  const changed = now === undefined ? { ...stop, present } : { ...stop, present, updatedAt: now };
+  return { ...state, stops: [...state.stops.slice(0, -1), changed] };
 }
 
 /** Starts a new stop with nobody marked. Earlier stops stay for the day's record. */
 export function newStop(state: HeadcountState, label: string, now: number): HeadcountState {
   const trimmed = label.trim() || `Stop ${state.stops.length + 1}`;
-  return { ...state, stops: [...state.stops, { id: `stop-${now}`, label: trimmed, present: [], startedAt: now }] };
+  return { ...state, stops: [...state.stops, { id: `stop-${now}`, label: trimmed, present: [], startedAt: now, updatedAt: now }] };
 }
 
 export function summarize(state: HeadcountState, roster: RosterEntry[], batchId?: string): HeadcountSummary {

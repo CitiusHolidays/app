@@ -1,7 +1,10 @@
 import type { CommandCenter, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
 
-/** Version 2 added `complete`; older packs are ignored and fetched again. */
-export const TRIP_PACK_VERSION = 2;
+/**
+ * Version 2 added `complete`; version 3 keeps only the tour manager's own group (the server
+ * narrows the roster; batches follow it). Older packs are ignored and fetched again.
+ */
+export const TRIP_PACK_VERSION = 3;
 export const TRIP_PACK_TTL_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,10 +113,14 @@ export function isPackExpired(pack: Pick<TripPack, 'expiresAt'>, now: number) {
  */
 export function buildTripPack(source: TripPackSource): TripPack {
   const { jobCard, proposal } = source.commandCenter;
-  const batches = source.batches
+  const allBatches = source.batches
     .map((batch) => ({ id: batch.id, label: batchLabel(batch, jobCard.jobCode) }))
     .sort((left, right) => byText(left.label, right.label));
-  const labelById = new Map(batches.map((batch) => [batch.id, batch.label]));
+  const labelById = new Map(allBatches.map((batch) => [batch.id, batch.label]));
+  // The batch list covers the whole Job Card, but a tour manager's roster is their own group:
+  // offer only the batches someone in that group travels in (filters, audiences, counts).
+  const inGroup = new Set(source.travellers.map((row) => row.travelBatchId));
+  const batches = allBatches.filter((batch) => inGroup.has(batch.id));
   const batchOrder = new Map(batches.map((batch, index) => [batch.id, index]));
 
   const roster: RosterEntry[] = source.travellers

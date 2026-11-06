@@ -41,6 +41,21 @@ describe("staff API manifest", () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
+  it("covers the field API and lists trips through the tour manager's own assignments", () => {
+    const paths = staffFunctionManifest.map((fn) => `${fn.kind} ${fn.module}:${fn.name}`);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "query crm/jobCards:listMyAssignedPage",
+        "mutation crm/fieldSync:pushHeadcountStop",
+        "mutation crm/fieldSync:recordAnnouncement",
+        "query crm/fieldPassports:listFieldPassports",
+        "action crm/fieldPassportActions:getFieldPassportFile",
+      ])
+    );
+    // The general Job Card list would show a tour manager every trip they can see, not theirs.
+    expect(paths).not.toContain("query crm/jobCards:listPage");
+  });
+
   it("records a server permission check for every function", () => {
     for (const fn of staffFunctionManifest) {
       expect(fn.serverCheck.length).toBeGreaterThan(10);

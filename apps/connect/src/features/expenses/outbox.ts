@@ -27,10 +27,16 @@ export interface ReceiptFile {
 
 export interface OutboxItem {
   attempts: number;
+  /**
+   * Sent with the create as `clientRef` (the item's id). The server returns the first expense for
+   * the same author and ref, so a create sent again after a timeout or an app kill files once.
+   * Items queued by earlier versions have none until their create is sent.
+   */
+  clientRef?: string;
   createdAt: number;
   /**
-   * Set (and saved) just before the create request is sent. Once set, the server may hold the
-   * expense even if the app never heard back, so the next attempt looks it up by ref first.
+   * Earlier versions set (and saved) this just before sending a create without `clientRef`. On
+   * such an item the server may hold the expense under its notes ref only, so it is looked up first.
    */
   createStartedAt?: number;
   draft: ExpenseDraft;
@@ -53,8 +59,9 @@ export interface OutboxDeps {
   attachProof: (args: { expenseId: string; fileName: string; fileSize: number; mimeType: string; storageId: string }) => Promise<void>;
   createExpense: (args: CreateExpenseArgs) => Promise<string>;
   /**
-   * Finds an expense this device already created for the item (matched on the ref in its notes).
-   * Best effort: it searches a bounded number of pages of the trip's expenses.
+   * Finds an expense an earlier version of the app created for the item (matched on the ref it
+   * wrote into the notes). Only items sent before `clientRef` need it. Best effort: it searches a
+   * bounded number of pages of the trip's expenses.
    */
   findExpenseByRef: (jobCardId: string, ref: string) => Promise<string | null>;
   generateUploadUrl: (expenseId: string) => Promise<string>;
@@ -68,6 +75,7 @@ export const outboxKey = 'outbox:expenses';
 const BASE_DELAY_MS = 30_000;
 const MAX_DELAY_MS = 30 * 60_000;
 
+/** The notes ref earlier versions wrote on each expense, so they could find it again. */
 export const refFor = (item: Pick<OutboxItem, 'id'>) => `Connect ref ${item.id}`;
 
 export function createOutboxItem(input: {
@@ -80,6 +88,7 @@ export function createOutboxItem(input: {
 }): OutboxItem {
   return {
     attempts: 0,
+    clientRef: input.id,
     createdAt: input.now,
     draft: input.draft,
     id: input.id,
@@ -130,25 +139,26 @@ function backoff(attempts: number) {
 async function advance(item: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> {
   switch (item.stage) {
     case 'queued': {
-      const existing =
-        item.createStartedAt !== undefined ? await deps.findExpenseByRef(item.jobCardId, refFor(item)) : null;
-      if (existing) {
-        return { ...item, expenseId: existing, stage: 'created' };
+      if (!item.clientRef && item.createStartedAt !== undefined) {
+        // An earlier version sent this create without clientRef: the server may already hold it.
+        const existing = await deps.findExpenseByRef(item.jobCardId, refFor(item));
+        if (existing) {
+          return { ...item, expenseId: existing, stage: 'created' };
+        }
       }
-      // Saved before sending: if the app dies mid-request, the next run knows to look first.
-      const inFlight = { ...item, createStartedAt: deps.now() };
-      await deps.save(inFlight);
+      // Safe to resend as often as needed: the same clientRef always returns the same expense.
+      const clientRef = item.clientRef ?? item.id;
       const expenseId = await deps.createExpense({
         amount: item.draft.amount,
         category: item.draft.category,
+        clientRef,
         currency: item.draft.currency,
         expenseDate: item.draft.expenseDate,
         jobCardId: item.jobCardId,
-        notes: refFor(item),
         paidBy: item.draft.paidBy,
         particulars: item.draft.particulars,
       });
-      return { ...inFlight, expenseId, stage: 'created' };
+      return { ...item, clientRef, expenseId, stage: 'created' };
     }
     case 'created': {
       const expenseId = requireExpenseId(item);
@@ -196,10 +206,8 @@ export async function processItem(start: OutboxItem, deps: OutboxDeps): Promise<
       }
     } catch (error) {
       const now = deps.now();
-      // A create that may have reached the server must be looked up next time, whatever failed.
-      const tried = item.stage === 'queued' && item.createStartedAt === undefined ? { ...item, createStartedAt: now } : item;
       if (isServerRefusal(error)) {
-        const stuck: OutboxItem = { ...tried, problem: refusalMessage(error), status: 'needsAttention', updatedAt: now };
+        const stuck: OutboxItem = { ...item, problem: refusalMessage(error), status: 'needsAttention', updatedAt: now };
         if (item.stage === 'uploaded') {
           // The server deletes an uploaded file it refuses to attach, so a retry must upload again.
           const { storageId: _deleted, ...rest } = stuck;
@@ -208,7 +216,7 @@ export async function processItem(start: OutboxItem, deps: OutboxDeps): Promise<
         return stuck;
       }
       const attempts = item.attempts + 1;
-      return { ...tried, attempts, nextAttemptAt: now + backoff(attempts), updatedAt: now };
+      return { ...item, attempts, nextAttemptAt: now + backoff(attempts), updatedAt: now };
     }
   }
   return item;

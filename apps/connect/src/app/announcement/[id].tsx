@@ -5,17 +5,25 @@ import { Share, StyleSheet, View } from 'react-native';
 import { Avatar, Icon, ListCard, PageTitle, QuietState, Screen, SectionTitle, TickStrip } from '@/components/kit';
 import { ackSummary, composeShareText } from '@/features/announcements/announcements';
 import { useAnnouncements } from '@/features/announcements/use-announcements';
+import { useFieldSync } from '@/features/field-sync/field-sync-context';
+import { announcementPush } from '@/features/field-sync/pushes';
+import { syncKey } from '@/features/field-sync/queue';
+import { SyncLine } from '@/features/field-sync/sync-line';
 import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { logEvent } from '@/lib/safe-log';
 
-/** The acknowledgement checklist the tour manager keeps for one announcement. */
+const ignoredNote = (count: number) =>
+  `${count} ${count === 1 ? 'traveller is' : 'travellers are'} not in your group on the office list, so the office record leaves them out.`;
+
+/** The acknowledgement checklist the tour manager keeps for one announcement, shared with the office. */
 export default function AnnouncementDetail() {
   const theme = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const staff = useStaff();
   const { pack, selected } = useTrips();
   const { log, toggleAck } = useAnnouncements(selected?.id ?? null);
+  const sync = useFieldSync();
   const announcement = log.find((item) => item.id === id);
   if (!announcement) {
     return (
@@ -33,6 +41,8 @@ export default function AnnouncementDetail() {
     announcement.sharedAt
   );
   const answer = `${acks.acknowledged} of ${acks.total} have seen it`;
+  const officeKey = syncKey(announcementPush(announcement));
+  const syncItems = sync.items.filter((item) => item.key === officeKey);
   return (
     <Screen tabBar={false}>
       <PageTitle
@@ -70,6 +80,7 @@ export default function AnnouncementDetail() {
           </View>
           <TickStrip marked={acks.acknowledged} total={acks.total} />
         </View>
+        <SyncLine ignoredNote={ignoredNote} items={syncItems} onRetry={sync.retry} />
       </Surface>
       <View style={{ gap: space.md }}>
         <SectionTitle>Who has seen it</SectionTitle>

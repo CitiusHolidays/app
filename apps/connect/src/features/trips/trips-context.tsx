@@ -19,6 +19,11 @@ export type TripSummary = Pick<
 interface TripsCache {
   complete: boolean;
   savedAt: number;
+  /**
+   * 'assigned': read from the tour manager's own assignments. Lists saved by earlier versions
+   * (from the general Job Card list) have no scope and are not shown.
+   */
+  scope?: 'assigned';
   trips: TripSummary[];
 }
 
@@ -68,7 +73,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const { live, store } = useAppStore();
   const { gate, online } = useStaffSession();
   const canReachServer = online && gate.kind === 'staff' && !gate.offline;
-  const [cache, setCache, tripsLoaded] = useStoredValue<TripsCache | null>('trips:list', null);
+  const [storedCache, setCache, tripsLoaded] = useStoredValue<TripsCache | null>('trips:list', null);
+  const cache = storedCache?.scope === 'assigned' ? storedCache : null;
   const [selectedId, setSelectedId] = useStoredValue<string | null>('trips:selected', null);
   const [refreshing, setRefreshing] = useState(false);
   const [tripsProblem, setTripsProblem] = useState<string | null>(null);
@@ -93,12 +99,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     // write the previous user's trips back.
     const current = live.fence();
     try {
+      // Only the trips this tour manager is assigned to, one row per Job Card.
       const result = await collectPages(
-        (cursor) => convex.query(staffApi.listJobCards.ref, { paginationOpts: firstPage(cursor) }),
+        (cursor) => convex.query(staffApi.listMyAssignedJobCards.ref, { paginationOpts: firstPage(cursor) }),
         MAX_PAGES
       );
       if (!current()) return;
-      void setCache({ complete: result.complete, savedAt: Date.now(), trips: result.rows.map(toSummary) });
+      void setCache({ complete: result.complete, savedAt: Date.now(), scope: 'assigned', trips: result.rows.map(toSummary) });
       setTripsProblem(null);
     } catch (error) {
       logEvent('trips.refresh-failed', error);
