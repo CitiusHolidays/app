@@ -61,6 +61,24 @@ describe('buildTripPack', () => {
       { id: 'tb_2', label: 'Bus 2' },
     ]);
   });
+
+  it("keeps only the batches with travellers in the tour manager's group, which the server narrows the roster to", () => {
+    const extra = [...batches, { ...batches[0]!, batchReference: 'Bus 3', id: 'tb_3' }];
+    const onlyBus1 = travellers.filter((row) => row.travelBatchId === 'tb_1');
+    const pack = buildTripPack({ batches: extra, commandCenter, complete: true, savedAt: SAVED_AT, tourManagers, travellers: onlyBus1 });
+    expect(pack.batches).toEqual([{ id: 'tb_1', label: 'Bus 1' }]);
+    expect(pack.roster.map((entry) => entry.id).sort()).toEqual(['t_1', 't_2']);
+    // A contact for another batch still names it.
+    const other = buildTripPack({
+      batches: extra,
+      commandCenter,
+      complete: true,
+      savedAt: SAVED_AT,
+      tourManagers: [{ ...tourManagers[0]!, name: 'Other Manager', travelBatchId: 'tb_3' }],
+      travellers: onlyBus1,
+    });
+    expect(other.contacts[0]?.role).toBe('Tour manager · Bus 3');
+  });
 });
 
 describe('buildTripPack labels and contacts', () => {

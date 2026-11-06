@@ -12,6 +12,7 @@ import { ActivityIndicator, LogBox, Platform, View } from 'react-native';
 
 import { AppErrorBoundary } from '@/components/error-boundary';
 import { OutboxProvider } from '@/features/expenses/outbox-context';
+import { FieldSyncProvider } from '@/features/field-sync/field-sync-context';
 import { StaffSessionProvider, useStaffSession } from '@/features/gate/session';
 import { TripsProvider } from '@/features/trips/trips-context';
 import { AppStoreProvider } from '@/lib/app-store';
@@ -59,14 +60,16 @@ function MissingConfiguration() {
   );
 }
 
-/** Trip data and the expense outbox exist only for a verified tour manager. */
+/** Trip data, the expense outbox and the field sync queue exist only for a verified tour manager. */
 function StaffData({ children, enabled }: { children: ReactNode; enabled: boolean }) {
   if (!enabled) {
     return children;
   }
   return (
     <TripsProvider>
-      <OutboxProvider>{children}</OutboxProvider>
+      <OutboxProvider>
+        <FieldSyncProvider>{children}</FieldSyncProvider>
+      </OutboxProvider>
     </TripsProvider>
   );
 }
@@ -109,6 +112,7 @@ function Shell() {
           <Stack.Screen name="announce" options={{ presentation: 'modal', title: 'New announcement' }} />
           <Stack.Screen name="announcement/[id]" options={{ title: 'Announcement' }} />
           <Stack.Screen name="expense-new" options={{ presentation: 'modal', title: 'New expense' }} />
+          <Stack.Screen name="passport/[id]" options={{ headerShown: false, presentation: 'fullScreenModal', title: 'Passport' }} />
           <Stack.Screen name="notification/[id]" options={{ title: 'Notification' }} />
         </Stack.Protected>
       </Stack>

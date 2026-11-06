@@ -11,6 +11,10 @@ describe('announcements', () => {
     expect(recipientsFor(pack, { batchId: 'tb_2', kind: 'batch' }).map((r) => r.id)).toEqual(['t_3']);
   });
 
+  it("names the group audience as the tour manager's own group, since the roster is narrowed to it", () => {
+    expect(createAnnouncement({ audience: { kind: 'trip' }, body: 'Hi', id: 'a0', now: 5, pack }).audienceLabel).toBe('your group');
+  });
+
   it('writes a share message with the audience and sender', () => {
     expect(
       composeShareText({ audienceLabel: 'Bus 2', body: '  Bus leaves at 8:15 from the lobby.  ', sender: 'Test Tour Manager', tripLabel: 'JC-TEST-001 Bali' })

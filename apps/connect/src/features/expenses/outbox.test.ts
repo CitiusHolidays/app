@@ -30,7 +30,7 @@ function fakeDeps(overrides: Partial<OutboxDeps> = {}) {
       calls.push(`attach:${args.expenseId}:${args.storageId}:${args.fileSize}`);
     },
     createExpense: async (args) => {
-      calls.push(`create:${args.amount}:${args.currency}:${args.notes}`);
+      calls.push(`create:${args.amount}:${args.currency}:${args.clientRef}`);
       return 'exp_1';
     },
     findExpenseByRef: async () => null,
@@ -59,15 +59,29 @@ describe('expense outbox', () => {
     const { calls, deps, saved } = fakeDeps();
     const done = await processItem(newItem(), deps);
     expect(calls).toEqual([
-      'create:1250.5:THB:Connect ref ob_1',
+      'create:1250.5:THB:ob_1',
       'url:exp_1',
       'upload:https://upload.example.test/1',
       'attach:exp_1:storage_1:2048',
       'submit:exp_1',
     ]);
     expect(done.status).toBe('done');
-    expect(saved.map((item) => item.stage)).toEqual(['queued', 'created', 'uploaded', 'attached', 'submitted']);
-    expect(saved[0]?.createStartedAt).toBe(NOW);
+    expect(saved.map((item) => item.stage)).toEqual(['created', 'uploaded', 'attached', 'submitted']);
+  });
+
+  it("passes the item's own id as clientRef, so the server files a resent create once", async () => {
+    const created: Record<string, unknown>[] = [];
+    const { deps } = fakeDeps({
+      createExpense: async (args) => {
+        created.push(args);
+        return 'exp_1';
+      },
+    });
+    await processItem(newItem(), deps);
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ clientRef: 'ob_1', jobCardId: 'jc_test_1' });
+    expect(created[0]).not.toHaveProperty('notes');
+    expect(/^[A-Za-z0-9._:-]{1,128}$/.test(String(created[0]?.clientRef))).toBe(true);
   });
 
   it('keeps the item and its receipt on a network failure, and resumes where it stopped', async () => {
@@ -87,50 +101,74 @@ describe('expense outbox', () => {
     calls.length = 0;
     const done = await processItem(failed, deps);
     expect(calls[0]).toBe('url:exp_1');
-    expect(calls).not.toContain('create:1250.5:THB:Connect ref ob_1');
+    expect(calls).not.toContain('create:1250.5:THB:ob_1');
     expect(done.status).toBe('done');
   });
 
   it('does not file twice when the app dies after create reached the server', async () => {
-    const server: { id: string; notes: string }[] = [];
+    // The server keeps the first expense per author and clientRef, and returns it on a replay.
+    const server: { clientRef: string; id: string }[] = [];
+    const serverCreate = async (args: { clientRef?: string }) => {
+      const existing = server.find((row) => row.clientRef === args.clientRef);
+      if (existing) return existing.id;
+      server.push({ clientRef: String(args.clientRef), id: `exp_server_${server.length + 1}` });
+      return `exp_server_${server.length}`;
+    };
+    const lookups = jest.fn(async () => null);
     const first = fakeDeps({
       // The server stores the expense, then the app is killed before the answer arrives.
       createExpense: (args) => {
-        server.push({ id: 'exp_server', notes: String(args.notes) });
+        void serverCreate(args);
         return new Promise(() => undefined);
       },
-      findExpenseByRef: async (_jobCardId, ref) => server.find((row) => row.notes === ref)?.id ?? null,
+      findExpenseByRef: lookups,
     });
     void processItem(newItem(), first.deps);
     await new Promise((resolve) => setTimeout(resolve, 0));
     // After a restart the outbox resumes from the last saved copy of the item.
     const afterRestart = first.saved.at(-1) ?? newItem();
 
-    const second = fakeDeps({ findExpenseByRef: async (_jobCardId, ref) => server.find((row) => row.notes === ref)?.id ?? null });
+    const second = fakeDeps({ createExpense: serverCreate, findExpenseByRef: lookups });
     const done = await processItem(afterRestart, second.deps);
     expect(server).toHaveLength(1);
-    expect(second.calls.some((call) => call.startsWith('create:'))).toBe(false);
-    expect(done).toMatchObject({ expenseId: 'exp_server', status: 'done' });
+    expect(done).toMatchObject({ expenseId: 'exp_server_1', status: 'done' });
+    expect(lookups).not.toHaveBeenCalled();
   });
 
-  it('looks the ref up before creating again after a create that failed on the network', async () => {
-    let lookups = 0;
+  it('looks an item an earlier version already sent up by its notes ref before creating it again', async () => {
+    // Queued and sent by a build without clientRef: the server may hold it under the notes ref only.
+    const { clientRef: _none, ...legacy } = { ...newItem(), createStartedAt: NOW };
+    const created: unknown[] = [];
+    const found = fakeDeps({
+      createExpense: async (args) => {
+        created.push(args);
+        return 'exp_new';
+      },
+      findExpenseByRef: async (_jobCardId, ref) => (ref === 'Connect ref ob_1' ? 'exp_old' : null),
+    });
+    expect(await processItem(legacy, found.deps)).toMatchObject({ expenseId: 'exp_old', status: 'done' });
+    expect(created).toEqual([]);
+
+    const missing = fakeDeps({ findExpenseByRef: async () => null });
+    const done = await processItem(legacy, missing.deps);
+    expect(missing.calls[0]).toBe('create:1250.5:THB:ob_1');
+    expect(done).toMatchObject({ clientRef: 'ob_1', expenseId: 'exp_1' });
+  });
+
+  it('does not look anything up for an item this version queued, even after a failed create', async () => {
     let failCreate = true;
+    const lookups = jest.fn(async () => null);
     const { deps } = fakeDeps({
       createExpense: async () => {
         if (failCreate) throw new TypeError('Network request failed');
         return 'exp_2';
       },
-      findExpenseByRef: async () => {
-        lookups += 1;
-        return null;
-      },
+      findExpenseByRef: lookups,
     });
     const failed = await processItem(newItem(), deps);
-    expect(lookups).toBe(0);
     failCreate = false;
     const done = await processItem(failed, deps);
-    expect(lookups).toBe(1);
+    expect(lookups).not.toHaveBeenCalled();
     expect(done.expenseId).toBe('exp_2');
   });
 

@@ -1,3 +1,4 @@
+import type { FieldPassportRow, FieldPassports } from '@citius/backend';
 import { Banner, Button, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -5,6 +6,7 @@ import { View } from 'react-native';
 
 import { FreshnessStamp } from '@/components/freshness';
 import {
+  ActionPill,
   Avatar,
   CallButton,
   formatDateRange,
@@ -17,6 +19,8 @@ import {
   Screen,
   Segmented,
 } from '@/components/kit';
+import { canOpenPassportInApp, passportWindowLine } from '@/features/passports/passport-window';
+import { useFieldPassports } from '@/features/passports/use-field-passports';
 import { callingPill, groupRoster, rosterMeta } from '@/features/trip-pack/roster';
 import { type ScheduleStep, tripSchedule } from '@/features/trip-pack/schedule';
 import type { TripPack } from '@/features/trip-pack/trip-pack';
@@ -31,14 +35,20 @@ const VIEWS: { label: string; value: TripView }[] = [
   { label: 'Contacts', value: 'contacts' },
 ];
 
-function Roster({ pack }: { pack: TripPack }) {
+function Roster({ now, online, pack, passports }: { now: number; online: boolean; pack: TripPack; passports: FieldPassports | null }) {
   const groups = groupRoster(pack);
   const travelling = pack.roster.filter((entry) => entry.travelling).length;
+  const passportById = new Map<string, FieldPassportRow>((passports?.travellers ?? []).map((row) => [row.travellerId, row]));
   return (
     <View style={{ gap: space.lg }}>
       <Text tabular tone="muted" variant="secondary">
-        {travelling} travelling · {pack.batches.length} {pack.batches.length === 1 ? 'travel batch' : 'travel batches'}
+        {travelling} travelling in your group · {pack.batches.length} {pack.batches.length === 1 ? 'travel batch' : 'travel batches'}
       </Text>
+      {online ? null : (
+        <Text tone="muted" variant="secondary">
+          Passports open here only when you are online.
+        </Text>
+      )}
       {pack.complete ? null : (
         <Banner tone="attention">
           <Text variant="secondary">Not every traveller or contact could be loaded. Pull down to refresh the trip pack.</Text>
@@ -49,47 +59,78 @@ function Roster({ pack }: { pack: TripPack }) {
           <QuietState text="No travellers are on this trip's roster yet." />
         </Surface>
       ) : null}
-      {groups.map((group) => (
-        <View key={group.id} style={{ gap: space.sm }}>
-          <View
-            accessible
-            accessibilityLabel={`${group.label}, ${group.travelling} travelling`}
-            accessibilityRole="header"
-            style={{ alignItems: 'baseline', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space.xs }}
-          >
-            <Text style={{ flexShrink: 1 }} numberOfLines={1} variant="bodyStrong">
-              {group.label}
-            </Text>
-            <Text tabular tone="muted" variant="label">
-              {group.travelling} travelling
-            </Text>
+      {groups.map((group) => {
+        // A batch shares one trip window; the first traveller with a scan speaks for the group.
+        const window = group.entries.map((entry) => passportById.get(entry.id)).find((row) => row?.hasPassportScan);
+        return (
+          <View key={group.id} style={{ gap: space.sm }}>
+            <View
+              accessible
+              accessibilityLabel={`${group.label}, ${group.travelling} travelling`}
+              accessibilityRole="header"
+              style={{ alignItems: 'baseline', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space.xs }}
+            >
+              <Text style={{ flexShrink: 1 }} numberOfLines={1} variant="bodyStrong">
+                {group.label}
+              </Text>
+              <Text tabular tone="muted" variant="label">
+                {group.travelling} travelling
+              </Text>
+            </View>
+            {window && passports ? (
+              <Text style={{ paddingHorizontal: space.xs }} tone="muted" variant="secondary">
+                {passportWindowLine(window, now, passports.timeZone)}
+              </Text>
+            ) : null}
+            <ListCard>
+              {group.entries.map((entry, index) => {
+                const pill = callingPill(entry.callingStatus);
+                const meta = rosterMeta(entry);
+                const passport = online ? passportById.get(entry.id) : undefined;
+                return (
+                  <Row
+                    accessibilityLabel={[entry.name, meta, `calling: ${pill.label}`].filter(Boolean).join(', ')}
+                    detail={entry.phone ? <StatusPill kind={pill.kind} label={pill.label} /> : undefined}
+                    key={entry.id}
+                    last={index === group.entries.length - 1}
+                    leading={<Avatar name={entry.name} />}
+                    subtitle={meta || undefined}
+                    title={entry.name}
+                    trailing={
+                      <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
+                        {passport?.available && canOpenPassportInApp(passport.mimeType) ? (
+                          <ActionPill
+                            accessibilityLabel={`Passport, ${entry.name}`}
+                            icon={{ ios: 'person.text.rectangle', md: 'badge' }}
+                            label="Passport"
+                            onPress={() => router.push({ params: { id: entry.id }, pathname: '/passport/[id]' })}
+                          />
+                        ) : passport?.available ? (
+                          // Opening it would be an audited read of a file nobody could see here.
+                          <Text
+                            accessibilityLabel={`Passport for ${entry.name} can't be opened in the app`}
+                            numberOfLines={2}
+                            style={{ maxWidth: 104, textAlign: 'right' }}
+                            tone="muted"
+                            variant="label"
+                          >
+                            {"Can't be opened in the app"}
+                          </Text>
+                        ) : null}
+                        {entry.phone ? (
+                          <CallButton name={entry.name} phone={entry.phone} />
+                        ) : (
+                          <StatusPill kind={pill.kind} label={pill.label} />
+                        )}
+                      </View>
+                    }
+                  />
+                );
+              })}
+            </ListCard>
           </View>
-          <ListCard>
-            {group.entries.map((entry, index) => {
-              const pill = callingPill(entry.callingStatus);
-              const meta = rosterMeta(entry);
-              return (
-                <Row
-                  accessibilityLabel={[entry.name, meta, `calling: ${pill.label}`].filter(Boolean).join(', ')}
-                  detail={entry.phone ? <StatusPill kind={pill.kind} label={pill.label} /> : undefined}
-                  key={entry.id}
-                  last={index === group.entries.length - 1}
-                  leading={<Avatar name={entry.name} />}
-                  subtitle={meta || undefined}
-                  title={entry.name}
-                  trailing={
-                    entry.phone ? (
-                      <CallButton name={entry.name} phone={entry.phone} />
-                    ) : (
-                      <StatusPill kind={pill.kind} label={pill.label} />
-                    )
-                  }
-                />
-              );
-            })}
-          </ListCard>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -229,6 +270,7 @@ export default function TripPackScreen() {
   }
   const [refreshing, setRefreshing] = useState(false);
   const now = useNow();
+  const { online, passports } = useFieldPassports(selected?.id ?? null);
 
   const refresh = () => {
     setRefreshing(true);
@@ -271,7 +313,7 @@ export default function TripPackScreen() {
           <Button busy={refreshing} label="Save trip pack" onPress={refresh} />
         </Banner>
       ) : null}
-      {pack && section === 'roster' ? <Roster pack={pack} /> : null}
+      {pack && section === 'roster' ? <Roster now={now} online={online} pack={pack} passports={passports} /> : null}
       {pack && section === 'schedule' ? <Schedule now={now} pack={pack} /> : null}
       {pack && section === 'contacts' ? <Contacts pack={pack} /> : null}
     </Screen>

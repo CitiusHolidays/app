@@ -25,6 +25,14 @@ describeWithWebsite("staff API contract with the website backend", () => {
     }
   );
 
+  it("gets each traveller's scan file type from the field passport list", () => {
+    // The roster offers Passport only for types the app can show, so the type must be there.
+    const source = readFileSync(join(convexDir, "crm/fieldPassports.ts"), "utf8");
+    const list = source.slice(source.indexOf("export const listFieldPassports"));
+    const returns = list.slice(list.indexOf("returns:"), list.indexOf("});"));
+    expect(returns).toMatch(/mimeType: v\.union\(v\.string\(\), v\.null\(\)\)/);
+  });
+
   it("offers the same expense currencies as the server validator", () => {
     const validators = readFileSync(join(convexDir, "crm/financeValidators.ts"), "utf8");
     const block = validators.match(/expenseCurrencyValidator = v\.union\(([\s\S]*?)\);/);
@@ -39,6 +47,21 @@ describe("staff API manifest", () => {
   it("names each function once", () => {
     const paths = staffFunctionManifest.map((fn) => `${fn.module}:${fn.name}`);
     expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it("covers the field API and lists trips through the tour manager's own assignments", () => {
+    const paths = staffFunctionManifest.map((fn) => `${fn.kind} ${fn.module}:${fn.name}`);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "query crm/jobCards:listMyAssignedPage",
+        "mutation crm/fieldSync:pushHeadcountStop",
+        "mutation crm/fieldSync:recordAnnouncement",
+        "query crm/fieldPassports:listFieldPassports",
+        "action crm/fieldPassportActions:getFieldPassportFile",
+      ])
+    );
+    // The general Job Card list would show a tour manager every trip they can see, not theirs.
+    expect(paths).not.toContain("query crm/jobCards:listPage");
   });
 
   it("records a server permission check for every function", () => {

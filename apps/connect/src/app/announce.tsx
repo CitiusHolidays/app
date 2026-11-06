@@ -18,7 +18,10 @@ import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
 import { logEvent } from '@/lib/safe-log';
 
-/** Write once, send through today's channels with the share sheet, keep a local log. */
+/** The office records announcements of up to this many characters. */
+const MAX_ANNOUNCEMENT_LENGTH = 4000;
+
+/** Write once, send through today's channels with the share sheet, keep a log the office also sees. */
 export default function Announce() {
   const theme = useAppTheme();
   const staff = useStaff();
@@ -72,7 +75,7 @@ export default function Announce() {
     <Screen tabBar={false}>
       <View style={{ gap: space.sm }}>
         <ChipRow label="Send to" showLabel>
-          <Chip label="Whole trip" onPress={() => setAudience({ kind: 'trip' })} selected={audience.kind === 'trip'} />
+          <Chip label="Your group" onPress={() => setAudience({ kind: 'trip' })} selected={audience.kind === 'trip'} />
           {pack.batches.map((batch) => (
             <Chip
               key={batch.id}
@@ -88,6 +91,7 @@ export default function Announce() {
       </View>
       <TextField
         label="Message"
+        maxLength={MAX_ANNOUNCEMENT_LENGTH}
         multiline
         onChangeText={setBody}
         placeholder="For example: The bus leaves the hotel at 8:15. Meet in the lobby."
@@ -117,7 +121,7 @@ export default function Announce() {
         />
         <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
           Opens your phone&apos;s share sheet, so you can send it on WhatsApp, SMS or email as today. Citius Connect keeps a
-          copy here with a checklist of who has seen it.
+          copy here with a checklist of who has seen it, and sends both to the office.
         </Text>
       </View>
       {log.length > 0 ? (
