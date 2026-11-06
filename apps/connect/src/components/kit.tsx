@@ -13,6 +13,7 @@ import {
   type TextInputProps,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Room under the content for the floating tab bar. */
@@ -482,7 +483,8 @@ export function TickStrip({ marked, total }: { marked: number; total: number }) 
       style={{ flexDirection: 'row', gap: shown > 30 ? 2 : 5, height: 24 }}
     >
       {Array.from({ length: shown }, (_, index) => (
-        <View
+        // A Reanimated view runs the colour change as a CSS transition on the UI thread.
+        <Animated.View
           key={index}
           style={{
             backgroundColor: index < filled ? theme.color.accent : theme.color.tickOff,
