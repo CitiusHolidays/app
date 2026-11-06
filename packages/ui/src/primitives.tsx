@@ -3,15 +3,17 @@ import {
   ActivityIndicator,
   Pressable,
   type PressableProps,
+  type StyleProp,
   StyleSheet,
   Text as RNText,
   type TextProps as RNTextProps,
   View,
   type ViewProps,
+  type ViewStyle,
 } from "react-native";
 import Animated, { cubicBezier, useReducedMotion } from "react-native-reanimated";
 
-import { type AppTheme, motion, space, type TypeScale } from "./tokens";
+import { type AppTheme, citius, motion, space, type TypeScale } from "./tokens";
 
 const ThemeContext = createContext<AppTheme | null>(null);
 
@@ -27,7 +29,7 @@ export function useAppTheme(): AppTheme {
   return theme;
 }
 
-type Tone = "ink" | "muted" | "primary" | "success" | "warning" | "onPrimary";
+type Tone = "ink" | "muted" | "accent" | "primary" | "success" | "warning" | "danger" | "onPrimary" | "onDark" | "onDarkMuted";
 
 export interface TextProps extends RNTextProps {
   variant?: keyof TypeScale;
@@ -35,8 +37,12 @@ export interface TextProps extends RNTextProps {
   tone?: Tone;
 }
 
-/** Text with a type role. Dynamic Type stays on; only the answer role is capped. */
-export function Text({ style, tabular, tone = "ink", variant = "body", ...rest }: TextProps) {
+/**
+ * Text with a type role. Bundled faces carry their own weight, so a role with a font family sets
+ * the family and leaves the weight alone (Android would otherwise fall back to the system face).
+ * Dynamic Type stays on; only display figures are capped.
+ */
+export function Text({ children, style, tabular, tone = "ink", variant = "body", ...rest }: TextProps) {
   const theme = useAppTheme();
   const scale = theme.type[variant];
   return (
@@ -46,29 +52,39 @@ export function Text({ style, tabular, tone = "ink", variant = "body", ...rest }
         {
           color: theme.color[tone],
           fontSize: scale.fontSize,
-          fontWeight: scale.fontWeight,
+          letterSpacing: scale.letterSpacing,
           lineHeight: scale.lineHeight,
+          textTransform: scale.uppercase ? "uppercase" : undefined,
         },
+        scale.fontFamily ? { fontFamily: theme.font[scale.fontFamily] } : { fontWeight: scale.fontWeight },
         tabular ? styles.tabular : null,
         style,
       ]}
       {...rest}
-    />
+    >
+      {children}
+    </RNText>
   );
 }
 
-export function Surface({ style, ...rest }: ViewProps) {
+export interface SurfaceProps extends ViewProps {
+  /** card: the resting card. hero: the screen's answer block. inset: a panel inside a card. */
+  variant?: "card" | "hero" | "inset";
+}
+
+/** Flat surfaces: a fill one step off the ground and a hairline, never a shadow. */
+export function Surface({ style, variant = "card", ...rest }: SurfaceProps) {
   const theme = useAppTheme();
+  const look = {
+    card: { backgroundColor: theme.color.card, borderRadius: theme.radius.surface, padding: space.lg },
+    hero: { backgroundColor: theme.color.card, borderRadius: theme.radius.hero, padding: space.xl - 4 },
+    inset: { backgroundColor: theme.color.inset, borderRadius: theme.radius.inset, padding: space.md },
+  }[variant];
   return (
     <View
       style={[
-        {
-          backgroundColor: theme.color.surface,
-          borderColor: theme.color.border,
-          borderRadius: theme.radius.surface,
-          borderWidth: StyleSheet.hairlineWidth,
-          padding: space.lg,
-        },
+        { borderColor: variant === "inset" ? theme.color.rule : theme.color.border, borderWidth: StyleSheet.hairlineWidth },
+        look,
         style,
       ]}
       {...rest}
@@ -80,6 +96,8 @@ const pressEase = cubicBezier(...motion.easeOut);
 
 export interface PressableScaleProps extends PressableProps {
   children: ReactNode;
+  /** Layout for the touch area itself (flex, width), for items laid out in a row. */
+  outerStyle?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -91,6 +109,7 @@ export function PressableScale({
   disabled,
   onPressIn,
   onPressOut,
+  outerStyle,
   style,
   ...rest
 }: PressableScaleProps) {
@@ -108,6 +127,7 @@ export function PressableScale({
         onPressOut?.(event);
       }}
       pressRetentionOffset={12}
+      style={outerStyle}
       {...rest}
     >
       {(state) => (
@@ -132,11 +152,13 @@ export function PressableScale({
 
 export interface ButtonProps extends Omit<PressableProps, "children"> {
   busy?: boolean;
+  icon?: ReactNode;
   label: string;
   variant?: "primary" | "secondary";
 }
 
-export function Button({ busy, disabled, label, variant = "primary", ...rest }: ButtonProps) {
+/** Pill buttons in pairs: near-black primary, white secondary with a hairline. */
+export function Button({ busy, disabled, icon, label, variant = "primary", ...rest }: ButtonProps) {
   const theme = useAppTheme();
   const primary = variant === "primary";
   return (
@@ -148,56 +170,71 @@ export function Button({ busy, disabled, label, variant = "primary", ...rest }: 
       style={{
         alignItems: "center",
         backgroundColor: primary ? theme.color.primary : theme.color.surface,
-        borderColor: primary ? theme.color.primary : theme.color.controlBorder,
-        borderRadius: theme.radius.control,
+        borderColor: primary ? theme.color.primary : theme.color.border,
+        borderRadius: theme.radius.chip,
         borderWidth: 1,
         flexDirection: "row",
         gap: space.sm,
         justifyContent: "center",
-        minHeight: theme.minTarget,
-        paddingHorizontal: space.lg,
+        minHeight: 48,
+        paddingHorizontal: space.lg + 4,
         paddingVertical: space.sm,
       }}
       {...rest}
     >
-      {busy ? <ActivityIndicator color={primary ? theme.color.onPrimary : theme.color.primary} /> : null}
-      <Text variant="bodyStrong" tone={primary ? "onPrimary" : "primary"}>
+      {busy ? <ActivityIndicator color={primary ? theme.color.onPrimary : theme.color.ink} /> : icon}
+      <Text variant="bodyStrong" tone={primary ? "onPrimary" : "ink"}>
         {label}
       </Text>
     </PressableScale>
   );
 }
 
-export type StatusKind = "good" | "attention" | "neutral";
+export type StatusKind = "good" | "attention" | "danger" | "neutral" | "live";
 
-/** Status always carries words and a shape marker; colour is never the only signal. */
+/**
+ * A pale pill with ink of the same hue and a shape marker, so the state reads without colour:
+ * check for done, exclamation for attention, a dashed ring for pending, a dot for live.
+ */
 export function StatusPill({ kind, label }: { kind: StatusKind; label: string }) {
   const theme = useAppTheme();
-  const palette = {
+  const look = {
     attention: { bg: theme.color.warningSoft, fg: "warning" as const, mark: "!" },
+    danger: { bg: theme.color.dangerSoft, fg: "danger" as const, mark: "!" },
     good: { bg: theme.color.successSoft, fg: "success" as const, mark: "✓" },
-    neutral: { bg: theme.color.ground, fg: "muted" as const, mark: "•" },
+    live: { bg: theme.color.surface, fg: "ink" as const, mark: "dot" },
+    neutral: { bg: "transparent", fg: "muted" as const, mark: "ring" },
   }[kind];
   return (
     <View
       accessible
       accessibilityLabel={label}
       style={{
+        alignItems: "center",
         alignSelf: "flex-start",
-        backgroundColor: palette.bg,
-        borderColor: theme.color.border,
-        borderRadius: theme.radius.control,
+        backgroundColor: look.bg,
+        borderColor: kind === "live" || kind === "neutral" ? theme.color.border : "transparent",
+        borderRadius: theme.radius.chip,
         borderWidth: StyleSheet.hairlineWidth,
         flexDirection: "row",
-        gap: space.xs,
-        paddingHorizontal: space.sm,
-        paddingVertical: 2,
+        flexShrink: 0,
+        gap: 6,
+        minHeight: 26,
+        paddingHorizontal: 10,
       }}
     >
-      <Text importantForAccessibility="no" variant="meta" tone={palette.fg}>
-        {palette.mark}
-      </Text>
-      <Text variant="meta" tone={palette.fg}>
+      {look.mark === "dot" ? (
+        <View style={{ backgroundColor: citius.green, borderRadius: 4, height: 7, width: 7 }} />
+      ) : look.mark === "ring" ? (
+        <View
+          style={{ borderColor: theme.color.pending, borderRadius: 6, borderStyle: "dashed", borderWidth: 1.2, height: 11, width: 11 }}
+        />
+      ) : (
+        <Text importantForAccessibility="no" variant="label" tone={look.fg}>
+          {look.mark}
+        </Text>
+      )}
+      <Text numberOfLines={1} variant="label" tone={look.fg}>
         {label}
       </Text>
     </View>
@@ -207,17 +244,23 @@ export function StatusPill({ kind, label }: { kind: StatusKind; label: string })
 export function Banner({ children, tone = "neutral" }: { children: ReactNode; tone?: StatusKind }) {
   const theme = useAppTheme();
   const background =
-    tone === "attention" ? theme.color.warningSoft : tone === "good" ? theme.color.successSoft : theme.color.surface;
+    tone === "attention"
+      ? theme.color.warningSoft
+      : tone === "good"
+        ? theme.color.successSoft
+        : tone === "danger"
+          ? theme.color.dangerSoft
+          : theme.color.card;
   return (
     <View
       accessibilityRole="summary"
       style={{
         backgroundColor: background,
-        borderColor: theme.color.border,
-        borderRadius: theme.radius.surface,
+        borderColor: tone === "neutral" ? theme.color.border : "transparent",
+        borderRadius: theme.radius.inset,
         borderWidth: StyleSheet.hairlineWidth,
         gap: space.xs,
-        padding: space.md,
+        padding: space.md + 2,
       }}
     >
       {children}

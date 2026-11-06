@@ -1,14 +1,15 @@
-import { Banner, Button, space, Text } from '@citius/ui';
+import { Banner, Button, space, Text, useAppTheme } from '@citius/ui';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
 
-import { Screen, TextField } from '@/components/kit';
+import { PageTitle, Screen, TextField, TopTint } from '@/components/kit';
 import { clients } from '@/lib/clients';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 
 /** Staff sign in with their existing email and password. There is no sign-up in this app. */
 export default function SignIn() {
+  const theme = useAppTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,12 +43,21 @@ export default function SignIn() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <Screen title="Citius Connect">
-        <Text variant="secondary" tone="muted">
-          Sign in with your Citius staff account.
-        </Text>
-        <View style={{ gap: space.md }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ backgroundColor: theme.color.ground, flex: 1 }}>
+      <TopTint height={420} />
+      <Screen
+        header={
+          <View style={{ gap: space.md, paddingTop: space.xxl * 2 }}>
+            <PageTitle kicker="Staff" title="Citius Connect" />
+            <Text tone="muted" variant="secondary">
+              Sign in with your Citius staff account.
+            </Text>
+          </View>
+        }
+        style={{ backgroundColor: 'transparent' }}
+        tabBar={false}
+      >
+        <View style={{ gap: space.md, paddingTop: space.sm }}>
           <TextField
             autoCapitalize="none"
             autoComplete="email"
@@ -80,7 +90,7 @@ export default function SignIn() {
           </Banner>
         ) : null}
         <Button busy={busy} label="Sign in" onPress={() => void submit()} />
-        <Text variant="secondary" tone="muted">
+        <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
           Staff accounts are set up by Citius. If you cannot sign in, contact HR or your manager.
         </Text>
       </Screen>

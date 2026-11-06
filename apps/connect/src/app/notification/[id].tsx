@@ -1,94 +1,152 @@
 import { staffApi } from '@citius/backend';
-import { space, Surface, Text } from '@citius/ui';
+import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { useQuery } from 'convex/react';
-import { useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
-import { formatDateRange, Placeholder, Screen, SectionTitle } from '@/components/kit';
+import { formatDateRange, Icon, PageTitle, Placeholder, QuietState, Screen, SectionTitle } from '@/components/kit';
 import { formatMoney } from '@/features/expenses/format';
 import { useStaffSession } from '@/features/gate/session';
+import { fullTime } from '@/features/inbox/relative-time';
 import { useInbox } from '@/features/inbox/use-inbox';
+import { useTrips } from '@/features/trips/trips-context';
 
-function Line({ label, value }: { label: string; value: string }) {
+function Lines({ lines }: { lines: { label: string; value: string }[] }) {
+  const theme = useAppTheme();
   return (
-    <View accessible accessibilityLabel={`${label}: ${value}`} style={{ flexDirection: 'row', gap: space.sm }}>
-      <Text variant="secondary" style={{ width: 110 }} tone="muted">
-        {label}
-      </Text>
-      <Text variant="secondary" style={{ flex: 1 }}>
-        {value}
-      </Text>
-    </View>
+    <Surface style={{ paddingVertical: space.xs }}>
+      {lines.map((line, index) => (
+        <View
+          accessible
+          accessibilityLabel={`${line.label}: ${line.value}`}
+          key={line.label}
+          style={{
+            borderBottomColor: theme.color.rule,
+            borderBottomWidth: index === lines.length - 1 ? 0 : StyleSheet.hairlineWidth,
+            flexDirection: 'row',
+            gap: space.md,
+            paddingVertical: space.md,
+          }}
+        >
+          <Text style={{ width: 104 }} tone="muted" variant="secondary">
+            {line.label}
+          </Text>
+          <Text style={{ flex: 1, textAlign: 'right' }} tabular variant="secondary">
+            {line.value}
+          </Text>
+        </View>
+      ))}
+    </Surface>
   );
 }
 
 function JobCardSummary({ id }: { id: string }) {
   const job = useQuery(staffApi.getJobCardDetail.ref, { jobCardId: id });
-  if (job === undefined) return <Placeholder lines={3} />;
-  if (job === null) return <Text tone="muted">This Job Card is not visible to you.</Text>;
+  if (job === undefined) {
+    return (
+      <Surface>
+        <Placeholder lines={3} />
+      </Surface>
+    );
+  }
+  if (job === null) {
+    return (
+      <Surface>
+        <QuietState text="This Job Card is not visible to you." />
+      </Surface>
+    );
+  }
   return (
-    <Surface style={{ gap: space.xs }}>
-      <Line label="Job Card" value={job.jobCode} />
-      <Line label="Client" value={job.clientName} />
-      <Line label="Destination" value={job.destination || 'Not set'} />
-      <Line label="Dates" value={formatDateRange(job.travelStartDate, job.travelEndDate)} />
-      <Line label="Status" value={job.status} />
-    </Surface>
+    <Lines
+      lines={[
+        { label: 'Job Card', value: job.jobCode },
+        { label: 'Client', value: job.clientName },
+        { label: 'Destination', value: job.destination || 'Not set' },
+        { label: 'Dates', value: formatDateRange(job.travelStartDate, job.travelEndDate) },
+        { label: 'Status', value: job.status },
+      ]}
+    />
   );
 }
 
 function ExpenseSummary({ id }: { id: string }) {
   const expense = useQuery(staffApi.getExpenseRow.ref, { expenseId: id });
-  if (expense === undefined) return <Placeholder lines={3} />;
-  if (expense === null) return <Text tone="muted">This expense is not visible to you.</Text>;
+  if (expense === undefined) {
+    return (
+      <Surface>
+        <Placeholder lines={3} />
+      </Surface>
+    );
+  }
+  if (expense === null) {
+    return (
+      <Surface>
+        <QuietState text="This expense is not visible to you." />
+      </Surface>
+    );
+  }
   return (
-    <Surface style={{ gap: space.xs }}>
-      <Line label="Amount" value={formatMoney(expense.amount, expense.currency)} />
-      <Line label="Category" value={expense.category} />
-      <Line label="Job Card" value={expense.jobCode} />
-      <Line label="Approval" value={expense.approvalStatus} />
-      <Line label="Manager" value={expense.managerReviewStatus} />
-    </Surface>
+    <Lines
+      lines={[
+        { label: 'Amount', value: formatMoney(expense.amount, expense.currency) },
+        { label: 'Category', value: expense.category },
+        { label: 'Job Card', value: expense.jobCode },
+        { label: 'Approval', value: expense.approvalStatus },
+        { label: 'Manager', value: expense.managerReviewStatus },
+      ]}
+    />
   );
 }
 
 /** A notification and a short summary of its record. Read-only; the portal holds the full record. */
 export default function NotificationDetail() {
+  const theme = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { gate, online } = useStaffSession();
   const { rows } = useInbox();
+  const { selectTrip, trips } = useTrips();
   const notification = rows.find((row) => row.id === id);
   if (!notification) {
     return (
-      <Screen>
-        <Text tone="muted">This notification is not on this phone. Open the inbox while online to refresh it.</Text>
+      <Screen tabBar={false}>
+        <Surface>
+          <QuietState text="This notification is not on this phone. Open the inbox while online to refresh it." />
+        </Surface>
       </Screen>
     );
   }
   const canQuery = online && gate.kind === 'staff' && !gate.offline && Boolean(notification.entityId);
+  const trip = notification.entityType === 'jobCard' ? trips.find((candidate) => candidate.id === notification.entityId) : undefined;
   return (
-    <Screen>
-      <Text accessibilityRole="header" variant="section">
-        {notification.title}
-      </Text>
-      <Text selectable>{notification.body}</Text>
-      <Text variant="meta" tone="muted">
-        {new Date(notification.createdAt).toLocaleString()}
-      </Text>
+    <Screen tabBar={false}>
+      <PageTitle kicker={fullTime(notification.createdAt) || undefined} title={notification.title} />
+      <Surface>
+        <Text selectable>{notification.body}</Text>
+      </Surface>
       {canQuery && notification.entityType === 'jobCard' ? (
-        <>
+        <View style={{ gap: space.md }}>
           <SectionTitle>Job Card</SectionTitle>
           <JobCardSummary id={notification.entityId} />
-        </>
+        </View>
       ) : null}
       {canQuery && notification.entityType === 'expense' ? (
-        <>
+        <View style={{ gap: space.md }}>
           <SectionTitle>Expense</SectionTitle>
           <ExpenseSummary id={notification.entityId} />
-        </>
+        </View>
+      ) : null}
+      {trip ? (
+        <Button
+          icon={<Icon color={theme.color.onPrimary} ios="suitcase" md="luggage" size={16} />}
+          label="Open trip"
+          onPress={() => {
+            selectTrip(trip.id);
+            router.navigate('/trip');
+          }}
+        />
       ) : null}
       {!['jobCard', 'expense'].includes(notification.entityType) || !canQuery ? (
-        <Text variant="secondary" tone="muted">
+        <Text tone="muted" variant="secondary">
           Open Citius Connect on the web portal for the full record.
         </Text>
       ) : null}

@@ -26,20 +26,42 @@ export const motion = {
 export interface AppTheme {
   name: string;
   color: {
+    /** Citius blue: data and the one active state (filled ticks, selected segment, links). */
+    accent: string;
     border: string;
+    /** Resting card fill, one step lighter than the ground. */
+    card: string;
     controlBorder: string;
+    danger: string;
+    dangerSoft: string;
+    /** Floating dark layer: the action tray and the profile card. */
+    dark: string;
     ground: string;
     ink: string;
+    /** Inset panel inside a card. */
+    inset: string;
     muted: string;
+    onDark: string;
+    onDarkMuted: string;
     onPrimary: string;
+    /** Dashed ring for pending states (non-text, 3:1). */
+    pending: string;
+    /** Primary action fill: near-black. */
     primary: string;
+    /** Row rules inside a card, one step lighter than card edges. */
+    rule: string;
+    /** Segmented-control track. */
+    track: string;
     success: string;
     successSoft: string;
     surface: string;
+    /** Unmarked headcount tick. */
+    tickOff: string;
     warning: string;
     warningSoft: string;
   };
-  radius: { control: number; surface: number };
+  font: { display: string; mono: string; regular: string; medium: string; semibold: string };
+  radius: { chip: number; control: number; hero: number; inset: number; surface: number };
   /** Minimum touch target in points (staff 44, customer 48). */
   minTarget: number;
   /** Side margin of the phone frame. */
@@ -48,54 +70,106 @@ export interface AppTheme {
 }
 
 export interface TypeRole {
+  fontFamily?: keyof AppTheme["font"];
   fontSize: number;
   fontWeight: "400" | "500" | "600";
+  letterSpacing?: number;
   lineHeight: number;
-  /** Only the answer figure is capped; everything else scales with Dynamic Type. */
+  /** Only display figures are capped; everything else scales with Dynamic Type. */
   maxFontSizeMultiplier?: number;
+  uppercase?: boolean;
 }
 
 export interface TypeScale {
   answer: TypeRole;
   body: TypeRole;
   bodyStrong: TypeRole;
+  display: TypeRole;
+  label: TypeRole;
   meta: TypeRole;
+  mono: TypeRole;
+  rowTitle: TypeRole;
   secondary: TypeRole;
   section: TypeRole;
   title: TypeRole;
 }
 
 /**
- * Citius Connect, from the portal's `.portal-shell` tokens (warm neutrals, Citius blue only on the
- * primary action). Success and warning ink are the portal's oklch tokens converted to sRGB.
- * System fonts until product approves bundling Inter (DESIGN.md: font changes need approval).
+ * Citius Connect in the Citius palette (website `src/app/globals.css`): Citius blue for primary
+ * actions and data, night for the dark tray and profile card, public ink and muted for text,
+ * paper and brand-border for grounds and lines, and the account-shell success and gold mixes for
+ * status. The ground is paper mixed half with brand-border so white cards read on it.
+ * Every text pair is at least 4.5:1 (muted on ground 5.3:1, on white 6.0:1).
+ * Type: Instrument Serif for screen titles and the trip name, Inter for UI, JetBrains Mono for
+ * Job Card codes and the date line (all OFL, bundled through @expo-google-fonts).
  */
+export const citius = {
+  blue: "#102a83",
+  border: "#e2e8f0",
+  green: "#8dc63f",
+  ink: "#0f172a",
+  light: "#f8fafc",
+  lime: "#b5d439",
+  muted: "#55647b",
+  mutedOnDark: "#cbd5e1",
+  night: "#0b1026",
+  orange: "#f58220",
+  orangeInk: "#8a3500",
+  paper: "#fdfbf7",
+} as const;
+
 export const staffTheme: AppTheme = {
   color: {
-    border: "#e7e7e9",
-    controlBorder: "#686b72",
-    ground: "#fafafa",
-    ink: "#24272d",
-    muted: "#686b72",
+    accent: citius.blue,
+    border: citius.border,
+    card: "#ffffff",
+    controlBorder: "#8a94a6",
+    /** No Citius red exists yet; a proposed negative token pending brand approval. */
+    danger: "#9a2a1f",
+    dangerSoft: "#fbe3de",
+    dark: citius.night,
+    ground: "#f0f2f4",
+    ink: citius.ink,
+    inset: citius.light,
+    muted: citius.muted,
+    onDark: "#ffffff",
+    onDarkMuted: citius.mutedOnDark,
     onPrimary: "#ffffff",
-    primary: "#102a83",
-    success: "#39745b",
-    successSoft: "#e9f3ee",
+    pending: "#8a94a6",
+    primary: citius.blue,
+    rule: "#edf0f4",
+    /** account-shell success: green 55% into ink, on green 16% into white. */
+    success: "#4e7242",
+    successSoft: "#ecf6e3",
     surface: "#ffffff",
-    warning: "#7d5628",
-    warningSoft: "#f6efe6",
+    tickOff: "#ccd1d9",
+    track: citius.border,
+    /** account-shell gold: orange-ink on orange 14% into white. */
+    warning: citius.orangeInk,
+    warningSoft: "#ffeee4",
   },
-  frame: 16,
+  font: {
+    display: "InstrumentSerif_400Regular",
+    medium: "Inter_500Medium",
+    mono: "JetBrainsMono_500Medium",
+    regular: "Inter_400Regular",
+    semibold: "Inter_600SemiBold",
+  },
+  frame: 20,
   minTarget: 44,
   name: "citius-connect",
-  radius: { control: 8, surface: 12 },
+  radius: { chip: 999, control: 14, hero: 24, inset: 16, surface: 20 },
   type: {
-    answer: { fontSize: 28, fontWeight: "600", lineHeight: 34, maxFontSizeMultiplier: 1.5 },
-    body: { fontSize: 16, fontWeight: "400", lineHeight: 22 },
-    bodyStrong: { fontSize: 16, fontWeight: "600", lineHeight: 22 },
-    meta: { fontSize: 13, fontWeight: "500", lineHeight: 18 },
-    secondary: { fontSize: 14, fontWeight: "400", lineHeight: 20 },
-    section: { fontSize: 17, fontWeight: "600", lineHeight: 22 },
-    title: { fontSize: 22, fontWeight: "600", lineHeight: 28 },
+    answer: { fontFamily: "semibold", fontSize: 44, fontWeight: "600", letterSpacing: -1, lineHeight: 48, maxFontSizeMultiplier: 1.5 },
+    body: { fontFamily: "regular", fontSize: 16, fontWeight: "400", lineHeight: 22 },
+    bodyStrong: { fontFamily: "semibold", fontSize: 16, fontWeight: "600", lineHeight: 22 },
+    display: { fontFamily: "display", fontSize: 34, fontWeight: "400", letterSpacing: -0.5, lineHeight: 38, maxFontSizeMultiplier: 1.6 },
+    label: { fontFamily: "medium", fontSize: 13, fontWeight: "500", lineHeight: 16 },
+    meta: { fontFamily: "medium", fontSize: 13, fontWeight: "500", lineHeight: 18 },
+    mono: { fontFamily: "mono", fontSize: 12, fontWeight: "500", letterSpacing: 0.6, lineHeight: 16, uppercase: true },
+    rowTitle: { fontFamily: "semibold", fontSize: 17, fontWeight: "600", lineHeight: 22 },
+    secondary: { fontFamily: "regular", fontSize: 15, fontWeight: "400", lineHeight: 20 },
+    section: { fontFamily: "semibold", fontSize: 20, fontWeight: "600", lineHeight: 24 },
+    title: { fontFamily: "display", fontSize: 34, fontWeight: "400", letterSpacing: -0.5, lineHeight: 38 },
   },
 };

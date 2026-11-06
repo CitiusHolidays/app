@@ -1,4 +1,8 @@
 import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react';
+import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
+import { useFonts } from 'expo-font';
 import { staffTheme, Text, ThemeProvider } from '@citius/ui';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -73,7 +77,10 @@ function Shell() {
         screenOptions={{
           contentStyle: { backgroundColor: staffTheme.color.ground },
           headerBackButtonDisplayMode: 'minimal',
-          headerTintColor: staffTheme.color.primary,
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: staffTheme.color.ground },
+          headerTintColor: staffTheme.color.ink,
+          headerTitleStyle: { fontFamily: staffTheme.font.semibold, fontSize: 17 },
         }}
       >
         <Stack.Protected guard={gate.kind === 'signedOut'}>
@@ -109,6 +116,17 @@ function GuardedShell() {
 }
 
 export default function RootLayout() {
+  // The splash stays up until the bundled faces are ready; a font error falls back to system type.
+  const [fontsLoaded, fontError] = useFonts({
+    InstrumentSerif_400Regular,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    JetBrainsMono_500Medium,
+  });
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
   if (!clients) {
     return (
       <ThemeProvider theme={staffTheme}>

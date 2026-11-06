@@ -1,12 +1,12 @@
 import { EXPENSE_CATEGORIES, EXPENSE_CURRENCIES, type ExpenseCategory, type ExpenseCurrency } from '@citius/backend';
-import { Button, space, Text } from '@citius/ui';
+import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Chip, ChipRow, haptic, Screen, TextField } from '@/components/kit';
+import { Chip, ChipRow, haptic, Icon, QuietState, Screen, TextField } from '@/components/kit';
 import { parseAmount } from '@/features/expenses/format';
 import { createOutboxItem, type ReceiptFile } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
@@ -22,6 +22,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Receipt photo, amount and currency, saved to the outbox at once; it sends when online. */
 export default function NewExpense() {
+  const theme = useAppTheme();
   const staff = useStaff();
   const { chosen, trips } = useTrips();
   const { enqueue } = useOutbox();
@@ -108,10 +109,22 @@ export default function NewExpense() {
     router.back();
   };
 
+  const tile = {
+    alignItems: 'center' as const,
+    backgroundColor: theme.color.inset,
+    borderColor: theme.color.controlBorder,
+    borderRadius: theme.radius.inset,
+    borderStyle: 'dashed' as const,
+    borderWidth: 1.5,
+    gap: space.sm,
+    justifyContent: 'center' as const,
+    padding: space.lg,
+  };
+
   return (
-    <Screen>
+    <Screen tabBar={false}>
       {trips.length > 0 ? (
-        <ChipRow label="Trip">
+        <ChipRow label="Trip" showLabel>
           {trips.map((candidate) => (
             <Chip
               key={candidate.id}
@@ -122,31 +135,69 @@ export default function NewExpense() {
           ))}
         </ChipRow>
       ) : (
-        <Text tone="muted">No trips are assigned to you, so there is no trip to file an expense against.</Text>
+        <Surface>
+          <QuietState text="No trips are assigned to you, so there is no trip to file an expense against." />
+        </Surface>
       )}
-      {receipt ? (
-        <Image
-          accessibilityLabel="Receipt photo"
-          contentFit="contain"
-          source={{ uri: receipt.uri }}
-          style={{ aspectRatio: 3 / 4, borderRadius: 12, maxHeight: 320, width: '100%' }}
-        />
-      ) : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-        <View style={{ flexGrow: 1 }}>
-          <Button label={receipt ? 'Retake photo' : 'Take receipt photo'} onPress={() => void takePhoto()} />
-        </View>
-        <View style={{ flexGrow: 1 }}>
-          <Button label="Choose from library" onPress={() => void choosePhoto()} variant="secondary" />
+      <View style={{ gap: space.sm }}>
+        <Text accessibilityElementsHidden importantForAccessibility="no" variant="label">
+          Receipt
+        </Text>
+        {receipt ? (
+          <View style={[tile, { borderStyle: 'solid', borderColor: theme.color.rule, borderWidth: StyleSheet.hairlineWidth, padding: space.sm }]}>
+            <Image
+              accessibilityLabel="Receipt photo"
+              contentFit="contain"
+              source={{ uri: receipt.uri }}
+              style={{ aspectRatio: 3 / 4, borderRadius: theme.radius.control, maxHeight: 320, width: '100%' }}
+            />
+          </View>
+        ) : (
+          <PressableScale
+            accessibilityHint="Opens the camera"
+            accessibilityLabel="Take receipt photo"
+            accessibilityRole="button"
+            onPress={() => void takePhoto()}
+            style={[tile, { minHeight: 168 }]}
+          >
+            <View
+              style={{
+                alignItems: 'center',
+                backgroundColor: theme.color.card,
+                borderColor: theme.color.border,
+                borderRadius: 24,
+                borderWidth: StyleSheet.hairlineWidth,
+                height: 48,
+                justifyContent: 'center',
+                width: 48,
+              }}
+            >
+              <Icon ios="camera" md="photo_camera" size={22} />
+            </View>
+            <Text variant="bodyStrong">Take receipt photo</Text>
+            <Text tone="muted" variant="secondary">
+              The whole receipt, flat and in focus
+            </Text>
+          </PressableScale>
+        )}
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          {receipt ? (
+            <View style={{ flex: 1 }}>
+              <Button label="Retake photo" onPress={() => void takePhoto()} variant="secondary" />
+            </View>
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <Button label="Choose from library" onPress={() => void choosePhoto()} variant="secondary" />
+          </View>
         </View>
       </View>
       <TextField inputMode="decimal" keyboardType="decimal-pad" label="Amount" onChangeText={setAmount} placeholder="0.00" value={amount} />
-      <ChipRow label="Currency">
+      <ChipRow label="Currency" showLabel>
         {EXPENSE_CURRENCIES.map((code) => (
           <Chip key={code} label={code} onPress={() => setCurrency(code)} selected={currency === code} />
         ))}
       </ChipRow>
-      <ChipRow label="Category">
+      <ChipRow label="Category" showLabel>
         {EXPENSE_CATEGORIES.map((head) => (
           <Chip key={head} label={head} onPress={() => setCategory(head)} selected={category === head} />
         ))}
@@ -154,14 +205,18 @@ export default function NewExpense() {
       <TextField autoCorrect={false} label="Date" onChangeText={setExpenseDate} placeholder="YYYY-MM-DD" value={expenseDate} />
       <TextField label="What it was for" onChangeText={setParticulars} placeholder="For example: Airport taxi for Bus 2" value={particulars} />
       {problem ? (
-        <Text accessibilityLiveRegion="polite" tone="warning">
-          {problem}
-        </Text>
+        <Banner tone="attention">
+          <Text accessibilityLiveRegion="polite" variant="secondary">
+            {problem}
+          </Text>
+        </Banner>
       ) : null}
-      <Button busy={busy} label="Save expense" onPress={save} />
-      <Text variant="secondary" tone="muted">
-        Saved on this phone first. It is sent for approval as soon as you are online, and the photo is kept until it is.
-      </Text>
+      <View style={{ gap: space.md }}>
+        <Button busy={busy} label="Save expense" onPress={save} />
+        <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
+          Saved on this phone first. It is sent for approval as soon as you are online, and the photo is kept until it is.
+        </Text>
+      </View>
     </Screen>
   );
 }

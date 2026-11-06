@@ -1,7 +1,7 @@
-import { Button, Text } from '@citius/ui';
+import { Button } from '@citius/ui';
 import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
 
-import { Screen } from '@/components/kit';
+import { MessageScreen } from '@/components/kit';
 import { logEvent } from '@/lib/safe-log';
 
 /** The server's refusal codes that mean this account may no longer read trip data. */
@@ -27,28 +27,30 @@ interface State {
 function Fallback({ onRetry, onSignOut, revoked }: { onRetry: () => void; onSignOut: () => Promise<void>; revoked: boolean }) {
   const [busy, setBusy] = useState(false);
   return (
-    <Screen title={revoked ? 'Your access has changed' : 'Something went wrong'}>
-      <Text>
-        {revoked
+    <MessageScreen
+      actions={
+        <>
+          <Button label="Try again" onPress={onRetry} />
+          <Button
+            busy={busy}
+            label="Sign out"
+            onPress={() => {
+              setBusy(true);
+              void onSignOut().finally(() => setBusy(false));
+            }}
+            variant="secondary"
+          />
+        </>
+      }
+      detail={revoked ? 'If you think this is a mistake, ask HR or your manager to check your staff access.' : undefined}
+      icon={revoked ? { ios: 'lock', md: 'lock' } : { ios: 'exclamationmark.triangle', md: 'warning' }}
+      text={
+        revoked
           ? 'Citius no longer lets this account open trip data, so what was saved on this phone has been deleted.'
-          : 'This screen could not be shown. Your saved trip data and unsent expenses are still on this phone.'}
-      </Text>
-      {revoked ? (
-        <Text variant="secondary" tone="muted">
-          If you think this is a mistake, ask HR or your manager to check your staff access.
-        </Text>
-      ) : null}
-      <Button label="Try again" onPress={onRetry} />
-      <Button
-        busy={busy}
-        label="Sign out"
-        onPress={() => {
-          setBusy(true);
-          void onSignOut().finally(() => setBusy(false));
-        }}
-        variant="secondary"
-      />
-    </Screen>
+          : 'This screen could not be shown. Your saved trip data and unsent expenses are still on this phone.'
+      }
+      title={revoked ? 'Your access has changed' : 'Something went wrong'}
+    />
   );
 }
 

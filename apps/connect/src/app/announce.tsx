@@ -1,9 +1,9 @@
-import { Button, space, Surface, Text } from '@citius/ui';
+import { Banner, Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Share, View } from 'react-native';
 
-import { Chip, ChipRow, haptic, Row, Screen, SectionTitle, TextField } from '@/components/kit';
+import { Chip, ChipRow, haptic, Icon, ListCard, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
 import {
   ackSummary,
   type Audience,
@@ -20,6 +20,7 @@ import { logEvent } from '@/lib/safe-log';
 
 /** Write once, send through today's channels with the share sheet, keep a local log. */
 export default function Announce() {
+  const theme = useAppTheme();
   const staff = useStaff();
   const { pack, selected } = useTrips();
   const { add, log } = useAnnouncements(selected?.id ?? null);
@@ -29,8 +30,10 @@ export default function Announce() {
 
   if (!pack || !selected) {
     return (
-      <Screen>
-        <Text tone="muted">Save the trip pack first (Trip tab), then write an announcement.</Text>
+      <Screen tabBar={false}>
+        <Surface>
+          <QuietState text="Save the trip pack first (Trip tab), then write an announcement." />
+        </Surface>
       </Screen>
     );
   }
@@ -66,61 +69,76 @@ export default function Announce() {
   };
 
   return (
-    <Screen>
-      <ChipRow label="Send to">
-        <Chip label="Whole trip" onPress={() => setAudience({ kind: 'trip' })} selected={audience.kind === 'trip'} />
-        {pack.batches.map((batch) => (
-          <Chip
-            key={batch.id}
-            label={batch.label}
-            onPress={() => setAudience({ batchId: batch.id, kind: 'batch' })}
-            selected={audience.kind === 'batch' && audience.batchId === batch.id}
-          />
-        ))}
-      </ChipRow>
-      <Text variant="secondary" tabular tone="muted">
-        To {label} · {recipients.length} travellers
-      </Text>
+    <Screen tabBar={false}>
+      <View style={{ gap: space.sm }}>
+        <ChipRow label="Send to" showLabel>
+          <Chip label="Whole trip" onPress={() => setAudience({ kind: 'trip' })} selected={audience.kind === 'trip'} />
+          {pack.batches.map((batch) => (
+            <Chip
+              key={batch.id}
+              label={batch.label}
+              onPress={() => setAudience({ batchId: batch.id, kind: 'batch' })}
+              selected={audience.kind === 'batch' && audience.batchId === batch.id}
+            />
+          ))}
+        </ChipRow>
+        <Text tabular tone="muted" variant="secondary">
+          To {label} · {recipients.length} {recipients.length === 1 ? 'traveller' : 'travellers'}
+        </Text>
+      </View>
       <TextField
         label="Message"
         multiline
         onChangeText={setBody}
         placeholder="For example: The bus leaves the hotel at 8:15. Meet in the lobby."
-        style={{ minHeight: 120, textAlignVertical: 'top' }}
+        style={{ minHeight: 132, paddingTop: space.md, textAlignVertical: 'top' }}
         value={body}
       />
       {body.trim() ? (
-        <Surface>
-          <Text variant="meta" tone="muted">
+        <Surface style={{ gap: space.xs + 2 }} variant="inset">
+          <Text tone="muted" variant="label">
             Preview
           </Text>
           <Text selectable>{message}</Text>
         </Surface>
       ) : null}
       {problem ? (
-        <Text accessibilityLiveRegion="polite" tone="warning">
-          {problem}
-        </Text>
+        <Banner tone="attention">
+          <Text accessibilityLiveRegion="polite" variant="secondary">
+            {problem}
+          </Text>
+        </Banner>
       ) : null}
-      <Button label="Share message" onPress={() => void share()} />
-      <Text variant="secondary" tone="muted">
-        Opens your phone&apos;s share sheet, so you can send it on WhatsApp, SMS or email as today. Citius Connect keeps a
-        copy here with a checklist of who has seen it.
-      </Text>
+      <View style={{ gap: space.md }}>
+        <Button
+          icon={<Icon color={theme.color.onPrimary} ios="square.and.arrow.up" md="share" size={16} />}
+          label="Share message"
+          onPress={() => void share()}
+        />
+        <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
+          Opens your phone&apos;s share sheet, so you can send it on WhatsApp, SMS or email as today. Citius Connect keeps a
+          copy here with a checklist of who has seen it.
+        </Text>
+      </View>
       {log.length > 0 ? (
-        <View style={{ gap: space.xs }}>
+        <View style={{ gap: space.md }}>
           <SectionTitle>Earlier announcements</SectionTitle>
-          {log.map((item) => {
-            const acks = ackSummary(item);
-            return (
-              <Row
-                key={item.id}
-                onPress={() => router.push({ params: { id: item.id }, pathname: '/announcement/[id]' })}
-                subtitle={`To ${item.audienceLabel} · ${acks.acknowledged} of ${acks.total} have seen it`}
-                title={item.body}
-              />
-            );
-          })}
+          <ListCard>
+            {log.map((item, index) => {
+              const acks = ackSummary(item);
+              return (
+                <Row
+                  accessibilityLabel={`${item.body}. To ${item.audienceLabel}, ${acks.acknowledged} of ${acks.total} have seen it`}
+                  chevron
+                  key={item.id}
+                  last={index === log.length - 1}
+                  onPress={() => router.push({ params: { id: item.id }, pathname: '/announcement/[id]' })}
+                  subtitle={`To ${item.audienceLabel} · ${acks.acknowledged} of ${acks.total} have seen it`}
+                  title={item.body}
+                />
+              );
+            })}
+          </ListCard>
         </View>
       ) : null}
     </Screen>

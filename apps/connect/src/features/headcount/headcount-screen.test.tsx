@@ -29,14 +29,14 @@ describe('headcount screen', () => {
         <Headcount />
       </AppStoreProvider>
     );
-    expect(await screen.findByText('0 of 3 here')).toBeOnTheScreen();
+    expect(await screen.findByLabelText('0 of 3 here')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('checkbox', { name: 'Asha Example' }));
-    expect(await screen.findByText('1 of 3 here')).toBeOnTheScreen();
+    expect(await screen.findByLabelText('1 of 3 here')).toBeOnTheScreen();
     expect(screen.getByRole('checkbox', { name: 'Asha Example' })).toBeChecked();
     expect(announce).toHaveBeenCalledWith('1 of 3 here');
 
     await fireEvent.press(screen.getByRole('radio', { name: 'Bus 2' }));
-    expect(await screen.findByText('0 of 1 here')).toBeOnTheScreen();
+    expect(await screen.findByLabelText('0 of 1 here')).toBeOnTheScreen();
     expect(screen.queryByRole('checkbox', { name: 'Asha Example' })).not.toBeOnTheScreen();
   });
 
@@ -49,7 +49,7 @@ describe('headcount screen', () => {
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Zed Example' }));
     await fireEvent.changeText(screen.getByLabelText('Next stop'), 'Temple car park');
     await fireEvent.press(screen.getByRole('button', { name: 'Start new stop' }));
-    expect(await screen.findByText('0 of 3 here')).toBeOnTheScreen();
+    expect(await screen.findByLabelText('0 of 3 here')).toBeOnTheScreen();
     expect(screen.getByText(/Temple car park/)).toBeOnTheScreen();
   });
 });
