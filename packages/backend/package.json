@@ -1,0 +1,14 @@
+{
+  "name": "@citius/backend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The explicit list of Convex functions the Citius apps call, with hand-written types. No website source is copied here.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "convex": "^1.49.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

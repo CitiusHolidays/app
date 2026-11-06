@@ -1,0 +1,4 @@
+[install]
+# Hoisted installs: React Native tooling (Metro, Babel runtime helpers, Jest) resolves shared
+# packages from the workspace root, so packages/* need no duplicate dependency entries.
+linker = "hoisted"
