@@ -206,7 +206,7 @@ export default function NewExpense() {
       <TextField autoCorrect={false} label="Date" onChangeText={setExpenseDate} placeholder="YYYY-MM-DD" value={expenseDate} />
       <TextField label="What it was for" onChangeText={setParticulars} placeholder="For example: Airport taxi for Bus 2" value={particulars} />
       {problem ? (
-        <Banner tone="attention">
+        <Banner tone="danger">
           <Text accessibilityLiveRegion="polite" variant="secondary">
             {problem}
           </Text>

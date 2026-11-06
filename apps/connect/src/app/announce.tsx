@@ -103,7 +103,7 @@ export default function Announce() {
         </Surface>
       ) : null}
       {problem ? (
-        <Banner tone="attention">
+        <Banner tone="danger">
           <Text accessibilityLiveRegion="polite" variant="secondary">
             {problem}
           </Text>

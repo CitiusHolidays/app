@@ -151,9 +151,9 @@ export const staffTheme: AppTheme = {
     border: citius.border,
     card: "#ffffff",
     controlBorder: "#8a94a6",
-    /** No Citius red exists yet; a proposed negative token pending brand approval. */
-    danger: "#9a2a1f",
-    dangerSoft: "#fbe3de",
+    /** Errors only: a brick red that sits beside Citius orange (6.6:1 on white, 6.1:1 on its tint). */
+    danger: "#b42318",
+    dangerSoft: "#fef3f2",
     dark: citius.night,
     ground: "#f0f2f4",
     ink: citius.ink,
