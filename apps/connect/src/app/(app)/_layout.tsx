@@ -4,7 +4,7 @@ import { NativeTabs } from 'expo-router/native-tabs';
 /** Tour manager tabs. Tabs never animate between each other. */
 export default function StaffTabs() {
   return (
-    <NativeTabs labelStyle={{ selected: { color: staffTheme.color.primary } }} tintColor={staffTheme.color.primary}>
+    <NativeTabs labelVisibilityMode="labeled" labelStyle={{ selected: { color: staffTheme.color.primary } }} tintColor={staffTheme.color.primary}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="today" sf="sun.max" />

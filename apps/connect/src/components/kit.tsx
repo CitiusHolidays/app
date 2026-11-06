@@ -50,9 +50,9 @@ export function Screen({
         gap: space.lg + 4,
         paddingBottom: insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl),
         paddingHorizontal: theme.frame,
-        // Tab screens let iOS inset the content for the status bar ('automatic'), which adds
-        // exactly what the container did not; stack screens without a header pad for it themselves.
-        paddingTop: opens && !tabBar ? insets.top + space.lg : space.sm,
+        // iOS tab screens let the system inset the content for the status bar ('automatic');
+        // Android tab screens and header-less stack screens pad for it themselves.
+        paddingTop: !tabBar && opens ? insets.top + space.lg : tabBar && Platform.OS !== 'ios' ? insets.top + space.md : space.sm,
       }}
       contentInsetAdjustmentBehavior={tabBar ? 'automatic' : 'never'}
       keyboardShouldPersistTaps="handled"
