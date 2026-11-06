@@ -124,7 +124,7 @@ describe('trip screen', () => {
       expect(screen.getByRole('button', { name: 'Passport, Asha Example' })).toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'Passport, Bina Example' })).toBeNull();
       expect(screen.getByLabelText("Passport for Bina Example can't be opened in the app")).toBeOnTheScreen();
-      expect(screen.getAllByText("Can't be opened in the app")).toHaveLength(1);
+      expect(screen.getAllByText("Passport can't be opened in the app")).toHaveLength(1);
       // Nothing navigates to the viewer, so no audited read is made for a file nobody can see.
       expect(mockPush).not.toHaveBeenCalled();
 

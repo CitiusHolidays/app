@@ -90,39 +90,41 @@ function Roster({ now, online, pack, passports }: { now: number; online: boolean
                 return (
                   <Row
                     accessibilityLabel={[entry.name, meta, `calling: ${pill.label}`].filter(Boolean).join(', ')}
-                    detail={entry.phone ? <StatusPill kind={pill.kind} label={pill.label} /> : undefined}
+                    detail={
+                      entry.phone || passport?.available ? (
+                        <>
+                          {entry.phone ? <StatusPill kind={pill.kind} label={pill.label} /> : null}
+                          {passport?.available && canOpenPassportInApp(passport.mimeType) ? (
+                            <ActionPill
+                              accessibilityLabel={`Passport, ${entry.name}`}
+                              icon={{ ios: 'person.text.rectangle', md: 'badge' }}
+                              label="Passport"
+                              onPress={() => router.push({ params: { id: entry.id }, pathname: '/passport/[id]' })}
+                            />
+                          ) : passport?.available ? (
+                            // Opening it would be an audited read of a file nobody could see here.
+                            <Text
+                              accessibilityLabel={`Passport for ${entry.name} can't be opened in the app`}
+                              tone="muted"
+                              variant="label"
+                            >
+                              {"Passport can't be opened in the app"}
+                            </Text>
+                          ) : null}
+                        </>
+                      ) : undefined
+                    }
                     key={entry.id}
                     last={index === group.entries.length - 1}
                     leading={<Avatar name={entry.name} />}
                     subtitle={meta || undefined}
                     title={entry.name}
                     trailing={
-                      <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
-                        {passport?.available && canOpenPassportInApp(passport.mimeType) ? (
-                          <ActionPill
-                            accessibilityLabel={`Passport, ${entry.name}`}
-                            icon={{ ios: 'person.text.rectangle', md: 'badge' }}
-                            label="Passport"
-                            onPress={() => router.push({ params: { id: entry.id }, pathname: '/passport/[id]' })}
-                          />
-                        ) : passport?.available ? (
-                          // Opening it would be an audited read of a file nobody could see here.
-                          <Text
-                            accessibilityLabel={`Passport for ${entry.name} can't be opened in the app`}
-                            numberOfLines={2}
-                            style={{ maxWidth: 104, textAlign: 'right' }}
-                            tone="muted"
-                            variant="label"
-                          >
-                            {"Can't be opened in the app"}
-                          </Text>
-                        ) : null}
-                        {entry.phone ? (
-                          <CallButton name={entry.name} phone={entry.phone} />
-                        ) : (
-                          <StatusPill kind={pill.kind} label={pill.label} />
-                        )}
-                      </View>
+                      entry.phone ? (
+                        <CallButton name={entry.name} phone={entry.phone} />
+                      ) : (
+                        <StatusPill kind={pill.kind} label={pill.label} />
+                      )
                     }
                   />
                 );
