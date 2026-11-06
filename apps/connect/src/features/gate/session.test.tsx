@@ -21,6 +21,7 @@ const mockSession = { data: { session: { id: 's' } } as unknown, error: null as 
 const mockSignOut = jest.fn(async () => undefined);
 const mockClearLocalAuthSession = jest.fn(async () => undefined);
 const mockDeleteAllReceipts = jest.fn();
+const mockDeleteAllPassportPdfs = jest.fn();
 let mockStore: KeyValueStore;
 
 jest.mock('convex/react', () => ({
@@ -39,6 +40,7 @@ jest.mock('@/lib/clients', () => ({
 }));
 jest.mock('@/lib/auth-storage', () => ({ clearLocalAuthSession: () => mockClearLocalAuthSession() }));
 jest.mock('@/features/expenses/receipt-files', () => ({ deleteAllReceipts: () => mockDeleteAllReceipts() }));
+jest.mock('@/features/passports/passport-pdf-file', () => ({ deleteAllPassportPdfs: () => mockDeleteAllPassportPdfs() }));
 jest.mock('@/lib/network', () => ({ useOnline: () => true }));
 jest.mock('@/lib/storage/device-store', () => ({ openDeviceStore: async () => mockStore }));
 
@@ -70,6 +72,7 @@ beforeEach(async () => {
   mockSignOut.mockReset().mockResolvedValue(undefined);
   mockClearLocalAuthSession.mockClear();
   mockDeleteAllReceipts.mockClear();
+  mockDeleteAllPassportPdfs.mockClear();
 });
 
 describe('staff session', () => {
@@ -83,7 +86,18 @@ describe('staff session', () => {
     expect(await mockStore.getJSON('pack:jc_a')).toBeNull();
     expect(await mockStore.getJSON('outbox:expenses')).toBeNull();
     expect(mockDeleteAllReceipts).toHaveBeenCalled();
+    expect(mockDeleteAllPassportPdfs).toHaveBeenCalled();
     expect(await mockStore.getJSON('session:verifiedStaff')).toMatchObject({ staffId: 'staff_b' });
+  });
+
+  it('deletes any passport view file left by a crash as soon as the app starts', async () => {
+    await mockStore.setJSON('session:verifiedStaff', { name: 'A', roles: ['Tour Manager'], staffId: 'staff_a', verifiedAt: 1 });
+    mockAuth.access = tmAccess('staff_a');
+    await renderSession();
+    expect(await screen.findByText('gate:staff')).toBeOnTheScreen();
+    // Same tour manager: nothing else is wiped, but a leftover passport file never survives a start.
+    expect(mockDeleteAllReceipts).not.toHaveBeenCalled();
+    expect(mockDeleteAllPassportPdfs).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the same tour manager's data and refreshes the saved roles and time", async () => {
@@ -146,6 +160,7 @@ describe('staff session', () => {
     mockSignOut.mockRejectedValue(new TypeError('Network request failed'));
     await renderSession();
     expect(await screen.findByText('gate:staff')).toBeOnTheScreen();
+    mockDeleteAllPassportPdfs.mockClear();
     await act(async () => {
       await handles.session?.signOut();
     });
@@ -154,5 +169,6 @@ describe('staff session', () => {
     expect(await mockStore.getJSON('pack:jc_a')).toBeNull();
     expect(await mockStore.getJSON('session:verifiedStaff')).toBeNull();
     expect(mockDeleteAllReceipts).toHaveBeenCalled();
+    expect(mockDeleteAllPassportPdfs).toHaveBeenCalled();
   });
 });

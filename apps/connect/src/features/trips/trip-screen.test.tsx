@@ -90,9 +90,9 @@ describe('trip screen', () => {
     mockPassports.passports = {
       timeZone: 'Asia/Kolkata',
       travellers: [
-        { available: true, hasPassportScan: true, travellerId: 't_2', ...tripWindow },
-        { available: false, hasPassportScan: false, travellerId: 't_1', ...tripWindow },
-        { available: false, closesAt: null, hasPassportScan: true, opensAt: null, travellerId: 't_3' },
+        { available: true, hasPassportScan: true, mimeType: 'image/jpeg', travellerId: 't_2', ...tripWindow },
+        { available: false, hasPassportScan: false, mimeType: null, travellerId: 't_1', ...tripWindow },
+        { available: false, closesAt: null, hasPassportScan: true, mimeType: 'application/pdf', opensAt: null, travellerId: 't_3' },
       ],
     };
     try {
@@ -108,9 +108,39 @@ describe('trip screen', () => {
     }
   });
 
+  it('offers Passport for images and PDFs only, and says other files cannot be opened, without opening them', async () => {
+    jest.useFakeTimers({ now: tripWindow.opensAt + DAY_MS, doNotFake: ['nextTick', 'setImmediate'] });
+    mockPassports.passports = {
+      timeZone: 'Asia/Kolkata',
+      travellers: [
+        { available: true, hasPassportScan: true, mimeType: 'image/heic', travellerId: 't_1', ...tripWindow },
+        { available: true, hasPassportScan: true, mimeType: 'application/pdf', travellerId: 't_2', ...tripWindow },
+        { available: true, hasPassportScan: true, mimeType: 'image/tiff', travellerId: 't_3', ...tripWindow },
+      ],
+    };
+    try {
+      await renderWithTheme(<TripPackScreen />);
+      expect(screen.getByRole('button', { name: 'Passport, Zed Example' })).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Passport, Asha Example' })).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Passport, Bina Example' })).toBeNull();
+      expect(screen.getByLabelText("Passport for Bina Example can't be opened in the app")).toBeOnTheScreen();
+      expect(screen.getAllByText("Can't be opened in the app")).toHaveLength(1);
+      // Nothing navigates to the viewer, so no audited read is made for a file nobody can see.
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Passport, Asha Example' }));
+      expect(mockPush).toHaveBeenCalledWith({ params: { id: 't_2' }, pathname: '/passport/[id]' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('says when passports open before the window', async () => {
     jest.useFakeTimers({ now: tripWindow.opensAt - 1, doNotFake: ['nextTick', 'setImmediate'] });
-    mockPassports.passports = { timeZone: 'Asia/Kolkata', travellers: [{ available: false, hasPassportScan: true, travellerId: 't_2', ...tripWindow }] };
+    mockPassports.passports = {
+      timeZone: 'Asia/Kolkata',
+      travellers: [{ available: false, hasPassportScan: true, mimeType: 'image/jpeg', travellerId: 't_2', ...tripWindow }],
+    };
     try {
       await renderWithTheme(<TripPackScreen />);
       expect(screen.getByText('Passports · Opens on 4 Nov (India time)')).toBeOnTheScreen();

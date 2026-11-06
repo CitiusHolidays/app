@@ -112,7 +112,7 @@ function Shell() {
           <Stack.Screen name="announce" options={{ presentation: 'modal', title: 'New announcement' }} />
           <Stack.Screen name="announcement/[id]" options={{ title: 'Announcement' }} />
           <Stack.Screen name="expense-new" options={{ presentation: 'modal', title: 'New expense' }} />
-          <Stack.Screen name="passport/[id]" options={{ presentation: 'modal', title: 'Passport' }} />
+          <Stack.Screen name="passport/[id]" options={{ headerShown: false, presentation: 'fullScreenModal', title: 'Passport' }} />
           <Stack.Screen name="notification/[id]" options={{ title: 'Notification' }} />
         </Stack.Protected>
       </Stack>

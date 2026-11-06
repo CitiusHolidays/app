@@ -10,6 +10,7 @@ import { useOnline } from '@/lib/network';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
 import { deleteAllReceipts } from '@/features/expenses/receipt-files';
+import { deleteAllPassportPdfs } from '@/features/passports/passport-pdf-file';
 
 import {
   type AuthSessionState,
@@ -102,7 +103,14 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const wipeLocalData = useCallback(async () => {
     await live.wipe();
     deleteAllReceipts();
+    deleteAllPassportPdfs();
   }, [live]);
+
+  // A passport PDF's file is deleted when its viewer closes; one left by a crash or a killed app
+  // goes at the next start, before anything is shown.
+  useEffect(() => {
+    deleteAllPassportPdfs();
+  }, []);
 
   const latestAccess = useRef(access);
   useEffect(() => {

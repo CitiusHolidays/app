@@ -25,6 +25,14 @@ describeWithWebsite("staff API contract with the website backend", () => {
     }
   );
 
+  it("gets each traveller's scan file type from the field passport list", () => {
+    // The roster offers Passport only for types the app can show, so the type must be there.
+    const source = readFileSync(join(convexDir, "crm/fieldPassports.ts"), "utf8");
+    const list = source.slice(source.indexOf("export const listFieldPassports"));
+    const returns = list.slice(list.indexOf("returns:"), list.indexOf("});"));
+    expect(returns).toMatch(/mimeType: v\.union\(v\.string\(\), v\.null\(\)\)/);
+  });
+
   it("offers the same expense currencies as the server validator", () => {
     const validators = readFileSync(join(convexDir, "crm/financeValidators.ts"), "utf8");
     const block = validators.match(/expenseCurrencyValidator = v\.union\(([\s\S]*?)\);/);

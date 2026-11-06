@@ -173,6 +173,8 @@ export interface FieldPassportRow {
   available: boolean;
   closesAt: number | null;
   hasPassportScan: boolean;
+  /** The scan's file type ("image/jpeg", "application/pdf"), or null when there is no scan. */
+  mimeType: string | null;
   opensAt: number | null;
   travellerId: string;
 }

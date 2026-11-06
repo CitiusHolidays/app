@@ -1,6 +1,13 @@
 import { ConvexError } from 'convex/values';
 
-import { base64FromBytes, passportProblem, passportViewKind, passportWindowLabel, passportWindowLine } from './passport-window';
+import {
+  base64FromBytes,
+  canOpenPassportInApp,
+  passportProblem,
+  passportViewKind,
+  passportWindowLabel,
+  passportWindowLine,
+} from './passport-window';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const IST_MS = 5.5 * 60 * 60 * 1000;
@@ -54,11 +61,24 @@ describe('passport file handling', () => {
     expect(base64FromBytes(new Uint8Array([0, 255, 254, 1]).buffer)).toBe('AP/+AQ==');
   });
 
-  it('shows images, and does not try to show PDFs or other types', () => {
-    expect(passportViewKind('image/jpeg')).toBe('image');
-    expect(passportViewKind('IMAGE/PNG')).toBe('image');
+  it('shows JPEG, PNG, HEIC and WebP as images and PDFs as PDFs; nothing else', () => {
+    for (const type of ['image/jpeg', 'IMAGE/PNG', 'image/heic', 'image/heif', 'image/webp', ' image/jpg ']) {
+      expect(passportViewKind(type)).toBe('image');
+    }
     expect(passportViewKind('application/pdf')).toBe('pdf');
-    expect(passportViewKind('application/zip')).toBe('other');
+    for (const type of ['application/zip', 'image/tiff', 'image/gif', 'image/svg+xml', 'text/html', '']) {
+      expect(passportViewKind(type)).toBe('other');
+    }
+  });
+
+  it('offers the Passport button only for a scan the app can show', () => {
+    expect(canOpenPassportInApp('image/jpeg')).toBe(true);
+    expect(canOpenPassportInApp('image/heic')).toBe(true);
+    expect(canOpenPassportInApp('application/pdf')).toBe(true);
+    expect(canOpenPassportInApp('image/tiff')).toBe(false);
+    expect(canOpenPassportInApp('application/msword')).toBe(false);
+    // No scan on file.
+    expect(canOpenPassportInApp(null)).toBe(false);
   });
 
   it('explains refusals in plain words', () => {

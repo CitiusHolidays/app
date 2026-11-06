@@ -32,12 +32,23 @@ export function passportWindowLine(window: PassportWindow, now: number, timeZone
 
 export type PassportViewKind = 'image' | 'pdf' | 'other';
 
-/** What the viewer can do with a file: images show in place; there is no PDF view in this build. */
+/**
+ * What the viewer can do with a file: JPEG, PNG, HEIC and WebP show as an image (with the `jpg`
+ * and `heif` spellings some uploads carry), PDFs in the PDF view, and nothing else.
+ */
 export function passportViewKind(mimeType: string): PassportViewKind {
   const type = mimeType.trim().toLowerCase();
-  if (/^image\/(jpeg|jpg|png|webp|gif|heic|heif)$/.test(type)) return 'image';
+  if (/^image\/(jpeg|jpg|png|webp|heic|heif)$/.test(type)) return 'image';
   if (type === 'application/pdf') return 'pdf';
   return 'other';
+}
+
+/**
+ * Whether the roster offers Passport for a scan of this type (null: no scan). Every open is an
+ * audited server read, so a file the app cannot show is never fetched.
+ */
+export function canOpenPassportInApp(mimeType: string | null) {
+  return mimeType !== null && passportViewKind(mimeType) !== 'other';
 }
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';

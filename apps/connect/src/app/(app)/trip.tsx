@@ -19,7 +19,7 @@ import {
   Screen,
   Segmented,
 } from '@/components/kit';
-import { passportWindowLine } from '@/features/passports/passport-window';
+import { canOpenPassportInApp, passportWindowLine } from '@/features/passports/passport-window';
 import { useFieldPassports } from '@/features/passports/use-field-passports';
 import { callingPill, groupRoster, rosterMeta } from '@/features/trip-pack/roster';
 import { type ScheduleStep, tripSchedule } from '@/features/trip-pack/schedule';
@@ -86,6 +86,7 @@ function Roster({ now, online, pack, passports }: { now: number; online: boolean
               {group.entries.map((entry, index) => {
                 const pill = callingPill(entry.callingStatus);
                 const meta = rosterMeta(entry);
+                const passport = online ? passportById.get(entry.id) : undefined;
                 return (
                   <Row
                     accessibilityLabel={[entry.name, meta, `calling: ${pill.label}`].filter(Boolean).join(', ')}
@@ -97,13 +98,24 @@ function Roster({ now, online, pack, passports }: { now: number; online: boolean
                     title={entry.name}
                     trailing={
                       <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
-                        {online && passportById.get(entry.id)?.available ? (
+                        {passport?.available && canOpenPassportInApp(passport.mimeType) ? (
                           <ActionPill
                             accessibilityLabel={`Passport, ${entry.name}`}
                             icon={{ ios: 'person.text.rectangle', md: 'badge' }}
                             label="Passport"
                             onPress={() => router.push({ params: { id: entry.id }, pathname: '/passport/[id]' })}
                           />
+                        ) : passport?.available ? (
+                          // Opening it would be an audited read of a file nobody could see here.
+                          <Text
+                            accessibilityLabel={`Passport for ${entry.name} can't be opened in the app`}
+                            numberOfLines={2}
+                            style={{ maxWidth: 104, textAlign: 'right' }}
+                            tone="muted"
+                            variant="label"
+                          >
+                            {"Can't be opened in the app"}
+                          </Text>
                         ) : null}
                         {entry.phone ? (
                           <CallButton name={entry.name} phone={entry.phone} />

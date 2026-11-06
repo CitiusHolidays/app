@@ -93,7 +93,7 @@ export default function Me() {
           />
           <Row
             last
-            subtitle="Receipt photos wait in the app's cache, which is left out of phone backups, and are deleted once the expense is sent. No passport or visa files are ever saved here, only their status."
+            subtitle="Receipt photos wait in the app's cache, which is left out of phone backups, and are deleted once the expense is sent. Passports are never saved: a PDF scan is held in a temporary cache file only while it is on screen, and deleted when you close it or leave the app."
             subtitleLines={0}
             title="Receipts and documents"
           />
