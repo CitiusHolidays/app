@@ -213,7 +213,7 @@ export function StatusPill({ kind, label }: { kind: StatusKind; label: string })
     attention: { bg: theme.color.warningSoft, fg: "warning" as const, mark: "!" },
     danger: { bg: theme.color.dangerSoft, fg: "danger" as const, mark: "!" },
     good: { bg: theme.color.successSoft, fg: "success" as const, mark: "✓" },
-    live: { bg: theme.color.surface, fg: "ink" as const, mark: "dot" },
+    live: { bg: "transparent", fg: "ink" as const, mark: "dot" },
     neutral: { bg: "transparent", fg: "muted" as const, mark: "ring" },
   }[kind];
   return (
@@ -226,12 +226,13 @@ export function StatusPill({ kind, label }: { kind: StatusKind; label: string })
         backgroundColor: look.bg,
         borderColor: kind === "live" || kind === "neutral" ? theme.color.border : "transparent",
         borderRadius: theme.radius.chip,
-        borderWidth: StyleSheet.hairlineWidth,
+        // A live pill sits among the trip's outlined chips, so it takes their outline and size.
+        borderWidth: kind === "live" ? 1 : StyleSheet.hairlineWidth,
         flexDirection: "row",
         flexShrink: 0,
         gap: 6,
-        minHeight: 26,
-        paddingHorizontal: 10,
+        minHeight: kind === "live" ? 30 : 26,
+        paddingHorizontal: kind === "live" ? 12 : 10,
       }}
     >
       {look.mark === "dot" ? (
