@@ -22,6 +22,8 @@ import {
 import { signOutDevice } from './sign-out';
 
 const VERIFIED_KEY = 'session:verifiedStaff';
+/** Set when the sign-in screen is shown; cleared once the server has confirmed a tour manager. */
+const SERVER_CHECK_KEY = 'session:needsServerCheck';
 
 interface StaffSession {
   gate: Gate;
@@ -83,6 +85,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const online = useOnline();
   const access = useQuery(staffApi.getMyPortalAccess.ref, isAuthenticated ? {} : 'skip');
   const [storedVerified, , verifiedLoaded] = useStoredValue<VerifiedStaff | null>(VERIFIED_KEY, null);
+  const [needsServerCheck, , checkLoaded] = useStoredValue<boolean>(SERVER_CHECK_KEY, false);
   const [authEpoch, setAuthEpoch] = useState(0);
   const hasCachedSession = useHasCachedSession(isAuthenticated, authEpoch);
   const [signingOut, setSigningOut] = useState(false);
@@ -119,6 +122,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
           await wipeLocalData();
         }
         await live.set(VERIFIED_KEY, step.record);
+        await live.set(SERVER_CHECK_KEY, false);
       }
     },
     [live, wipeLocalData]
@@ -169,14 +173,22 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     ? { kind: 'loading' }
     : resolveGate({
         access: access ?? undefined,
-        authLoading: isLoading || !verifiedLoaded || hasCachedSession === null,
+        authLoading: isLoading || !verifiedLoaded || !checkLoaded || hasCachedSession === null,
         hasCachedSession: Boolean(hasCachedSession),
         isAuthenticated,
         lastVerified: storedVerified,
+        needsServerCheck,
         now,
         sessionRejected: sessionRejectedByServer(authSession),
         stalled,
       });
+
+  // Whoever signs in next is confirmed by the server before any saved data opens.
+  useEffect(() => {
+    if (gate.kind === 'signedOut' && checkLoaded && !needsServerCheck) {
+      void serially(() => live.set(SERVER_CHECK_KEY, true));
+    }
+  }, [checkLoaded, gate.kind, live, needsServerCheck, serially]);
 
   return <SessionContext.Provider value={{ gate, online, revoke, signOut }}>{children}</SessionContext.Provider>;
 }

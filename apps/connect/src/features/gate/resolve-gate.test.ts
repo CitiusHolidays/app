@@ -27,6 +27,22 @@ describe('resolveGate', () => {
     expect(gate({ authLoading: true }).kind).toBe('loading');
   });
 
+  it('opens at once from this phone while the server check runs, without calling it offline', () => {
+    // A slow link must not hold the splash screen when the phone already knows this tour manager.
+    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm })).toMatchObject({ kind: 'staff', offline: false });
+    expect(gate({ hasCachedSession: true, isAuthenticated: true, lastVerified: verifiedTm })).toMatchObject({
+      kind: 'staff',
+      offline: false,
+    });
+  });
+
+  it('waits for the server after a fresh sign-in, even with saved data on the phone', () => {
+    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm, needsServerCheck: true }).kind).toBe('loading');
+    expect(
+      gate({ hasCachedSession: true, isAuthenticated: true, lastVerified: verifiedTm, needsServerCheck: true, stalled: true }).kind
+    ).toBe('loading');
+  });
+
   it('opens the saved trip pack when the server has not answered in time (a hanging connection)', () => {
     // Still waiting on the token check: after the stall, the offline window decides.
     expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm, stalled: true })).toMatchObject({

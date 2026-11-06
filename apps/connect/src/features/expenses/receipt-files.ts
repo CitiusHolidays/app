@@ -20,8 +20,40 @@ function legacyReceiptsDirectory() {
 export interface PickedImage {
   fileName?: string | null;
   fileSize?: number;
+  height?: number;
   mimeType?: string | null;
   uri: string;
+  width?: number;
+}
+
+/** A receipt stays readable at 1600 px on the long edge; a 12 MP photo is wasted bytes on 3G. */
+const RECEIPT_LONG_EDGE = 1600;
+const RECEIPT_QUALITY = 0.6;
+
+/** The resize for a photo, or null when it is already small enough or its size is unknown. */
+export function receiptSize(width: number | undefined, height: number | undefined) {
+  if (!width || !height || Math.max(width, height) <= RECEIPT_LONG_EDGE) {
+    return null;
+  }
+  return width >= height ? { height: null, width: RECEIPT_LONG_EDGE } : { height: RECEIPT_LONG_EDGE, width: null };
+}
+
+/** A smaller JPEG of the photo, or null when it cannot be decoded (the original is kept then). */
+async function shrink(image: PickedImage) {
+  try {
+    // Loaded on first use: a build without the native module skips shrinking instead of failing
+    // to start.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ImageManipulator, SaveFormat } = require('expo-image-manipulator') as typeof import('expo-image-manipulator');
+    const context = ImageManipulator.manipulate(image.uri);
+    const size = receiptSize(image.width, image.height);
+    if (size) context.resize(size);
+    const rendered = await context.renderAsync();
+    const result = await rendered.saveAsync({ compress: RECEIPT_QUALITY, format: SaveFormat.JPEG });
+    return result.uri;
+  } catch {
+    return null;
+  }
 }
 
 function extensionFor(mimeType: string) {
@@ -32,18 +64,27 @@ function extensionFor(mimeType: string) {
 }
 
 /**
- * Copies a picked photo out of the picker's temporary cache before anything else happens, so the
- * receipt survives the picker cleaning up, the app restarting or a failed upload.
+ * Shrinks a picked photo to a receipt-sized JPEG and copies it out of the picker's temporary cache
+ * before anything else happens, so the receipt survives the picker cleaning up, the app restarting
+ * or a failed upload, and costs a few hundred KB to send instead of several MB.
  */
 export async function keepReceipt(image: PickedImage, id: string): Promise<ReceiptFile> {
   const directory = receiptsDirectory();
   if (!directory.exists) {
     directory.create({ idempotent: true, intermediates: true });
   }
-  const mimeType = image.mimeType || 'image/jpeg';
+  const smaller = await shrink(image);
+  const mimeType = smaller ? 'image/jpeg' : image.mimeType || 'image/jpeg';
   const extension = extensionFor(mimeType);
   const destination = new File(directory, `${id}.${extension}`);
-  await new File(image.uri).copy(destination, { overwrite: true });
+  await new File(smaller ?? image.uri).copy(destination, { overwrite: true });
+  if (smaller) {
+    try {
+      new File(smaller).delete();
+    } catch {
+      // The manipulator's temporary file is cleared with the cache anyway.
+    }
+  }
   return { fileName: `receipt-${id}.${extension}`, mimeType, size: destination.size, uri: destination.uri };
 }
 

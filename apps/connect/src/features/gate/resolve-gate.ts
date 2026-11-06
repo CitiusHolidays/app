@@ -27,6 +27,11 @@ export interface GateInput {
   sessionRejected: boolean;
   /** The server has not answered for a while: a hanging connection, treated like no connection. */
   stalled?: boolean;
+  /**
+   * Someone has signed in since this phone last verified a tour manager. Until the server confirms
+   * who it is, the saved data (possibly another person's) must not open.
+   */
+  needsServerCheck?: boolean;
 }
 
 export type Gate =
@@ -70,12 +75,12 @@ export function sessionRejectedByServer(state: AuthSessionState) {
 export function resolveGate(input: GateInput): Gate {
   const verified = input.lastVerified;
   if (input.authLoading) {
-    return (input.stalled && offlineGate(input)) || { kind: 'loading' };
+    return whileWaiting(input);
   }
   if (input.isAuthenticated) {
     const access = input.access;
     if (!access) {
-      return (input.stalled && offlineGate(input)) || { kind: 'loading' };
+      return whileWaiting(input);
     }
     if (!(access.allowed && access.staffId)) {
       return { kind: 'notStaff' };
@@ -95,6 +100,19 @@ export function resolveGate(input: GateInput): Gate {
     };
   }
   return offlineGate(input) ?? { kind: 'signedOut' };
+}
+
+/**
+ * While the server has not answered: a phone that verified this tour manager recently opens the
+ * saved data straight away (a slow 3G link must not hold the splash screen), marked offline only
+ * once the wait has stalled. After a fresh sign-in it waits for the server instead.
+ */
+function whileWaiting(input: GateInput): Gate {
+  const saved = input.needsServerCheck ? null : offlineGate(input);
+  if (saved?.kind === 'staff') {
+    return { ...saved, offline: Boolean(input.stalled) };
+  }
+  return saved ?? { kind: 'loading' };
 }
 
 /**

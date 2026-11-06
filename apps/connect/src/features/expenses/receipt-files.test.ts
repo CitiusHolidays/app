@@ -1,4 +1,25 @@
-import { deleteAllReceipts, keepReceipt } from './receipt-files';
+import { deleteAllReceipts, keepReceipt, receiptSize } from './receipt-files';
+
+const mockResize = jest.fn();
+const mockSave = jest.fn();
+let mockManipulateFails = false;
+
+jest.mock('expo-image-manipulator', () => ({
+  ImageManipulator: {
+    manipulate: () => {
+      if (mockManipulateFails) throw new Error('decode failed');
+      const context = {
+        renderAsync: async () => ({ saveAsync: mockSave }),
+        resize: (size: unknown) => {
+          mockResize(size);
+          return context;
+        },
+      };
+      return context;
+    },
+  },
+  SaveFormat: { JPEG: 'jpeg' },
+}));
 
 const mockDeleted: string[] = [];
 const mockCopies: string[] = [];
@@ -41,6 +62,23 @@ describe('receipt files', () => {
   beforeEach(() => {
     mockDeleted.length = 0;
     mockCopies.length = 0;
+    mockResize.mockReset();
+    mockSave.mockReset();
+    mockSave.mockResolvedValue({ height: 1200, uri: 'file:///manipulator/out.jpg', width: 1600 });
+    mockManipulateFails = false;
+  });
+
+  it('shrinks a camera photo to a 3G-friendly JPEG before keeping it', async () => {
+    const receipt = await keepReceipt({ height: 3024, mimeType: 'image/heic', uri: 'file:///picker/tmp.heic', width: 4032 }, 'exp_2');
+    expect(mockResize).toHaveBeenCalledWith({ height: null, width: 1600 });
+    expect(mockSave).toHaveBeenCalledWith({ compress: 0.6, format: 'jpeg' });
+    expect(receipt).toMatchObject({ mimeType: 'image/jpeg', uri: 'file:///app/Library/Caches/receipts/exp_2.jpg' });
+  });
+
+  it('keeps the original when the photo cannot be shrunk, so no receipt is lost', async () => {
+    mockManipulateFails = true;
+    const receipt = await keepReceipt({ height: 3024, mimeType: 'image/png', uri: 'file:///picker/tmp.png', width: 4032 }, 'exp_3');
+    expect(receipt).toMatchObject({ mimeType: 'image/png', uri: 'file:///app/Library/Caches/receipts/exp_3.png' });
   });
 
   it('keeps receipt photos where device backups do not copy them', async () => {
@@ -52,5 +90,14 @@ describe('receipt files', () => {
   it('deletes receipts from the cache, and from the documents folder used by earlier builds', () => {
     deleteAllReceipts();
     expect(mockDeleted.sort()).toEqual(['file:///app/Documents/receipts', 'file:///app/Library/Caches/receipts']);
+  });
+});
+
+describe('receiptSize', () => {
+  it('caps the long edge at 1600 and never enlarges', () => {
+    expect(receiptSize(4032, 3024)).toEqual({ height: null, width: 1600 });
+    expect(receiptSize(3024, 4032)).toEqual({ height: 1600, width: null });
+    expect(receiptSize(1200, 900)).toBeNull();
+    expect(receiptSize(undefined, undefined)).toBeNull();
   });
 });
