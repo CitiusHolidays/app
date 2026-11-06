@@ -59,6 +59,23 @@ function useHasCachedSession(isAuthenticated: boolean, epoch: number) {
   return cached?.for === checkFor ? cached.value : null;
 }
 
+/** How long the gate waits for the server before treating the connection as gone. */
+export const SERVER_STALL_MS = 8_000;
+
+/** True once `waiting` has stayed true for SERVER_STALL_MS; resets as soon as it clears. */
+function useStalled(waiting: boolean) {
+  const [stalledFor, setStalledFor] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setTimeout(() => setStalledFor(true), SERVER_STALL_MS);
+    return () => {
+      clearTimeout(timer);
+      setStalledFor(null);
+    };
+  }, [waiting]);
+  return waiting && stalledFor === true;
+}
+
 export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const { live } = useAppStore();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -144,6 +161,10 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // A hanging connection never errors, so after a while stop waiting and use the offline rules.
+  const waiting = isLoading || (isAuthenticated && access === undefined);
+  const stalled = useStalled(waiting);
+
   const gate: Gate = signingOut
     ? { kind: 'loading' }
     : resolveGate({
@@ -154,6 +175,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
         lastVerified: storedVerified,
         now,
         sessionRejected: sessionRejectedByServer(authSession),
+        stalled,
       });
 
   return <SessionContext.Provider value={{ gate, online, revoke, signOut }}>{children}</SessionContext.Provider>;

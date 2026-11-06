@@ -27,6 +27,28 @@ describe('resolveGate', () => {
     expect(gate({ authLoading: true }).kind).toBe('loading');
   });
 
+  it('opens the saved trip pack when the server has not answered in time (a hanging connection)', () => {
+    // Still waiting on the token check: after the stall, the offline window decides.
+    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm, stalled: true })).toMatchObject({
+      kind: 'staff',
+      offline: true,
+    });
+    // Signed in, but the staff-access answer never arrives.
+    expect(
+      gate({ hasCachedSession: true, isAuthenticated: true, lastVerified: verifiedTm, stalled: true })
+    ).toMatchObject({ kind: 'staff', offline: true });
+  });
+
+  it('keeps waiting on a stall when the phone has nothing it may show', () => {
+    expect(gate({ authLoading: true, stalled: true }).kind).toBe('loading');
+    expect(gate({ authLoading: true, hasCachedSession: true, stalled: true }).kind).toBe('loading');
+    const old = { ...verifiedTm, verifiedAt: NOW - 30 * 86_400_000 };
+    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: old, stalled: true }).kind).toBe('loading');
+    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm, stalled: true, sessionRejected: true }).kind).toBe(
+      'loading'
+    );
+  });
+
   it('sends a signed-out user to sign-in', () => {
     expect(gate({ sessionRejected: true }).kind).toBe('signedOut');
     expect(gate({}).kind).toBe('signedOut');

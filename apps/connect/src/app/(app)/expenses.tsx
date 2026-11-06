@@ -1,5 +1,5 @@
 import { type ExpenseRow, staffApi } from '@citius/backend';
-import { Button, citius, StatusPill, type StatusKind, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Button, citius, face, space, StatusPill, Surface, Text, type StatusKind, useAppTheme } from '@citius/ui';
 import { useQuery } from 'convex/react';
 import { router } from 'expo-router';
 import { View } from 'react-native';
@@ -87,7 +87,7 @@ function SpendCard({ entries, label, loading, partial }: { entries: SpendEntry[]
             <Text adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1} style={{ flexShrink: 1 }} tabular variant="answer">
               {formatAmount(main.total, main.currency)}
             </Text>
-            <Text style={{ fontFamily: theme.font.medium }} tone="muted" variant="rowTitle">
+            <Text style={face(theme, 'medium')} tone="muted" variant="rowTitle">
               {main.currency}
             </Text>
           </View>

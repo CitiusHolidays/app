@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 /**
  * Shared craft layer: spacing, motion, haptic moments, type roles and the accessibility floor.
  * Palettes, radii and density are per app: the staff palette lives in
@@ -100,8 +102,7 @@ export interface TypeScale {
  * paper and brand-border for grounds and lines, and the account-shell success and gold mixes for
  * status. The ground is paper mixed half with brand-border so white cards read on it.
  * Every text pair is at least 4.5:1 (muted on ground 5.3:1, on white 6.0:1).
- * Type: Instrument Serif for screen titles and the trip name, Inter for UI, JetBrains Mono for
- * Job Card codes and the date line (all OFL, bundled through @expo-google-fonts).
+ * Type: see `platformFonts`.
  */
 export const citius = {
   blue: "#102a83",
@@ -117,6 +118,32 @@ export const citius = {
   orangeInk: "#8a3500",
   paper: "#fdfbf7",
 } as const;
+
+/**
+ * Type faces. On iOS the app uses Apple's own system faces, which ship with the OS and need no
+ * bundling: SF Pro for the interface, New York for titles, SF Mono for codes. Apple's downloadable
+ * copies are licensed for mockups only, so nothing of Apple's is bundled. Android uses bundled OFL
+ * faces with the same roles: Inter, Instrument Serif and JetBrains Mono.
+ */
+export const platformFonts: AppTheme["font"] =
+  Platform.OS === "ios"
+    ? { display: "ui-serif", medium: "System", mono: "ui-monospace", regular: "System", semibold: "System" }
+    : {
+        display: "InstrumentSerif_400Regular",
+        medium: "Inter_500Medium",
+        mono: "JetBrainsMono_500Medium",
+        regular: "Inter_400Regular",
+        semibold: "Inter_600SemiBold",
+      };
+
+/** The weight each face role stands for; system faces need it, bundled faces carry it. */
+export const faceWeights: Record<keyof AppTheme["font"], "400" | "500" | "600"> = {
+  display: "400",
+  medium: "500",
+  mono: "500",
+  regular: "400",
+  semibold: "600",
+};
 
 export const staffTheme: AppTheme = {
   color: {
@@ -148,13 +175,7 @@ export const staffTheme: AppTheme = {
     warning: citius.orangeInk,
     warningSoft: "#ffeee4",
   },
-  font: {
-    display: "InstrumentSerif_400Regular",
-    medium: "Inter_500Medium",
-    mono: "JetBrainsMono_500Medium",
-    regular: "Inter_400Regular",
-    semibold: "Inter_600SemiBold",
-  },
+  font: platformFonts,
   frame: 20,
   minTarget: 44,
   name: "citius-connect",

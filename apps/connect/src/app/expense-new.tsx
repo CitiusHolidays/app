@@ -28,7 +28,8 @@ export default function NewExpense() {
   const { enqueue } = useOutbox();
   const [itemId] = useState(() => localId('exp'));
   // Only a trip the tour manager picked, never a default guess. It must be in their trip list.
-  const [tripId, setTripId] = useState<string | null>(chosen?.id ?? null);
+  // The trip picked on Today, or the only trip assigned; with several and none picked, ask.
+  const [tripId, setTripId] = useState<string | null>(chosen?.id ?? (trips.length === 1 ? (trips[0]?.id ?? null) : null));
   const trip = trips.find((candidate) => candidate.id === tripId) ?? null;
   const [receipt, setReceipt] = useState<ReceiptFile | null>(null);
   const [amount, setAmount] = useState('');

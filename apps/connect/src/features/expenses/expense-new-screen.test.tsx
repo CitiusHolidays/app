@@ -5,7 +5,7 @@ import { renderWithTheme } from '@/test/render';
 
 const tripA = { clientName: 'Client A', destination: 'Bali', id: 'jc_a', jobCode: 'JC-A', status: 'Confirmed', travelBatchCount: 1, travelEndDate: '2026-11-10', travelStartDate: '2026-11-04' };
 const tripB = { ...tripA, clientName: 'Client B', id: 'jc_b', jobCode: 'JC-B' };
-const mockTrips = { chosen: null as typeof tripA | null, selected: tripA, trips: [tripA, tripB] };
+const mockTrips = { chosen: null as typeof tripA | null, selected: tripA, trips: [tripA, tripB] as (typeof tripA)[] };
 const mockEnqueue = jest.fn();
 
 jest.mock('@/features/trips/trips-context', () => ({ useTrips: () => mockTrips }));
@@ -31,6 +31,7 @@ describe('new expense screen', () => {
   beforeEach(() => {
     mockEnqueue.mockReset();
     mockTrips.chosen = null;
+    mockTrips.trips = [tripA, tripB];
   });
 
   it('does not file against the default trip; the tour manager must pick one of their trips', async () => {
@@ -51,5 +52,13 @@ describe('new expense screen', () => {
     await fillForm();
     await fireEvent.press(screen.getByRole('button', { name: 'Save expense' }));
     expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ jobCardId: 'jc_b' }));
+  });
+
+  it('files against the only assigned trip without asking', async () => {
+    mockTrips.trips = [tripA];
+    await renderWithTheme(<NewExpense />);
+    await fillForm();
+    await fireEvent.press(screen.getByRole('button', { name: 'Save expense' }));
+    expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ jobCardId: 'jc_a' }));
   });
 });

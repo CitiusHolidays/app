@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   type PressableProps,
   type StyleProp,
@@ -13,7 +14,17 @@ import {
 } from "react-native";
 import Animated, { cubicBezier, useReducedMotion } from "react-native-reanimated";
 
-import { type AppTheme, citius, motion, space, type TypeScale } from "./tokens";
+import { type AppTheme, citius, faceWeights, motion, space, type TypeScale } from "./tokens";
+
+/**
+ * The style for one face role. iOS system faces take their weight from `fontWeight`; bundled
+ * Android faces carry their own weight, and setting one there would fall back to Roboto.
+ */
+export function face(theme: AppTheme, role: keyof AppTheme["font"]) {
+  return Platform.OS === "ios"
+    ? { fontFamily: theme.font[role], fontWeight: faceWeights[role] }
+    : { fontFamily: theme.font[role] };
+}
 
 const ThemeContext = createContext<AppTheme | null>(null);
 
@@ -56,7 +67,7 @@ export function Text({ children, style, tabular, tone = "ink", variant = "body",
           lineHeight: scale.lineHeight,
           textTransform: scale.uppercase ? "uppercase" : undefined,
         },
-        scale.fontFamily ? { fontFamily: theme.font[scale.fontFamily] } : { fontWeight: scale.fontWeight },
+        scale.fontFamily ? face(theme, scale.fontFamily) : { fontWeight: scale.fontWeight },
         tabular ? styles.tabular : null,
         style,
       ]}

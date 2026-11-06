@@ -3,12 +3,12 @@ import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif'
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
 import { useFonts } from 'expo-font';
-import { staffTheme, Text, ThemeProvider } from '@citius/ui';
+import { face, staffTheme, Text, ThemeProvider } from '@citius/ui';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { type ReactNode, useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, LogBox, Platform, View } from 'react-native';
 
 import { AppErrorBoundary } from '@/components/error-boundary';
 import { OutboxProvider } from '@/features/expenses/outbox-context';
@@ -17,6 +17,17 @@ import { TripsProvider } from '@/features/trips/trips-context';
 import { AppStoreProvider } from '@/lib/app-store';
 import { clients } from '@/lib/clients';
 import { publicConfig } from '@/lib/env';
+
+// A known React Native dev-only warning from native scroll animations; it has no effect in release.
+LogBox.ignoreLogs(['Sending `onAnimatedValueUpdate` with no listeners registered']);
+
+const ANDROID_FACES = {
+  InstrumentSerif_400Regular,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  JetBrainsMono_500Medium,
+};
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -80,7 +91,7 @@ function Shell() {
           headerShadowVisible: false,
           headerStyle: { backgroundColor: staffTheme.color.ground },
           headerTintColor: staffTheme.color.ink,
-          headerTitleStyle: { fontFamily: staffTheme.font.semibold, fontSize: 17 },
+          headerTitleStyle: { ...face(staffTheme, 'semibold'), fontSize: 17 },
         }}
       >
         <Stack.Protected guard={gate.kind === 'signedOut'}>
@@ -116,14 +127,9 @@ function GuardedShell() {
 }
 
 export default function RootLayout() {
-  // The splash stays up until the bundled faces are ready; a font error falls back to system type.
-  const [fontsLoaded, fontError] = useFonts({
-    InstrumentSerif_400Regular,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    JetBrainsMono_500Medium,
-  });
+  // iOS uses Apple's system faces. Elsewhere the splash stays up until the bundled faces are
+  // ready; a font error falls back to system type.
+  const [fontsLoaded, fontError] = useFonts(Platform.OS === 'ios' ? {} : ANDROID_FACES);
   if (!fontsLoaded && !fontError) {
     return null;
   }

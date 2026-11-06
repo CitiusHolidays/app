@@ -1,4 +1,4 @@
-import { PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import type { ComponentProps, ReactNode } from 'react';
@@ -50,10 +50,11 @@ export function Screen({
         gap: space.lg + 4,
         paddingBottom: insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl),
         paddingHorizontal: theme.frame,
-        // Native tab screens already start below the status bar; stack screens without a header don't.
+        // Tab screens let iOS inset the content for the status bar ('automatic'), which adds
+        // exactly what the container did not; stack screens without a header pad for it themselves.
         paddingTop: opens && !tabBar ? insets.top + space.lg : space.sm,
       }}
-      contentInsetAdjustmentBehavior="never"
+      contentInsetAdjustmentBehavior={tabBar ? 'automatic' : 'never'}
       keyboardShouldPersistTaps="handled"
       refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={Boolean(refreshing)} /> : undefined}
       style={{ backgroundColor: theme.color.ground }}
@@ -392,7 +393,7 @@ export function TextField({ hint, label, style, ...rest }: TextInputProps & { hi
             borderRadius: theme.radius.control,
             borderWidth: 1,
             color: theme.color.ink,
-            fontFamily: theme.font.regular,
+            ...face(theme, 'regular'),
             fontSize: 17,
             minHeight: 50,
             paddingHorizontal: space.lg,

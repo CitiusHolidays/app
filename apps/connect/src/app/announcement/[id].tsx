@@ -1,4 +1,4 @@
-import { Button, PressableScale, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Button, face, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { useLocalSearchParams } from 'expo-router';
 import { Share, StyleSheet, View } from 'react-native';
 
@@ -64,7 +64,7 @@ export default function AnnouncementDetail() {
             <Text tabular variant="answer">
               {acks.acknowledged}
             </Text>
-            <Text style={{ fontFamily: theme.font.medium }} tabular tone="muted" variant="section">
+            <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
               / {acks.total} have seen it
             </Text>
           </View>

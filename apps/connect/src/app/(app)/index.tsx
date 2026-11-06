@@ -1,4 +1,4 @@
-import { Banner, Button, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Banner, Button, face, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { View } from 'react-native';
 
@@ -73,7 +73,7 @@ function HeadcountCard() {
           <Text tabular variant="answer">
             {everyone ? 'All' : summary.present}
           </Text>
-          <Text tabular tone="muted" variant="section" style={{ fontFamily: theme.font.medium }}>
+          <Text tabular tone="muted" variant="section" style={face(theme, 'medium')}>
             {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
           </Text>
         </View>

@@ -1,4 +1,4 @@
-import { Banner, Button, PressableScale, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Banner, Button, face, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -51,7 +51,7 @@ export default function Headcount() {
             <Text tabular variant="answer">
               {everyone ? 'All' : summary.present}
             </Text>
-            <Text style={{ fontFamily: theme.font.medium }} tabular tone="muted" variant="section">
+            <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
               {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
             </Text>
           </View>

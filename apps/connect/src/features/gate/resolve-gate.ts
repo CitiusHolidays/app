@@ -25,6 +25,8 @@ export interface GateInput {
   now: number;
   /** The auth server answered that the session is gone (signed out, expired or revoked). */
   sessionRejected: boolean;
+  /** The server has not answered for a while: a hanging connection, treated like no connection. */
+  stalled?: boolean;
 }
 
 export type Gate =
@@ -66,14 +68,14 @@ export function sessionRejectedByServer(state: AuthSessionState) {
  * session outright.
  */
 export function resolveGate(input: GateInput): Gate {
-  if (input.authLoading) {
-    return { kind: 'loading' };
-  }
   const verified = input.lastVerified;
+  if (input.authLoading) {
+    return (input.stalled && offlineGate(input)) || { kind: 'loading' };
+  }
   if (input.isAuthenticated) {
     const access = input.access;
     if (!access) {
-      return { kind: 'loading' };
+      return (input.stalled && offlineGate(input)) || { kind: 'loading' };
     }
     if (!(access.allowed && access.staffId)) {
       return { kind: 'notStaff' };
@@ -92,22 +94,31 @@ export function resolveGate(input: GateInput): Gate {
       staff: { name: access.name, roles: access.roles, staffId: access.staffId },
     };
   }
+  return offlineGate(input) ?? { kind: 'signedOut' };
+}
+
+/**
+ * The offline exception: a device that verified this tour manager recently and still holds their
+ * session may open the saved trip pack, unless the server rejected the session outright.
+ */
+function offlineGate(input: GateInput): Gate | null {
+  const verified = input.lastVerified;
   if (
-    !input.sessionRejected &&
-    input.hasCachedSession &&
-    verified &&
-    input.now - verified.verifiedAt <= OFFLINE_VERIFICATION_WINDOW_MS
+    input.sessionRejected ||
+    !input.hasCachedSession ||
+    !verified ||
+    input.now - verified.verifiedAt > OFFLINE_VERIFICATION_WINDOW_MS
   ) {
-    if (!isTourManager(verified.roles)) {
-      return { kind: 'notTourManager' };
-    }
-    return {
-      kind: 'staff',
-      offline: true,
-      staff: { name: verified.name, roles: verified.roles, staffId: verified.staffId },
-    };
+    return null;
   }
-  return { kind: 'signedOut' };
+  if (!isTourManager(verified.roles)) {
+    return { kind: 'notTourManager' };
+  }
+  return {
+    kind: 'staff',
+    offline: true,
+    staff: { name: verified.name, roles: verified.roles, staffId: verified.staffId },
+  };
 }
 
 export type VerificationStep =
