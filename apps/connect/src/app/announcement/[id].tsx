@@ -16,6 +16,9 @@ import { logEvent } from '@/lib/safe-log';
 const ignoredNote = (count: number) =>
   `${count} ${count === 1 ? 'traveller is' : 'travellers are'} not in your group on the office list, so the office record leaves them out.`;
 
+/** "6 Nov, 08:15", built once: an Intl formatter is slow to construct. */
+const SHARED_AT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short' });
+
 /** The acknowledgement checklist the tour manager keeps for one announcement, shared with the office. */
 export default function AnnouncementDetail() {
   const theme = useAppTheme();
@@ -37,9 +40,7 @@ export default function AnnouncementDetail() {
   const acks = ackSummary(announcement);
   const names = new Map((pack?.roster ?? []).map((entry) => [entry.id, entry.name]));
   const acknowledged = new Set(announcement.acknowledgedIds);
-  const sharedAt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short' }).format(
-    announcement.sharedAt
-  );
+  const sharedAt = SHARED_AT.format(announcement.sharedAt);
   const answer = `${acks.acknowledged} of ${acks.total} have seen it`;
   const officeKey = syncKey(announcementPush(announcement));
   const syncItems = sync.items.filter((item) => item.key === officeKey);

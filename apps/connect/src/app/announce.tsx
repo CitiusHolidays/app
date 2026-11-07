@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Share, View } from 'react-native';
 
-import { Chip, ChipRow, haptic, Icon, ListCard, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
+import { Chip, ChipRow, Icon, ListCard, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
 import {
   ackSummary,
   type Audience,
@@ -17,6 +17,7 @@ import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
 import { logEvent } from '@/lib/safe-log';
+import { haptic } from '@/lib/haptics';
 
 /** The office records announcements of up to this many characters. */
 const MAX_ANNOUNCEMENT_LENGTH = 4000;

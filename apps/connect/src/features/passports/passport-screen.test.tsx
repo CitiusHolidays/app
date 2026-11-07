@@ -142,6 +142,19 @@ describe('passport viewer', () => {
     expect(screen.getByRole('button', { name: 'Try full quality' })).toBeOnTheScreen();
   });
 
+  it('keeps the preview too when the full read answers without a scan', async () => {
+    const PREVIEW = new TextEncoder().encode('small preview bytes');
+    mockAction.mockImplementation(async (_ref: unknown, args: { variant?: string }) =>
+      args.variant === 'preview'
+        ? { bytes: PREVIEW.buffer, fileName: 'p.jpg', fullMimeType: 'image/jpeg', height: 900, mimeType: 'image/jpeg', variant: 'preview', width: 675 }
+        : { variant: 'none' }
+    );
+    await renderViewer();
+    expect(await screen.findByText(/Showing a lower-quality copy/)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Try full quality' })).toBeOnTheScreen();
+  });
+
   it('reads a PDF in full when the server has no preview for it, in the same open', async () => {
     mockAction.mockImplementation(async (_ref: unknown, args: { variant?: string }) =>
       args.variant === 'preview' ? { variant: 'none' } : { bytes: PDF.buffer, fileName: 'passport.pdf', mimeType: 'application/pdf', variant: 'full' }

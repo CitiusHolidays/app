@@ -1,4 +1,9 @@
 const MINUTE = 60_000;
+// Built once: an Intl formatter is slow to construct.
+const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
+const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const FULL_TIME = new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short', weekday: 'short' });
 const HOUR = 60 * MINUTE;
 
 function dayStart(time: number) {
@@ -19,17 +24,13 @@ export function relativeTime(iso: string, now: number) {
   const days = Math.round((dayStart(now) - dayStart(value)) / (24 * HOUR));
   if (days === 0) return `${Math.floor(elapsed / HOUR)} h`;
   if (days === 1) return 'Yesterday';
-  if (days < 7) return new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(value);
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: new Date(value).getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric',
-  }).format(value);
+  if (days < 7) return WEEKDAY.format(value);
+  return (new Date(value).getFullYear() === new Date(now).getFullYear() ? DAY_MONTH : DAY_MONTH_YEAR).format(value);
 }
 
 /** The full time for screen readers and the detail screen: "Fri 6 Nov, 08:15". */
 export function fullTime(iso: string) {
   const value = Date.parse(iso);
   if (Number.isNaN(value)) return '';
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short', weekday: 'short' }).format(value);
+  return FULL_TIME.format(value);
 }

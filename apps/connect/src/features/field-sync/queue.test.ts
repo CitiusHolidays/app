@@ -1,9 +1,11 @@
 import { ConvexError } from 'convex/values';
 
 import {
+  drainSyncQueue,
   dueSyncItems,
   enqueuePush,
   type FieldPush,
+  type PushOutcome,
   retrySyncNow,
   sendItem,
   settleItem,
@@ -165,5 +167,55 @@ describe('field sync queue', () => {
     const at = Date.UTC(2026, 10, 6, 7, 12);
     expect(syncedLabel(at, Date.UTC(2026, 10, 6, 9, 0), format)).toBe('Synced to office 07:12');
     expect(syncedLabel(at, Date.UTC(2026, 10, 7, 9, 0), format)).toBe('Synced to office 6 Nov, 07:12');
+  });
+
+  describe('a run over the queue', () => {
+    /** A queue that settles like the provider does: the outcome is applied to the item as it is now. */
+    function queue(initial: SyncItem[]) {
+      const state = { items: initial };
+      const settle = async (sent: SyncItem, outcome: PushOutcome) => {
+        state.items = state.items.map((item) => (item.key === sent.key && item.staffId === sent.staffId ? settleItem(item, sent, outcome) : item));
+      };
+      return { settle, state };
+    }
+    const presentIn = (push: FieldPush) => (push.kind === 'headcountStop' ? push.args.presentTravellerIds : []);
+    const second = (present: string[], at: number): StopPush => ({ ...stop(present, at), args: { ...stop(present, at).args, clientStopId: 'stop-2' } });
+
+    it("sends this staff member's due items one at a time and settles each", async () => {
+      const mine = enqueuePush(enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW), second(['t_2'], NOW), 'staff_1', NOW);
+      const { settle, state } = queue(enqueuePush(mine, stop(['t_9'], NOW), 'staff_2', NOW));
+      const fake = deps(applied);
+      await drainSyncQueue({ again: { current: false }, deps: fake, isCurrent: () => true, queued: () => state.items, settle, staffId: 'staff_1' });
+      expect(fake.sent.map(presentIn)).toEqual([['t_1'], ['t_2']]);
+      expect(state.items.map((item) => `${item.staffId}:${item.status}`)).toEqual(['staff_1:synced', 'staff_1:synced', 'staff_2:pending']);
+    });
+
+    it('looks at the queue again when a change arrives during the run', async () => {
+      const { settle, state } = queue(enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW));
+      const again = { current: false };
+      const fake = deps(async (push) => {
+        if (presentIn(push).length === 1) {
+          // The tour manager marks another traveller while the first push is in flight.
+          state.items = enqueuePush(state.items, stop(['t_1', 't_2'], NOW + 1), 'staff_1', NOW + 1);
+          again.current = true;
+        }
+        return applied();
+      });
+      await drainSyncQueue({ again, deps: fake, isCurrent: () => true, queued: () => state.items, settle, staffId: 'staff_1' });
+      expect(fake.sent.map(presentIn)).toEqual([['t_1'], ['t_1', 't_2']]);
+      expect(state.items).toMatchObject([{ status: 'synced' }]);
+    });
+
+    it('stops without settling anything once the store is wiped', async () => {
+      const { settle, state } = queue(enqueuePush(enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW), second(['t_2'], NOW), 'staff_1', NOW));
+      let current = true;
+      const fake = deps(async () => {
+        current = false;
+        return applied();
+      });
+      await drainSyncQueue({ again: { current: false }, deps: fake, isCurrent: () => current, queued: () => state.items, settle, staffId: 'staff_1' });
+      expect(fake.sent).toHaveLength(1);
+      expect(state.items.map((item) => item.status)).toEqual(['pending', 'pending']);
+    });
   });
 });

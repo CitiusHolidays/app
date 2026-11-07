@@ -18,6 +18,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
+/**
+ * The lift under a selected segment: black at 8%, 1pt down, a 6px blur. React Native draws the
+ * blur at half its radius on iOS, so this is the earlier iOS-only shadow (radius 3), now on Android too.
+ */
+const SELECTED_TAB_SHADOW = '0 1px 6px rgba(0, 0, 0, 0.08)';
+
+/**
+ * Room above or below scrolling content. Safe-area insets go in spacers, not in the scroll view's
+ * content padding, so the content container's style never changes as the insets settle.
+ */
+function Spacer({ height }: { height: number }) {
+  return <View importantForAccessibility="no-hide-descendants" pointerEvents="none" style={{ height }} />;
+}
 
 /**
  * A scrolling screen on the stone ground. A titled screen opens with an optional mono kicker
@@ -45,24 +58,24 @@ export function Screen({
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const opens = Boolean(title || header);
+  // iOS tab screens let the system inset the content for the status bar ('automatic');
+  // Android tab screens and header-less stack screens make room for it themselves.
+  const top = !tabBar && opens ? insets.top + space.lg : tabBar && Platform.OS !== 'ios' ? insets.top + space.md : space.sm;
   return (
     <ScrollView
-      contentContainerStyle={{
-        gap: space.lg + 4,
-        paddingBottom: insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl),
-        paddingHorizontal: theme.frame,
-        // iOS tab screens let the system inset the content for the status bar ('automatic');
-        // Android tab screens and header-less stack screens pad for it themselves.
-        paddingTop: !tabBar && opens ? insets.top + space.lg : tabBar && Platform.OS !== 'ios' ? insets.top + space.md : space.sm,
-      }}
+      contentContainerStyle={{ paddingHorizontal: theme.frame }}
       contentInsetAdjustmentBehavior={tabBar ? 'automatic' : 'never'}
       keyboardShouldPersistTaps="handled"
       refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={Boolean(refreshing)} /> : undefined}
       style={{ backgroundColor: theme.color.ground }}
       {...rest}
     >
-      {header ?? (title ? <PageTitle kicker={kicker} title={title} /> : null)}
-      {children}
+      <Spacer height={top} />
+      <View style={{ gap: space.lg + 4 }}>
+        {header ?? (title ? <PageTitle kicker={kicker} title={title} /> : null)}
+        {children}
+      </View>
+      <Spacer height={insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl)} />
     </ScrollView>
   );
 }
@@ -140,49 +153,46 @@ export function MessageScreen({
     <View style={{ backgroundColor: theme.color.ground, flex: 1 }}>
       <TopTint />
       <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          gap: space.xl,
-          justifyContent: 'center',
-          paddingBottom: insets.bottom + space.xxl,
-          paddingHorizontal: theme.frame + space.xs,
-          paddingTop: insets.top + space.xxl,
-        }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: theme.frame + space.xs }}
         contentInsetAdjustmentBehavior="never"
       >
-        <View style={{ alignItems: 'center', gap: space.lg }}>
-          <View
-            style={{
-              alignItems: 'center',
-              backgroundColor: theme.color.card,
-              borderColor: theme.color.border,
-              borderRadius: 28,
-              borderWidth: StyleSheet.hairlineWidth,
-              height: 56,
-              justifyContent: 'center',
-              width: 56,
-            }}
-          >
-            <Icon ios={icon.ios} md={icon.md} size={24} />
-          </View>
-          <View accessible accessibilityRole="header" style={{ alignItems: 'center', gap: space.xs + 2 }}>
-            {kicker ? (
-              <Text tone="muted" variant="mono">
-                {kicker}
+        <Spacer height={insets.top + space.xxl} />
+        <View style={{ flexGrow: 1, gap: space.xl, justifyContent: 'center' }}>
+          <View style={{ alignItems: 'center', gap: space.lg }}>
+            <View
+              style={{
+                alignItems: 'center',
+                backgroundColor: theme.color.card,
+                borderColor: theme.color.border,
+                borderRadius: 28,
+                borderWidth: StyleSheet.hairlineWidth,
+                height: 56,
+                justifyContent: 'center',
+                width: 56,
+              }}
+            >
+              <Icon ios={icon.ios} md={icon.md} size={24} />
+            </View>
+            <View accessible accessibilityRole="header" style={{ alignItems: 'center', gap: space.xs + 2 }}>
+              {kicker ? (
+                <Text tone="muted" variant="mono">
+                  {kicker}
+                </Text>
+              ) : null}
+              <Text style={{ textAlign: 'center' }} variant="display">
+                {title}
+              </Text>
+            </View>
+            <Text style={{ maxWidth: 340, textAlign: 'center' }}>{text}</Text>
+            {detail ? (
+              <Text style={{ maxWidth: 340, textAlign: 'center' }} tone="muted" variant="secondary">
+                {detail}
               </Text>
             ) : null}
-            <Text style={{ textAlign: 'center' }} variant="display">
-              {title}
-            </Text>
           </View>
-          <Text style={{ maxWidth: 340, textAlign: 'center' }}>{text}</Text>
-          {detail ? (
-            <Text style={{ maxWidth: 340, textAlign: 'center' }} tone="muted" variant="secondary">
-              {detail}
-            </Text>
-          ) : null}
+          <View style={{ gap: space.sm }}>{actions}</View>
         </View>
-        <View style={{ gap: space.sm }}>{actions}</View>
+        <Spacer height={insets.bottom + space.xxl} />
       </ScrollView>
     </View>
   );
@@ -359,13 +369,11 @@ export function Segmented<T extends string>({
               alignItems: 'center',
               backgroundColor: selected ? theme.color.surface : 'transparent',
               borderRadius: theme.radius.chip,
+              // The selected tab lifts off the track, on iOS and Android alike.
+              boxShadow: selected ? SELECTED_TAB_SHADOW : undefined,
               flex: 1,
               justifyContent: 'center',
               minHeight: 40,
-              shadowColor: '#000',
-              shadowOffset: { height: 1, width: 0 },
-              shadowOpacity: selected ? 0.08 : 0,
-              shadowRadius: 3,
             }}
           >
             <Text tone={selected ? 'ink' : 'muted'} variant="label">
@@ -414,7 +422,7 @@ export function TextField({ hint, label, style, ...rest }: TextInputProps & { hi
 }
 
 /** Initials for a name: "Aanya Testguest" -> "AT". */
-export function initials(name: string) {
+function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const letters = parts.length > 1 ? [parts[0], parts.at(-1)] : parts.slice(0, 1);
   return letters
@@ -733,32 +741,6 @@ export function Placeholder({ lines = 3 }: { lines?: number }) {
       ))}
     </View>
   );
-}
-
-export function haptic(kind: 'success' | 'error') {
-  if (Platform.OS === 'web') return;
-  void Haptics.notificationAsync(
-    kind === 'success' ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error
-  ).catch(() => undefined);
-}
-
-export function formatDateRange(start: string, end: string) {
-  const format = (value: string) => {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (!match) return '';
-    return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(
-      new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-    );
-  };
-  const from = format(start);
-  const to = format(end);
-  if (!from) return 'Dates not set';
-  return to && to !== from ? `${from} – ${to}` : from;
-}
-
-/** "FRI 6 NOV": the date line over a screen title. */
-export function dateKicker(now: number) {
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', weekday: 'short' }).format(new Date(now));
 }
 
 const styles = StyleSheet.create({

@@ -1,10 +1,10 @@
 import { ConvexError } from 'convex/values';
 
-import { createOutboxItem, dueItems, type OutboxDeps, type OutboxItem, processItem, retryNow } from './outbox';
+import { createOutboxItem, drainOutbox, dueItems, type OutboxDeps, type OutboxItem, processItem, retryNow } from './outbox';
 
 const NOW = 1_000_000;
 
-function newItem(): OutboxItem {
+function newItem(id = 'ob_1'): OutboxItem {
   return createOutboxItem({
     draft: {
       amount: 1250.5,
@@ -14,7 +14,7 @@ function newItem(): OutboxItem {
       paidBy: 'Test Tour Manager',
       particulars: 'Airport taxi',
     },
-    id: 'ob_1',
+    id,
     jobCardId: 'jc_test_1',
     now: NOW,
     receipt: { fileName: 'receipt.jpg', mimeType: 'image/jpeg', size: 2048, uri: 'file:///receipts/ob_1.jpg' },
@@ -223,5 +223,44 @@ describe('expense outbox', () => {
     expect(second.nextAttemptAt - first.nextAttemptAt).toBeGreaterThan(first.nextAttemptAt - NOW);
     expect(dueItems([first], NOW, 'staff_1')).toEqual([]);
     expect(dueItems([first], first.nextAttemptAt, 'staff_1')).toEqual([first]);
+  });
+
+  describe('a run over the queue', () => {
+    it('sends due items one at a time, in order, and saves each outcome', async () => {
+      const { calls, deps, saved } = fakeDeps();
+      const settled: string[] = [];
+      await drainOutbox({
+        deps,
+        isCurrent: () => true,
+        items: [newItem('ob_1'), { ...newItem('ob_9'), staffId: 'staff_2' }, newItem('ob_2')],
+        onSettled: (item) => settled.push(`${item.id}:${item.status}`),
+        staffId: 'staff_1',
+      });
+      expect(settled).toEqual(['ob_1:done', 'ob_2:done']);
+      // The second item starts only after the first is submitted.
+      expect(calls.indexOf('submit:exp_1')).toBeLessThan(calls.lastIndexOf('create:1250.5:THB:ob_2'));
+      expect(saved.filter((item) => item.status === 'done').map((item) => item.id)).toEqual(['ob_1', 'ob_2']);
+    });
+
+    it('stops at once when the store is wiped, and saves nothing from the wiped run', async () => {
+      let current = true;
+      const { calls, deps, saved } = fakeDeps({
+        submitExpense: async () => {
+          // Sign-out lands while the first item is being sent.
+          current = false;
+        },
+      });
+      const settled: string[] = [];
+      await drainOutbox({
+        deps,
+        isCurrent: () => current,
+        items: [newItem('ob_1'), newItem('ob_2')],
+        onSettled: (item) => settled.push(item.id),
+        staffId: 'staff_1',
+      });
+      expect(settled).toEqual([]);
+      expect(saved.some((item) => item.status === 'done')).toBe(false);
+      expect(calls.some((call) => call.endsWith(':ob_2'))).toBe(false);
+    });
   });
 });

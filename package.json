@@ -2,12 +2,19 @@
   "name": "citius-app",
   "private": true,
   "packageManager": "bun@1.4.3",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "connect": "bun --cwd apps/connect start",
     "customer": "bun --cwd apps/customer start",
     "typecheck": "bun --filter '*' typecheck",
     "test": "bun --filter '*' test",
-    "lint": "bun --filter '*' lint"
+    "lint": "bun --filter '*' lint",
+    "doctor": "react-doctor --no-telemetry --yes"
+  },
+  "devDependencies": {
+    "react-doctor": "0.9.22"
   }
 }

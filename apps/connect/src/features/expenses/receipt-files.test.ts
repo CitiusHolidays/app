@@ -1,4 +1,4 @@
-import { deleteAllReceipts, keepReceipt, receiptSize } from './receipt-files';
+import { deleteAllReceipts, keepReceipt, receiptSize, uploadReceipt } from './receipt-files';
 
 const mockResize = jest.fn();
 const mockSave = jest.fn();
@@ -23,6 +23,7 @@ jest.mock('expo-image-manipulator', () => ({
 
 const mockDeleted: string[] = [];
 const mockCopies: string[] = [];
+const mockUpload = { body: '', status: 200 };
 
 jest.mock('expo-file-system', () => {
   const pathOf = (parent: unknown, name?: string) =>
@@ -46,8 +47,14 @@ jest.mock('expo-file-system', () => {
     constructor(parent: unknown, name?: string) {
       this.uri = pathOf(parent, name);
     }
+    get exists() {
+      return true;
+    }
     async copy(destination: { uri: string }) {
       mockCopies.push(destination.uri);
+    }
+    async upload() {
+      return { ...mockUpload };
     }
   }
   return {
@@ -90,6 +97,24 @@ describe('receipt files', () => {
   it('deletes receipts from the cache, and from the documents folder used by earlier builds', () => {
     deleteAllReceipts();
     expect(mockDeleted.sort()).toEqual(['file:///app/Documents/receipts', 'file:///app/Library/Caches/receipts']);
+  });
+});
+
+describe('uploadReceipt', () => {
+  const receipt = { fileName: 'receipt.jpg', mimeType: 'image/jpeg', size: 2048, uri: 'file:///receipts/ob_1.jpg' };
+
+  it('returns the storage id the upload answered with', async () => {
+    Object.assign(mockUpload, { body: JSON.stringify({ storageId: 'storage_1' }), status: 200 });
+    await expect(uploadReceipt('https://upload.example.test/1', receipt)).resolves.toBe('storage_1');
+  });
+
+  it('treats an answer that is not the expected JSON as a failed upload, to be retried', async () => {
+    for (const body of ['<html>gateway timeout</html>', '', 'null', JSON.stringify({ storageId: 42 })]) {
+      Object.assign(mockUpload, { body, status: 200 });
+      const failure = uploadReceipt('https://upload.example.test/1', receipt);
+      await expect(failure).rejects.toBeInstanceOf(TypeError);
+      await expect(failure).rejects.toThrow('Upload returned no storage id');
+    }
   });
 });
 

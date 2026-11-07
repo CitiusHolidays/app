@@ -8,7 +8,7 @@ import { collectPages } from '@/features/trips/trips';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
 
-import { dueItems, type OutboxDeps, type OutboxItem, outboxKey, processItem, retryNow } from './outbox';
+import { drainOutbox, type OutboxDeps, type OutboxItem, outboxKey, retryNow } from './outbox';
 import { deleteReceipt, uploadReceipt } from './receipt-files';
 
 interface OutboxValue {
@@ -77,24 +77,21 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
       },
       uploadReceipt,
     };
-    try {
-      for (const item of dueItems(itemsRef.current, Date.now(), staffId)) {
-        if (!current()) break;
-        const result = await processItem(item, deps);
-        if (!current()) break;
-        await save(result);
+    await drainOutbox({
+      deps,
+      isCurrent: current,
+      items: itemsRef.current,
+      onSettled: (result) => {
         if (result.status === 'done') {
           deleteReceipt(result.receipt);
         }
         if (result.status === 'pending') {
           logEvent('outbox.retry-scheduled');
         }
-      }
-    } catch (error) {
-      logEvent('outbox.run-failed', error);
-    } finally {
-      running.current = false;
-    }
+      },
+      staffId,
+    }).catch((error: unknown) => logEvent('outbox.run-failed', error));
+    running.current = false;
   }, [canSend, convex, live, loaded, setItems, staffId]);
 
   useEffect(() => {

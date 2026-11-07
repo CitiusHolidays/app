@@ -6,8 +6,6 @@ import { FreshnessStamp } from '@/components/freshness';
 import {
   ActionTray,
   Avatar,
-  dateKicker,
-  formatDateRange,
   Icon,
   ListCard,
   Placeholder,
@@ -24,6 +22,7 @@ import { useInbox } from '@/features/inbox/use-inbox';
 import { dayOfTrip, tripPhase } from '@/features/trips/trips';
 import { type TripSummary, useTrips } from '@/features/trips/trips-context';
 import { useNow } from '@/lib/use-now';
+import { dateKicker, formatDateRange } from '@/lib/dates';
 
 const MISSING_SHOWN = 5;
 const INBOX_SHOWN = 2;
@@ -182,26 +181,14 @@ function InboxPreview() {
   );
 }
 
-/** "Is everyone here, and what's next?" for the trip on tour, then the tour manager's trips. */
-export default function Today() {
+/** The opening: date and trip day over the trip's name, its code, batches and how fresh it is. */
+function TodayHeader({ now }: { now: number }) {
   const theme = useAppTheme();
-  const {
-    pack,
-    packProblem,
-    refreshPack,
-    refreshTrips,
-    refreshing,
-    selectTrip,
-    selected,
-    trips,
-    tripsComplete,
-    tripsLoaded,
-    tripsProblem,
-    tripsSavedAt,
-  } = useTrips();
-  const now = useNow();
+  const { pack, packProblem, selected, tripsProblem, tripsSavedAt } = useTrips();
   const phase = selected ? phaseLabel(selected, now) : null;
-  const header = (
+  const problem = packProblem ?? tripsProblem;
+  const savedAt = pack?.savedAt ?? tripsSavedAt;
+  return (
     <View style={{ gap: space.md }}>
       <View accessible accessibilityRole="header" style={{ gap: space.xs + 2 }}>
         <Text tone="muted" variant="mono">
@@ -223,15 +210,79 @@ export default function Today() {
               label={`${pack.batches.length} ${pack.batches.length === 1 ? 'batch' : 'batches'}`}
             />
           ) : null}
-          <FreshnessStamp part="pill" problem={packProblem ?? tripsProblem} savedAt={pack?.savedAt ?? tripsSavedAt} />
+          <FreshnessStamp part="pill" problem={problem} savedAt={savedAt} />
         </View>
       ) : null}
-      <FreshnessStamp part={selected ? 'notice' : undefined} problem={packProblem ?? tripsProblem} savedAt={pack?.savedAt ?? tripsSavedAt} />
+      <FreshnessStamp part={selected ? 'notice' : undefined} problem={problem} savedAt={savedAt} />
     </View>
   );
+}
+
+const TODAY_ACTIONS = [
+  { icon: { ios: 'person.text.rectangle', md: 'badge' }, label: 'Roster', onPress: () => router.push({ params: { view: 'roster' }, pathname: '/trip' }) },
+  { icon: { ios: 'phone', md: 'call' }, label: 'Contacts', onPress: () => router.push({ params: { view: 'contacts' }, pathname: '/trip' }) },
+  { icon: { ios: 'creditcard', md: 'receipt_long' }, label: 'Expense', onPress: () => router.push('/expense-new') },
+  { icon: { ios: 'megaphone', md: 'campaign' }, label: 'Announce', onPress: () => router.push('/announce') },
+];
+
+/** Whether the trip list could be loaded: still loading, empty, or only partly loaded. */
+function TripsStatus() {
+  const { trips, tripsComplete, tripsLoaded } = useTrips();
+  if (!tripsLoaded) {
+    return (
+      <Surface>
+        <Placeholder lines={3} />
+      </Surface>
+    );
+  }
+  if (!tripsComplete) {
+    return (
+      <Banner tone="attention">
+        <Text variant="secondary">Not every trip could be loaded, so some of yours may be missing here. Pull down to try again.</Text>
+      </Banner>
+    );
+  }
+  return trips.length === 0 ? (
+    <Surface>
+      <QuietState text="No trips yet. A trip shows here once Operations assigns you to it and starts the app for that trip." />
+    </Surface>
+  ) : null;
+}
+
+/** The tour manager's trips, to switch between when there is more than one. */
+function YourTrips({ now }: { now: number }) {
+  const { selectTrip, selected, trips } = useTrips();
+  if (trips.length <= 1) return null;
+  return (
+    <View style={{ gap: space.md }}>
+      <SectionTitle>Your trips</SectionTitle>
+      <ListCard>
+        {trips.map((trip, index) => {
+          const isSelected = trip.id === selected?.id;
+          return (
+            <Row
+              accessibilityLabel={`${trip.clientName || trip.jobCode}, ${formatDateRange(trip.travelStartDate, trip.travelEndDate)}, ${trip.status}${isSelected ? ', selected' : ''}`}
+              key={trip.id}
+              last={index === trips.length - 1}
+              onPress={() => selectTrip(trip.id)}
+              subtitle={`${trip.jobCode} · ${formatDateRange(trip.travelStartDate, trip.travelEndDate)} · ${phaseLabel(trip, now)}`}
+              title={trip.clientName || trip.jobCode}
+              trailing={<StatusPill kind={isSelected ? 'good' : 'neutral'} label={isSelected ? 'Selected' : trip.status} />}
+            />
+          );
+        })}
+      </ListCard>
+    </View>
+  );
+}
+
+/** "Is everyone here, and what's next?" for the trip on tour, then the tour manager's trips. */
+export default function Today() {
+  const { pack, refreshPack, refreshTrips, refreshing, selected } = useTrips();
+  const now = useNow();
   return (
     <Screen
-      header={header}
+      header={<TodayHeader now={now} />}
       onRefresh={() => {
         void refreshTrips();
         void refreshPack();
@@ -239,56 +290,13 @@ export default function Today() {
       refreshing={refreshing}
     >
       <HeadcountCard />
-      {selected ? (
-        <ActionTray
-          actions={[
-            { icon: { ios: 'person.text.rectangle', md: 'badge' }, label: 'Roster', onPress: () => router.push({ params: { view: 'roster' }, pathname: '/trip' }) },
-            { icon: { ios: 'phone', md: 'call' }, label: 'Contacts', onPress: () => router.push({ params: { view: 'contacts' }, pathname: '/trip' }) },
-            { icon: { ios: 'creditcard', md: 'receipt_long' }, label: 'Expense', onPress: () => router.push('/expense-new') },
-            { icon: { ios: 'megaphone', md: 'campaign' }, label: 'Announce', onPress: () => router.push('/announce') },
-          ]}
-        />
-      ) : null}
+      {selected ? <ActionTray actions={TODAY_ACTIONS} /> : null}
       {pack?.schedule.itineraryText ? (
         <ProgrammeCard onOpen={() => router.push({ params: { view: 'schedule' }, pathname: '/trip' })} text={pack.schedule.itineraryText} />
       ) : null}
       <InboxPreview />
-      {!tripsLoaded ? (
-        <Surface>
-          <Placeholder lines={3} />
-        </Surface>
-      ) : null}
-      {tripsLoaded && tripsComplete && trips.length === 0 ? (
-        <Surface>
-          <QuietState text="No trips yet. A trip shows here once Operations assigns you to it and starts the app for that trip." />
-        </Surface>
-      ) : null}
-      {tripsLoaded && !tripsComplete ? (
-        <Banner tone="attention">
-          <Text variant="secondary">Not every trip could be loaded, so some of yours may be missing here. Pull down to try again.</Text>
-        </Banner>
-      ) : null}
-      {trips.length > 1 ? (
-        <View style={{ gap: space.md }}>
-          <SectionTitle>Your trips</SectionTitle>
-          <ListCard>
-            {trips.map((trip, index) => {
-              const isSelected = trip.id === selected?.id;
-              return (
-                <Row
-                  accessibilityLabel={`${trip.clientName || trip.jobCode}, ${formatDateRange(trip.travelStartDate, trip.travelEndDate)}, ${trip.status}${isSelected ? ', selected' : ''}`}
-                  key={trip.id}
-                  last={index === trips.length - 1}
-                  onPress={() => selectTrip(trip.id)}
-                  subtitle={`${trip.jobCode} · ${formatDateRange(trip.travelStartDate, trip.travelEndDate)} · ${phaseLabel(trip, now)}`}
-                  title={trip.clientName || trip.jobCode}
-                  trailing={<StatusPill kind={isSelected ? 'good' : 'neutral'} label={isSelected ? 'Selected' : trip.status} />}
-                />
-              );
-            })}
-          </ListCard>
-        </View>
-      ) : null}
+      <TripsStatus />
+      <YourTrips now={now} />
     </Screen>
   );
 }

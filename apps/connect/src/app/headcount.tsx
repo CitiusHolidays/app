@@ -2,28 +2,113 @@ import { Banner, Button, face, PressableScale, space, StatusPill, Surface, Text,
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Avatar, Chip, ChipRow, haptic, Icon, ListCard, QuietState, Screen, Segmented, TextField, TickStrip } from '@/components/kit';
+import { Avatar, Chip, ChipRow, Icon, ListCard, QuietState, Screen, Segmented, TextField, TickStrip } from '@/components/kit';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { headcountStopPush } from '@/features/field-sync/pushes';
 import { syncKey } from '@/features/field-sync/queue';
 import { SyncLine } from '@/features/field-sync/sync-line';
-import { type HeadcountState, headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
+import { type HeadcountState, type HeadcountSummary, headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
 import { useHeadcount } from '@/features/headcount/use-headcount';
+import type { RosterEntry } from '@/features/trip-pack/trip-pack';
 import { useTrips } from '@/features/trips/trips-context';
+import { haptic } from '@/lib/haptics';
 import { useAnnounce } from '@/lib/use-announce';
 import { useProgressiveCount } from '@/lib/use-progressive-count';
 
 type Show = 'all' | 'missing';
 
+const SHOW_OPTIONS: { label: string; value: Show }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Not marked', value: 'missing' },
+];
+
 const ignoredNote = (count: number) =>
   `${count} marked ${count === 1 ? 'traveller is' : 'travellers are'} not in your group on the office list, so the office did not count them. Refresh the trip pack.`;
+
+/** The answer at the top: how many are here at this stop, out of how many. */
+function HeadcountHero({ answer, summary }: { answer: string; summary: HeadcountSummary }) {
+  const theme = useAppTheme();
+  const everyone = answer.startsWith('All');
+  return (
+    <Surface style={{ gap: space.lg }} variant="hero">
+      <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm, justifyContent: 'space-between' }}>
+        <Text numberOfLines={1} style={{ flexShrink: 1 }} variant="label">
+          Headcount · {summary.stopLabel}
+        </Text>
+        <Icon color={theme.color.muted} ios="person.3" md="groups" size={18} />
+      </View>
+      <View accessibilityLabel={answer} accessibilityLiveRegion="polite" accessible style={{ gap: space.md }}>
+        <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
+          <Text tabular variant="answer">
+            {everyone ? 'All' : summary.present}
+          </Text>
+          <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
+            {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
+          </Text>
+        </View>
+        <TickStrip marked={summary.present} total={summary.expected} />
+      </View>
+      <Text tabular tone="muted" variant="secondary">
+        {summary.missing.length === 0 ? 'Nobody left to mark' : `${summary.missing.length} not marked yet`}
+      </Text>
+    </Surface>
+  );
+}
+
+/** One traveller to tap: here, or not marked yet. */
+function TravellerRow({ entry, here, last, onPress }: { entry: RosterEntry; here: boolean; last: boolean; onPress: () => void }) {
+  const theme = useAppTheme();
+  const meta = [entry.batchLabel, entry.guestType].filter(Boolean).join(' · ');
+  return (
+    <PressableScale accessibilityLabel={entry.name} accessibilityRole="checkbox" accessibilityState={{ checked: here }} onPress={onPress}>
+      <View style={[styles.row, { borderBottomColor: theme.color.rule, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth }]}>
+        <Avatar checked={here} name={entry.name} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text numberOfLines={2} variant="rowTitle">
+            {entry.name}
+          </Text>
+          {meta ? (
+            <Text numberOfLines={1} tone="muted" variant="secondary">
+              {meta}
+            </Text>
+          ) : null}
+        </View>
+        <StatusPill kind={here ? 'good' : 'neutral'} label={here ? 'Here' : 'Not marked'} />
+      </View>
+    </PressableScale>
+  );
+}
+
+/** Names a fresh stop and starts counting again from nobody. */
+function NextStop({ onStart }: { onStart: (name: string) => void }) {
+  const [stopName, setStopName] = useState('');
+  return (
+    <Surface style={{ gap: space.md }}>
+      <TextField
+        hint="Starts a fresh count. Earlier stops stay in today's record."
+        label="Next stop"
+        onChangeText={setStopName}
+        placeholder="For example: Temple car park"
+        value={stopName}
+      />
+      <Button
+        icon={<Icon ios="arrow.right" md="arrow_forward" size={15} />}
+        label="Start new stop"
+        onPress={() => {
+          onStart(stopName);
+          setStopName('');
+        }}
+        variant="secondary"
+      />
+    </Surface>
+  );
+}
 
 /**
  * Tap each traveller who is here. Works offline: marks stay on this phone for today, and each
  * stop is sent to the office whenever there is a connection.
  */
 export default function Headcount() {
-  const theme = useAppTheme();
   const { pack, selected } = useTrips();
   const { newStop, state, toggle } = useHeadcount(selected?.id ?? null);
   const sync = useFieldSync();
@@ -34,7 +119,6 @@ export default function Headcount() {
   };
   const [batchId, setBatchId] = useState<string | undefined>(undefined);
   const [show, setShow] = useState<Show>('all');
-  const [stopName, setStopName] = useState('');
   const summary = pack && state ? summarize(state, pack.roster, batchId) : null;
   const answer = summary && pack ? headcountAnswer(summary, pack) : null;
   useAnnounce(answer);
@@ -56,32 +140,10 @@ export default function Headcount() {
   const people = pack.roster.filter(
     (entry) => entry.travelling && (!batchId || entry.batchId === batchId) && (show === 'all' || !present.has(entry.id))
   );
-  const everyone = answer.startsWith('All');
 
   return (
     <Screen tabBar={false}>
-      <Surface style={{ gap: space.lg }} variant="hero">
-        <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm, justifyContent: 'space-between' }}>
-          <Text numberOfLines={1} style={{ flexShrink: 1 }} variant="label">
-            Headcount · {summary.stopLabel}
-          </Text>
-          <Icon color={theme.color.muted} ios="person.3" md="groups" size={18} />
-        </View>
-        <View accessibilityLabel={answer} accessibilityLiveRegion="polite" accessible style={{ gap: space.md }}>
-          <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
-            <Text tabular variant="answer">
-              {everyone ? 'All' : summary.present}
-            </Text>
-            <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
-              {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
-            </Text>
-          </View>
-          <TickStrip marked={summary.present} total={summary.expected} />
-        </View>
-        <Text tabular tone="muted" variant="secondary">
-          {summary.missing.length === 0 ? 'Nobody left to mark' : `${summary.missing.length} not marked yet`}
-        </Text>
-      </Surface>
+      <HeadcountHero answer={answer} summary={summary} />
       <SyncLine ignoredNote={ignoredNote} items={syncItems} onRetry={sync.retry} />
       {pack.complete ? null : (
         <Banner tone="attention">
@@ -96,79 +158,57 @@ export default function Headcount() {
           ))}
         </ChipRow>
       ) : null}
-      <Segmented
-        label="Show"
-        onChange={setShow}
-        options={[
-          { label: 'All', value: 'all' },
-          { label: 'Not marked', value: 'missing' },
-        ]}
-        value={show}
+      <Segmented label="Show" onChange={setShow} options={SHOW_OPTIONS} value={show} />
+      <TravellerList
+        onToggle={(entry) => {
+          const wasLast = !present.has(entry.id) && summary.missing.length === 1 && summary.missing[0]?.id === entry.id;
+          send(toggle(entry.id));
+          if (wasLast) haptic('success');
+        }}
+        people={people}
+        present={present}
+        show={show}
+        shown={shown}
       />
-      {people.length === 0 ? (
-        <Surface>
-          <QuietState good={show === 'missing'} text={show === 'missing' ? 'Everyone here is marked.' : 'Nobody in this batch is travelling.'} />
-        </Surface>
-      ) : (
-        <ListCard>
-          {people.slice(0, shown).map((entry, index) => {
-            const here = present.has(entry.id);
-            const meta = [entry.batchLabel, entry.guestType].filter(Boolean).join(' · ');
-            return (
-              <PressableScale
-                accessibilityLabel={entry.name}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: here }}
-                key={entry.id}
-                onPress={() => {
-                  const wasLast = !here && summary.missing.length === 1 && summary.missing[0]?.id === entry.id;
-                  send(toggle(entry.id));
-                  if (wasLast) haptic('success');
-                }}
-              >
-                <View
-                  style={[
-                    styles.row,
-                    { borderBottomColor: theme.color.rule, borderBottomWidth: index === Math.min(people.length, shown) - 1 ? 0 : StyleSheet.hairlineWidth },
-                  ]}
-                >
-                  <Avatar checked={here} name={entry.name} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text numberOfLines={2} variant="rowTitle">
-                      {entry.name}
-                    </Text>
-                    {meta ? (
-                      <Text numberOfLines={1} tone="muted" variant="secondary">
-                        {meta}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <StatusPill kind={here ? 'good' : 'neutral'} label={here ? 'Here' : 'Not marked'} />
-                </View>
-              </PressableScale>
-            );
-          })}
-        </ListCard>
-      )}
-      <Surface style={{ gap: space.md }}>
-        <TextField
-          hint="Starts a fresh count. Earlier stops stay in today's record."
-          label="Next stop"
-          onChangeText={setStopName}
-          placeholder="For example: Temple car park"
-          value={stopName}
-        />
-        <Button
-          icon={<Icon ios="arrow.right" md="arrow_forward" size={15} />}
-          label="Start new stop"
-          onPress={() => {
-            send(newStop(stopName));
-            setStopName('');
-          }}
-          variant="secondary"
-        />
-      </Surface>
+      <NextStop onStart={(name) => send(newStop(name))} />
     </Screen>
+  );
+}
+
+/** The travellers to mark (the first `shown` of them while a large group draws), or why there are none. */
+function TravellerList({
+  onToggle,
+  people,
+  present,
+  show,
+  shown,
+}: {
+  onToggle: (entry: RosterEntry) => void;
+  people: RosterEntry[];
+  present: ReadonlySet<string>;
+  show: Show;
+  shown: number;
+}) {
+  if (people.length === 0) {
+    return (
+      <Surface>
+        <QuietState good={show === 'missing'} text={show === 'missing' ? 'Everyone here is marked.' : 'Nobody in this batch is travelling.'} />
+      </Surface>
+    );
+  }
+  const rows = people.slice(0, shown);
+  return (
+    <ListCard>
+      {rows.map((entry, index) => (
+        <TravellerRow
+          entry={entry}
+          here={present.has(entry.id)}
+          key={entry.id}
+          last={index === rows.length - 1}
+          onPress={() => onToggle(entry)}
+        />
+      ))}
+    </ListCard>
   );
 }
 

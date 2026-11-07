@@ -1,0 +1,11 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["src/features/expenses/outbox.ts", "src/features/field-sync/queue.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      }
+    ]
+  }
+}
