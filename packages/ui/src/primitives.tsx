@@ -165,13 +165,14 @@ export interface ButtonProps extends Omit<PressableProps, "children"> {
   busy?: boolean;
   icon?: ReactNode;
   label: string;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
 }
 
-/** Pill buttons in pairs: near-black primary, white secondary with a hairline. */
+/** Pill buttons in pairs: filled primary, white secondary with a hairline, red for destruction. */
 export function Button({ busy, disabled, icon, label, variant = "primary", ...rest }: ButtonProps) {
   const theme = useAppTheme();
-  const primary = variant === "primary";
+  const primary = variant !== "secondary";
+  const fill = variant === "danger" ? theme.color.danger : theme.color.primary;
   return (
     <PressableScale
       accessibilityLabel={rest.accessibilityLabel ?? label}
@@ -180,14 +181,14 @@ export function Button({ busy, disabled, icon, label, variant = "primary", ...re
       disabled={disabled || busy}
       style={{
         alignItems: "center",
-        backgroundColor: primary ? theme.color.primary : theme.color.surface,
-        borderColor: primary ? theme.color.primary : theme.color.border,
+        backgroundColor: primary ? fill : theme.color.surface,
+        borderColor: primary ? fill : theme.color.border,
         borderRadius: theme.radius.chip,
         borderWidth: 1,
         flexDirection: "row",
         gap: space.sm,
         justifyContent: "center",
-        minHeight: 48,
+        minHeight: Math.max(48, theme.minTarget),
         paddingHorizontal: space.lg + 4,
         paddingVertical: space.sm,
       }}

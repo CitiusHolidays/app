@@ -1,5 +1,6 @@
 import { expoClient } from "@better-auth/expo/client";
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
+import { magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { ConvexReactClient } from "convex/react";
 
@@ -44,6 +45,32 @@ export function createAppAuthClient(options: AuthClientOptions) {
 }
 
 export type AppAuthClient = ReturnType<typeof createAppAuthClient>;
+
+/**
+ * The customer app's client: the same session handling as `createAppAuthClient`, plus Better
+ * Auth's email-link plugin, so a traveller signs in with a one-time link instead of a password.
+ * The app verifies the link's token itself (`magicLink.verify`), which keeps the session in
+ * SecureStore and out of any URL.
+ */
+export function createCustomerAuthClient(options: AuthClientOptions) {
+  if (options.platform === "web") {
+    return createAuthClient({ baseURL: options.baseURL, plugins: [convexClient(), magicLinkClient()] });
+  }
+  return createAuthClient({
+    baseURL: options.baseURL,
+    plugins: [
+      expoClient({
+        scheme: options.scheme,
+        storage: options.storage,
+        storagePrefix: options.scheme,
+      }),
+      convexClient(),
+      magicLinkClient(),
+    ],
+  });
+}
+
+export type CustomerAuthClient = ReturnType<typeof createCustomerAuthClient>;
 
 export function createAppConvexClient(convexUrl: string) {
   return new ConvexReactClient(convexUrl, {

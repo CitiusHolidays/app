@@ -5,6 +5,7 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "connect": "bun --cwd apps/connect start",
+    "customer": "bun --cwd apps/customer start",
     "typecheck": "bun --filter '*' typecheck",
     "test": "bun --filter '*' test",
     "lint": "bun --filter '*' lint"

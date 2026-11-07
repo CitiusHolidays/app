@@ -194,3 +194,74 @@ export const staffTheme: AppTheme = {
     title: { fontFamily: "display", fontSize: 34, fontWeight: "400", letterSpacing: -0.5, lineHeight: 38 },
   },
 };
+
+/**
+ * The Citius customer app, from the website's Customer Travel Account tokens (`globals.css`
+ * `.account-shell`): warm paper ground, white cards, public ink and muted, Citius blue for the
+ * primary action, night for the trip hero, orange-ink for attention and the account success mix
+ * for confirmed states. Targets are 48pt; body type is a step larger than the staff app's because
+ * travellers include older readers. Every text pair is at least 4.5:1 (muted on paper 5.8:1).
+ */
+export const customerTheme: AppTheme = {
+  color: {
+    accent: citius.blue,
+    border: citius.border,
+    card: "#ffffff",
+    controlBorder: "#8a94a6",
+    danger: "#b42318",
+    dangerSoft: "#fef3f2",
+    dark: citius.night,
+    ground: citius.paper,
+    ink: citius.ink,
+    inset: "#f7f4ee",
+    muted: citius.muted,
+    onDark: "#ffffff",
+    onDarkMuted: citius.mutedOnDark,
+    onPrimary: "#ffffff",
+    pending: "#8a94a6",
+    primary: citius.blue,
+    rule: "#efeae1",
+    success: "#4e7242",
+    successSoft: "#ecf6e3",
+    surface: "#ffffff",
+    tickOff: "#ccd1d9",
+    track: "#efeae1",
+    warning: citius.orangeInk,
+    warningSoft: "#ffeee4",
+  },
+  font: platformFonts,
+  frame: 20,
+  minTarget: 48,
+  name: "citius",
+  radius: { chip: 999, control: 999, hero: 28, inset: 14, surface: 20 },
+  type: {
+    answer: { fontFamily: "semibold", fontSize: 34, fontWeight: "600", letterSpacing: -0.6, lineHeight: 40, maxFontSizeMultiplier: 1.5 },
+    body: { fontFamily: "regular", fontSize: 17, fontWeight: "400", lineHeight: 24 },
+    bodyStrong: { fontFamily: "semibold", fontSize: 17, fontWeight: "600", lineHeight: 24 },
+    display: { fontFamily: "display", fontSize: 36, fontWeight: "400", letterSpacing: -0.5, lineHeight: 42, maxFontSizeMultiplier: 1.6 },
+    label: { fontFamily: "medium", fontSize: 13, fontWeight: "500", lineHeight: 18 },
+    meta: { fontFamily: "medium", fontSize: 13, fontWeight: "500", lineHeight: 18 },
+    mono: { fontFamily: "mono", fontSize: 12, fontWeight: "500", letterSpacing: 0.6, lineHeight: 16, uppercase: true },
+    rowTitle: { fontFamily: "semibold", fontSize: 17, fontWeight: "600", lineHeight: 24 },
+    secondary: { fontFamily: "regular", fontSize: 15, fontWeight: "400", lineHeight: 21 },
+    section: { fontFamily: "semibold", fontSize: 20, fontWeight: "600", lineHeight: 26 },
+    title: { fontFamily: "display", fontSize: 28, fontWeight: "400", letterSpacing: -0.4, lineHeight: 34 },
+  },
+};
+
+/**
+ * Devanagari, Bengali, Tamil and the other Indic scripts need about a quarter more line height
+ * than Latin, and no letter-spacing or forced capitals (they break conjuncts and matras).
+ */
+export function themeForScript(theme: AppTheme, script: "latin" | "indic"): AppTheme {
+  if (script === "latin") {
+    return theme;
+  }
+  const type = Object.fromEntries(
+    Object.entries(theme.type).map(([role, value]) => [
+      role,
+      { ...value, letterSpacing: 0, lineHeight: Math.round(value.lineHeight * 1.25), uppercase: false },
+    ])
+  ) as unknown as TypeScale;
+  return { ...theme, name: `${theme.name}-indic`, type };
+}
