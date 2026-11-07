@@ -102,6 +102,7 @@ export function retrySyncNow(item: SyncItem, now: number): SyncItem {
 
 /** Known server refusals, in words a tour manager can act on. Server text is never shown raw. */
 const KNOWN_REFUSALS: [RegExp, string][] = [
+  [/APP_PILOT_OFF/, 'This trip is not live in the app any more, so the office did not record this. Tell Operations.'],
   [/forbidden|must belong to the selected job card/i, 'The office did not accept this: the trip or batch may no longer be assigned to you.'],
   [/more travellers than|too many travellers/i, 'This trip is too large to send from the app. Tell Operations.'],
   [/1 to 4000 characters/i, 'This message is too long for the office record (4,000 characters at most).'],

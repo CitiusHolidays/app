@@ -260,7 +260,7 @@ export default function Today() {
       ) : null}
       {tripsLoaded && tripsComplete && trips.length === 0 ? (
         <Surface>
-          <QuietState text="No trips are assigned to you. Operations assigns tour managers on the Job Card." />
+          <QuietState text="No trips yet. A trip shows here once Operations assigns you to it and starts the app for that trip." />
         </Surface>
       ) : null}
       {tripsLoaded && !tripsComplete ? (

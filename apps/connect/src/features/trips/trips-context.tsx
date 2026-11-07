@@ -3,7 +3,7 @@ import { useConvex } from 'convex/react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useStaffSession } from '@/features/gate/session';
-import { deletePack, loadPack, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
+import { deletePack, loadPack, prunePacksNotIn, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
 import { buildTripPack, type TripPack } from '@/features/trip-pack/trip-pack';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
@@ -68,6 +68,12 @@ const toSummary = (row: JobCardRow): TripSummary => ({
 
 const firstPage = (cursor: string | null): PaginationOpts => ({ cursor, numItems: PAGE });
 
+/** Tells shared CRM reads this call is from the app, so a trip whose app pilot is off is refused. */
+const CONNECT = 'connect' as const;
+
+/** The server refuses app reads for a trip whose app pilot was stopped. */
+const isPilotOff = (error: unknown) => (error as { data?: unknown })?.data === 'APP_PILOT_OFF';
+
 export function TripsProvider({ children }: { children: ReactNode }) {
   const convex = useConvex();
   const { live, store } = useAppStore();
@@ -106,6 +112,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       );
       if (!current()) return;
       void setCache({ complete: result.complete, savedAt: Date.now(), scope: 'assigned', trips: result.rows.map(toSummary) });
+      if (result.complete) {
+        // A trip that left the list (unassigned, or its app pilot was stopped) must not stay
+        // readable on the phone.
+        await prunePacksNotIn(
+          store,
+          result.rows.map((row) => row.id)
+        );
+      }
       setTripsProblem(null);
     } catch (error) {
       logEvent('trips.refresh-failed', error);
@@ -113,7 +127,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [canReachServer, convex, live, setCache]);
+  }, [canReachServer, convex, live, setCache, store]);
 
   const selectedTripId = selected?.id ?? null;
 
@@ -125,10 +139,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     const current = live.fence();
     try {
       const [commandCenter, batches, travellers, tourManagers] = await Promise.all([
-        convex.query(staffApi.getJobCardCommandCenter.ref, { jobCardId }),
-        collectPages((cursor) => convex.query(staffApi.listTravelBatches.ref, { jobCardId, paginationOpts: firstPage(cursor) }), MAX_PAGES),
-        collectPages((cursor) => convex.query(staffApi.listTravellers.ref, { jobCardId, paginationOpts: firstPage(cursor) }), MAX_PAGES),
-        collectPages((cursor) => convex.query(staffApi.listTourManagers.ref, { jobCardId, paginationOpts: firstPage(cursor) }), MAX_PAGES),
+        convex.query(staffApi.getJobCardCommandCenter.ref, { jobCardId, surface: CONNECT }),
+        collectPages((cursor) => convex.query(staffApi.listTravelBatches.ref, { jobCardId, paginationOpts: firstPage(cursor), surface: CONNECT }), MAX_PAGES),
+        collectPages((cursor) => convex.query(staffApi.listTravellers.ref, { jobCardId, paginationOpts: firstPage(cursor), surface: CONNECT }), MAX_PAGES),
+        collectPages((cursor) => convex.query(staffApi.listTourManagers.ref, { jobCardId, paginationOpts: firstPage(cursor), surface: CONNECT }), MAX_PAGES),
       ]);
       if (!current()) return;
       const pack = buildTripPack({
@@ -148,10 +162,19 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       setPackState({ jobCardId, loading: false, pack });
       setPackProblem(null);
     } catch (error) {
+      if (isPilotOff(error)) {
+        // Operations stopped the app for this trip: nothing about it stays on the phone.
+        await deletePack(store, jobCardId);
+        if (!current()) return;
+        setPackState({ jobCardId, loading: false, pack: null });
+        setPackProblem('This trip is not live in the app any more.');
+        void refreshTrips();
+        return;
+      }
       logEvent('pack.refresh-failed', error);
       setPackProblem('Could not update the trip pack. Showing the saved copy.');
     }
-  }, [canReachServer, convex, live, selectedTripId, store]);
+  }, [canReachServer, convex, live, refreshTrips, selectedTripId, store]);
 
   useEffect(() => {
     let active = true;
