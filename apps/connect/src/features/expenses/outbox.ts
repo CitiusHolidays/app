@@ -114,6 +114,7 @@ export function retryNow(item: OutboxItem, now: number): OutboxItem {
 
 /** Known server refusals, in words a tour manager can act on. Server text is never shown raw. */
 const KNOWN_REFUSALS: [RegExp, string][] = [
+  [/APP_PILOT_OFF/, 'This trip is not live in the app any more, so this expense was not sent. Give the receipt to Operations.'],
   [/reporting manager/i, 'No reporting manager is set for you. Ask HR to add one, then try again.'],
   [/not assigned to you|job card not found/i, 'This trip is no longer assigned to you.'],
   [/file type|mime/i, 'This receipt file type is not accepted. Take a new photo.'],

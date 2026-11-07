@@ -84,6 +84,31 @@ describe('trips provider', () => {
     await waitFor(async () => expect(await mockStore.keys('pack:')).toEqual([`pack:${commandCenter.jobCard.id}`]));
   });
 
+  it('asks the shared trip reads for the app view, so a stopped pilot is refused there', async () => {
+    await renderTrips();
+    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    const appReads = mockQuery.mock.calls.filter(([ref]) =>
+      ['crm/jobCards:getCommandCenter', 'crm/jobCards:listTravelBatches', 'crm/travellers:listPage', 'crm/ops:listTourManagers'].includes(
+        getFunctionName(ref as Parameters<typeof getFunctionName>[0])
+      )
+    );
+    expect(appReads.length).toBeGreaterThanOrEqual(4);
+    expect(appReads.every(([, args]) => (args as { surface?: string }).surface === 'connect')).toBe(true);
+  });
+
+  it('deletes the saved trip when the office has stopped the app for it', async () => {
+    const jobCardId = commandCenter.jobCard.id;
+    await mockStore.setJSON(`pack:${jobCardId}`, { ...savedPack(jobCardId), savedAt: 0 });
+    mockQuery.mockImplementation(async (ref: unknown) => {
+      const name = getFunctionName(ref as Parameters<typeof getFunctionName>[0]);
+      if (name === 'crm/jobCards:listMyAssignedPage') return page([commandCenter.jobCard]);
+      throw Object.assign(new Error('refused'), { data: 'APP_PILOT_OFF' });
+    });
+    await renderTrips();
+    await waitFor(async () => expect(await mockStore.keys('pack:')).toEqual([]));
+    await waitFor(() => expect(handles.trips?.packProblem).toBe('This trip is not live in the app any more.'));
+  });
+
   it('keeps saved packs when the trip list came back incomplete', async () => {
     mockTripPagesDone = false;
     await mockStore.setJSON('pack:jc_other_page', savedPack('jc_other_page'));

@@ -88,13 +88,13 @@ export const staffApi = {
     "getExpenseListRow",
     "view:expenses; the row is hidden unless its Job Card is visible or the caller created or approves it"
   ),
-  getJobCardCommandCenter: define<"query", { jobCardId: string }, CommandCenter>(
+  getJobCardCommandCenter: define<"query", { jobCardId: string; surface?: "connect" }, CommandCenter>(
     "query",
     "crm/jobCards",
     "getCommandCenter",
     "view:jobCards; canSeeJobCardRecord (Tour Manager: assigned staff id or legacy name match)"
   ),
-  getJobCardDetail: define<"query", { jobCardId: string }, JobCardRow | null>(
+  getJobCardDetail: define<"query", { jobCardId: string; surface?: "connect" }, JobCardRow | null>(
     "query",
     "crm/jobCards",
     "getDetail",
@@ -146,7 +146,7 @@ export const staffApi = {
   ),
   listTourManagers: define<
     "query",
-    { jobCardId?: string; paginationOpts: PaginationOpts },
+    { jobCardId?: string; paginationOpts: PaginationOpts; surface?: "connect" },
     PaginationResult<TourManagerRow>
   >(
     "query",
@@ -156,7 +156,7 @@ export const staffApi = {
   ),
   listTravelBatches: define<
     "query",
-    { jobCardId: string; paginationOpts: PaginationOpts },
+    { jobCardId: string; paginationOpts: PaginationOpts; surface?: "connect" },
     PaginationResult<TravelBatchRow>
   >(
     "query",
@@ -166,7 +166,7 @@ export const staffApi = {
   ),
   listTravellers: define<
     "query",
-    { jobCardId: string; paginationOpts: PaginationOpts },
+    { jobCardId: string; paginationOpts: PaginationOpts; surface?: "connect" },
     PaginationResult<TravellerRow>
   >(
     "query",
