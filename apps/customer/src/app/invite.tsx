@@ -7,7 +7,7 @@ import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DestinationCover } from '@/components/destination-cover';
-import { haptic, Icon, MessageScreen, TopTint } from '@/components/kit';
+import { Icon, MessageScreen, TopTint } from '@/components/kit';
 import { InviteSkeleton } from '@/components/skeletons';
 import { PENDING_INVITE_KEY, useCustomerSession } from '@/features/session/session';
 import { inviteErrorMessage } from '@/features/trips/errors';
@@ -16,6 +16,8 @@ import { useReferenceNow } from '@/features/trips/reference-now';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
+import { haptic } from '@/lib/haptic';
+import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 
 function Checkbox({ checked, label, onToggle }: { checked: boolean; label: string; onToggle: () => void }) {
@@ -103,10 +105,14 @@ function InviteForAccount({ token }: { token: string }) {
     setProblem(null);
     try {
       const minorTravellerIds = preview.minors.map((minor) => minor.travellerId).filter((id) => consents.has(id));
-      const result = await claim({
-        ...(minorTravellerIds.length ? { consent: { minorTravellerIds, textVersion: PARENTAL_CONSENT_TEXT_VERSION } } : {}),
-        token,
-      });
+      const result = await runThen(
+        () =>
+          claim({
+            ...(minorTravellerIds.length ? { consent: { minorTravellerIds, textVersion: PARENTAL_CONSENT_TEXT_VERSION } } : {}),
+            token,
+          }),
+        () => setBusy(false)
+      );
       haptic('success');
       if (preview.trip) {
         router.replace({ params: { id: result.tripId }, pathname: '/trip/[id]' });
@@ -117,7 +123,6 @@ function InviteForAccount({ token }: { token: string }) {
       logEvent('invite.claim-failed', error);
       haptic('error');
       setProblem(inviteErrorMessage(error));
-      setBusy(false);
     }
   };
 

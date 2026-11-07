@@ -1,0 +1,19 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "overrides": [
+      {
+        "files": [
+          "src/app/?tabs?/index.tsx",
+          "src/app/?tabs?/updates.tsx",
+          "src/app/invite.tsx",
+          "src/app/sign-in.tsx",
+          "src/app/trip/?id?/index.tsx",
+          "src/app/trip/?id?/updates.tsx",
+          "src/components/kit.tsx"
+        ],
+        "rules": ["react-doctor/rn-scrollview-dynamic-padding"]
+      }
+    ]
+  }
+}
