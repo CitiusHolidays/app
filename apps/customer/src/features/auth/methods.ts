@@ -2,7 +2,7 @@ import { SIGN_IN_DEVICE_HEADER } from '@citius/backend/customer';
 
 import { clients } from '@/lib/clients';
 
-import { signInDevice } from './sign-in-device';
+import { sha256Hex, signInDevice } from './sign-in-device';
 
 /**
  * How a traveller can sign in. The owner decided on email link and SMS, the traveller's choice
@@ -38,13 +38,16 @@ function failure(status: unknown): RequestResult {
  * Emails a one-time sign-in link bound to this phone. The server answers the same whether or not
  * the address is known, is staff, or has asked too often this hour.
  */
-export async function requestEmailLink(email: string): Promise<RequestResult> {
+export async function requestEmailLink(email: string, inviteToken?: string | null): Promise<RequestResult> {
   if (!clients) return { ok: false, reason: 'network' };
   try {
     const { digest } = await signInDevice();
+    // An invited traveller is never held back by the server's domain or volume limits; the
+    // invite's hash (what the server stores) shows it is real without sending the token.
+    const inviteTokenHash = inviteToken ? await sha256Hex(inviteToken) : undefined;
     const { error } = await clients.auth.signIn.magicLink({
       email: email.trim().toLowerCase(),
-      metadata: { deviceDigest: digest },
+      metadata: inviteTokenHash ? { deviceDigest: digest, inviteTokenHash } : { deviceDigest: digest },
     });
     return error ? failure(error.status) : { ok: true };
   } catch {

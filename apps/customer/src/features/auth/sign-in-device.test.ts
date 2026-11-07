@@ -58,6 +58,11 @@ describe('sign-in device binding', () => {
     const { digest, secret } = await signInDevice();
     await requestEmailLink(' Asha@Example.test ');
     expect(mockSignIn).toHaveBeenCalledWith({ email: 'asha@example.test', metadata: { deviceDigest: digest } });
+    await requestEmailLink('asha@example.test', 'invite-token');
+    expect(mockSignIn).toHaveBeenLastCalledWith({
+      email: 'asha@example.test',
+      metadata: { deviceDigest: digest, inviteTokenHash: sha256('invite-token') },
+    });
     await verifyEmailLink('token-123');
     expect(mockVerify).toHaveBeenCalledWith({
       fetchOptions: { headers: { [SIGN_IN_DEVICE_HEADER]: secret } },

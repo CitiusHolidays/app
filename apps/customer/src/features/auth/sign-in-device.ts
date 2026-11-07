@@ -18,6 +18,14 @@ function base64Url(bytes: Uint8Array) {
   return out;
 }
 
+/** Lower-case hex SHA-256, as the server stores digests. */
+export async function sha256Hex(value: string) {
+  const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value, {
+    encoding: Crypto.CryptoEncoding.HEX,
+  });
+  return digest.toLowerCase();
+}
+
 /**
  * The secret that ties an email sign-in link to this phone (website ADR 0020). The app sends only
  * its SHA-256 digest when it asks for a link and the secret itself when it opens the link, so a
@@ -29,8 +37,5 @@ export async function signInDevice() {
     secret = base64Url(await Crypto.getRandomBytesAsync(32));
     await SecureStore.setItemAsync(SECRET_KEY, secret, SECRET_OPTIONS);
   }
-  const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, secret, {
-    encoding: Crypto.CryptoEncoding.HEX,
-  });
-  return { digest: digest.toLowerCase(), secret };
+  return { digest: await sha256Hex(secret), secret };
 }

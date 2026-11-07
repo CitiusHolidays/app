@@ -263,7 +263,7 @@ export default function SignIn() {
     if (!isEmail(email)) return setProblem('signIn.emailInvalid');
     setBusy(true);
     setProblem(null);
-    const result = await requestEmailLink(email);
+    const result = await requestEmailLink(email, pendingInvite);
     setBusy(false);
     if (result.ok) {
       setSentTo(email.trim().toLowerCase());
