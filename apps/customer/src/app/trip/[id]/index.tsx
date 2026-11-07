@@ -2,9 +2,11 @@ import { customerApi, type ConsentState, PARENTAL_CONSENT_TEXT_VERSION, type Tri
 import { Banner, Button, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { tripSchedule } from '@citius/core/src/schedule';
 import { useMutation } from 'convex/react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, ListCard, MessageScreen, Row, SectionTitle } from '@/components/kit';
@@ -282,28 +284,58 @@ export default function TripScreen() {
   const trip = useTrip(id);
   const now = useNow();
   const detail = trip.data;
+  // Light status bar icons over the dark photo; dark once the cream sheet slides under them.
+  // The scroll position is read on the UI thread; React only hears when the edge is crossed.
+  const [onSheet, setOnSheet] = useState(false);
+  const sheetTop = useSharedValue(0);
+  const sheetUnderBar = useSharedValue(false);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    const top = sheetTop.get();
+    const next = top > 0 && event.contentOffset.y >= top;
+    if (next !== sheetUnderBar.get()) {
+      sheetUnderBar.set(next);
+      scheduleOnRN(setOnSheet, next);
+    }
+  });
   if (detail === null) {
     return (
-      <MessageScreen
-        actions={<Button label={t('common.close')} onPress={() => router.replace('/')} variant="secondary" />}
-        icon={{ ios: 'eye.slash', md: 'visibility_off' }}
-        text={t('trip.notAvailableBody')}
-        title={t('trip.notAvailableTitle')}
-      />
+      <>
+        <Stack.Screen options={{ statusBarStyle: 'dark' }} />
+        <MessageScreen
+          actions={<Button label={t('common.close')} onPress={() => router.replace('/')} variant="secondary" />}
+          icon={{ ios: 'eye.slash', md: 'visibility_off' }}
+          text={t('trip.notAvailableBody')}
+          title={t('trip.notAvailableTitle')}
+        />
+      </>
     );
   }
   if (!detail) {
-    return <TripSkeleton back={<BackButton />} label={t('common.loading')} />;
+    return (
+      <>
+        <Stack.Screen options={{ statusBarStyle: 'light' }} />
+        <TripSkeleton back={<BackButton />} label={t('common.loading')} />
+      </>
+    );
   }
   const offline = gate.kind === 'signedIn' && gate.offline;
   const latest = detail.announcements.slice(0, 2);
   return (
-    <ScrollView
+    <Animated.ScrollView
       contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}
       contentInsetAdjustmentBehavior="never"
+      onScroll={onScroll}
+      scrollEventThrottle={32}
       style={{ backgroundColor: theme.color.ground }}
     >
-      <TripHeader detail={detail} now={now} />
+      <Stack.Screen options={{ statusBarStyle: onSheet ? 'dark' : 'light' }} />
+      <View
+        onLayout={(event) => {
+          sheetTop.set(event.nativeEvent.layout.height - theme.radius.hero - space.sm - insets.top);
+        }}
+      >
+        <TripHeader detail={detail} now={now} />
+      </View>
       <View
         style={{
           backgroundColor: theme.color.ground,
@@ -371,6 +403,6 @@ export default function TripScreen() {
         {detail.documents.length ? <DocumentsCard documents={detail.documents} /> : null}
         {detail.minors.length ? <FamilyCard detail={detail} tripId={id ?? ''} /> : null}
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
