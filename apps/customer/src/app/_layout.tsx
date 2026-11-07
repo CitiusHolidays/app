@@ -11,6 +11,7 @@ import { type ReactNode, useEffect, useMemo } from 'react';
 import { ActivityIndicator, LogBox, Platform, View } from 'react-native';
 
 import { AppErrorBoundary } from '@/components/error-boundary';
+import { LaunchCurtain, useLaunchDone } from '@/components/launch-curtain';
 import { CustomerSessionProvider, useCustomerSession } from '@/features/session/session';
 import { I18nProvider, useI18n } from '@/i18n/i18n';
 import { AppStoreProvider } from '@/lib/app-store';
@@ -43,9 +44,8 @@ function Waiting() {
 
 function MissingConfiguration() {
   const { t } = useI18n();
-  useEffect(() => {
-    void SplashScreen.hideAsync().catch(() => undefined);
-  }, []);
+  const launchDone = useLaunchDone();
+  useEffect(launchDone, [launchDone]);
   return (
     <View style={{ backgroundColor: customerTheme.color.ground, flex: 1, gap: 12, justifyContent: 'center', padding: 24 }}>
       <Text accessibilityRole="header" variant="title">
@@ -66,11 +66,10 @@ function ScriptTheme({ children }: { children: ReactNode }) {
 function Shell() {
   const { gate } = useCustomerSession();
   const { t } = useI18n();
+  const launchDone = useLaunchDone();
   useEffect(() => {
-    if (gate.kind !== 'loading') {
-      void SplashScreen.hideAsync().catch(() => undefined);
-    }
-  }, [gate.kind]);
+    if (gate.kind !== 'loading') launchDone();
+  }, [gate.kind, launchDone]);
   if (gate.kind === 'loading') {
     return <Waiting />;
   }
@@ -125,21 +124,24 @@ export default function RootLayout() {
     return null;
   }
   return (
-    <AppStoreProvider fallback={<Waiting />}>
-      <I18nProvider>
-        <ScriptTheme>
-          <StatusBar style="dark" />
-          {clients ? (
-            <ConvexBetterAuthProvider authClient={clients.auth} client={clients.convex}>
-              <CustomerSessionProvider>
-                <GuardedShell />
-              </CustomerSessionProvider>
-            </ConvexBetterAuthProvider>
-          ) : (
-            <MissingConfiguration />
-          )}
-        </ScriptTheme>
-      </I18nProvider>
-    </AppStoreProvider>
+    <LaunchCurtain>
+      {/* Mounted first, so the loading screen's light status bar wins while it is up. */}
+      <StatusBar style="dark" />
+      <AppStoreProvider fallback={<Waiting />}>
+        <I18nProvider>
+          <ScriptTheme>
+            {clients ? (
+              <ConvexBetterAuthProvider authClient={clients.auth} client={clients.convex}>
+                <CustomerSessionProvider>
+                  <GuardedShell />
+                </CustomerSessionProvider>
+              </ConvexBetterAuthProvider>
+            ) : (
+              <MissingConfiguration />
+            )}
+          </ScriptTheme>
+        </I18nProvider>
+      </AppStoreProvider>
+    </LaunchCurtain>
   );
 }
