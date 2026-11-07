@@ -186,11 +186,25 @@ export interface FieldPassports {
 }
 
 /** A decrypted passport scan. Kept in memory for display only; never stored. */
-export interface FieldPassportFile {
-  bytes: ArrayBuffer;
-  fileName: string;
-  mimeType: string;
-}
+/**
+ * One read of a traveller's passport scan. Asked for `variant: "preview"`, an image comes back as a
+ * small JPEG (about 900 px, tens of KB) to show at once; a PDF or unreadable file answers
+ * `{ variant: "none" }` and the app asks for the full file. A call without `variant` gets the
+ * original shape, without the `variant` field.
+ */
+export type FieldPassportFile =
+  | { bytes: ArrayBuffer; fileName: string; mimeType: string }
+  | { bytes: ArrayBuffer; fileName: string; height?: number; mimeType: string; variant: "full"; width?: number }
+  | {
+      bytes: ArrayBuffer;
+      fileName: string;
+      fullMimeType: string;
+      height: number;
+      mimeType: string;
+      variant: "preview";
+      width: number;
+    }
+  | { variant: "none" };
 
 /** Same lists as the website's portal constants; the contract test checks the currencies. */
 export const EXPENSE_CURRENCIES = ["INR", "USD", "AED", "EUR", "THB", "SGD"] as const;
