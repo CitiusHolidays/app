@@ -64,7 +64,9 @@ jobs:
           repository: CitiusHolidays/website
           ref: ${{ steps.ref.outputs.ref }}
           path: website
-          sparse-checkout: convex
+          sparse-checkout: |
+            convex
+            src/components/customerApp
 
       - name: Contract suite against the website
         working-directory: apps/connect
