@@ -1,7 +1,7 @@
 import { createMemoryStore } from '@/lib/storage/memory-store';
 
 import { batches, commandCenter, tourManagers, travellers } from './fixtures';
-import { loadPack, purgeExpiredPacks, savePack } from './pack-store';
+import { loadPack, prunePacksNotIn, purgeExpiredPacks, savePack } from './pack-store';
 import { buildTripPack } from './trip-pack';
 
 const SAVED_AT = new Date(2026, 10, 6, 7, 12).getTime();
@@ -22,6 +22,15 @@ describe('trip pack store', () => {
     await savePack(store, { ...pack, expiresAt: SAVED_AT - 1, jobCardId: 'jc_old' });
     expect(await purgeExpiredPacks(store, SAVED_AT)).toEqual(['jc_old']);
     expect(await store.keys('pack:')).toEqual(['pack:jc_test_1']);
+  });
+
+  it('deletes the packs of trips the server no longer lists, and keeps the rest', async () => {
+    const store = createMemoryStore();
+    await savePack(store, pack);
+    await savePack(store, { ...pack, jobCardId: 'jc_paused' });
+    expect(await prunePacksNotIn(store, ['jc_test_1'])).toEqual(['jc_paused']);
+    expect(await store.keys('pack:')).toEqual(['pack:jc_test_1']);
+    expect(await prunePacksNotIn(store, [])).toEqual(['jc_test_1']);
   });
 
   it('ignores a pack written by a different format version', async () => {

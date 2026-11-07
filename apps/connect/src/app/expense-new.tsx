@@ -137,7 +137,7 @@ export default function NewExpense() {
         </ChipRow>
       ) : (
         <Surface>
-          <QuietState text="No trips are assigned to you, so there is no trip to file an expense against." />
+          <QuietState text="No trips yet, so there is no trip to file an expense against." />
         </Surface>
       )}
       <View style={{ gap: space.sm }}>

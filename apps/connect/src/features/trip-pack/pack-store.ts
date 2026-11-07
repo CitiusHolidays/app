@@ -38,3 +38,21 @@ export async function purgeExpiredPacks(store: KeyValueStore, now: number) {
   }
   return removed;
 }
+
+/**
+ * Deletes the packs of trips the server no longer lists for this tour manager (unassigned, or
+ * the trip's app pilot was stopped); returns the Job Card ids removed. Only call it with a
+ * complete list, or a trip on a page that was not fetched would lose its pack.
+ */
+export async function prunePacksNotIn(store: KeyValueStore, listedJobCardIds: readonly string[]) {
+  const keep = new Set(listedJobCardIds);
+  const removed: string[] = [];
+  for (const packKey of await store.keys(PREFIX)) {
+    const jobCardId = packKey.slice(PREFIX.length);
+    if (!keep.has(jobCardId)) {
+      await store.delete(packKey);
+      removed.push(jobCardId);
+    }
+  }
+  return removed;
+}

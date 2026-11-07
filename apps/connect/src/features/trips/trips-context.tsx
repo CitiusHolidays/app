@@ -3,7 +3,7 @@ import { useConvex } from 'convex/react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useStaffSession } from '@/features/gate/session';
-import { deletePack, loadPack, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
+import { deletePack, loadPack, prunePacksNotIn, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
 import { buildTripPack, type TripPack } from '@/features/trip-pack/trip-pack';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
@@ -106,6 +106,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       );
       if (!current()) return;
       void setCache({ complete: result.complete, savedAt: Date.now(), scope: 'assigned', trips: result.rows.map(toSummary) });
+      if (result.complete) {
+        // A trip that left the list (unassigned, or its app pilot was stopped) must not stay
+        // readable on the phone.
+        await prunePacksNotIn(
+          store,
+          result.rows.map((row) => row.id)
+        );
+      }
       setTripsProblem(null);
     } catch (error) {
       logEvent('trips.refresh-failed', error);
@@ -113,7 +121,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [canReachServer, convex, live, setCache]);
+  }, [canReachServer, convex, live, setCache, store]);
 
   const selectedTripId = selected?.id ?? null;
 
