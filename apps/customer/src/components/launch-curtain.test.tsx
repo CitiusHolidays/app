@@ -1,8 +1,8 @@
 import { act, render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { PixelRatio, StyleSheet, Text } from 'react-native';
 import { useEffect } from 'react';
 
-import { LaunchCurtain, useLaunchDone } from './launch-curtain';
+import { LaunchCurtain, TEXTURE_LAYERS, useLaunchDone } from './launch-curtain';
 
 // Motion is checked on device; here timings finish at once so the hand-off logic can be tested.
 jest.mock('react-native-reanimated', () => {
@@ -81,6 +81,20 @@ describe('launch curtain', () => {
     );
     expect(screen.queryByLabelText('Citius')).not.toBeOnTheScreen();
     expect(screen.getByText('First screen')).toBeOnTheScreen();
+  });
+
+  it("tiles the website's doodles at their native size, never enlarged", async () => {
+    await render(
+      <LaunchCurtain>
+        <ReadyWhen ready={false} />
+      </LaunchCurtain>
+    );
+    const tiles = screen.getAllByTestId('image').slice(0, -1); // the last image is the planes
+    const first = StyleSheet.flatten(tiles[0]?.props.style);
+    expect(first.width).toBeCloseTo(1919 / PixelRatio.get());
+    expect(first.height).toBeCloseTo(956 / PixelRatio.get());
+    expect(tiles.length % TEXTURE_LAYERS).toBe(0);
+    expect(tiles.length).toBeGreaterThanOrEqual(TEXTURE_LAYERS);
   });
 
   it('never strands the app behind the native splash if the texture does not load', async () => {
