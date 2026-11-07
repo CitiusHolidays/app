@@ -99,9 +99,3 @@ export function DestinationCover({
     </View>
   );
 }
-
-/** Starts the full photo for a cover the traveller is about to open (the trip header). */
-export function prefetchCover(photo: DestinationPhoto | null, screenWidth: number) {
-  if (!photo) return;
-  void Image.prefetch(coverUri(photo.path, photoWidth(Math.ceil(screenWidth * PixelRatio.get()))), 'disk').catch(() => undefined);
-}

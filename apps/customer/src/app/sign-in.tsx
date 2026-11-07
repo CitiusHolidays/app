@@ -69,6 +69,142 @@ function MethodOption({
   );
 }
 
+function VerifyingLink() {
+  const theme = useAppTheme();
+  const { t } = useI18n();
+  return (
+    <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
+      <ActivityIndicator color={theme.color.primary} />
+      <Text>{t('signIn.verifying')}</Text>
+    </View>
+  );
+}
+
+function LinkFailed({ onNewLink }: { onNewLink: () => void }) {
+  const { t } = useI18n();
+  return (
+    <View style={{ gap: space.lg }}>
+      <Banner tone="danger">
+        <Text variant="secondary">{t('signIn.linkFailed')}</Text>
+      </Banner>
+      <Button label={t('signIn.newLink')} onPress={onNewLink} />
+    </View>
+  );
+}
+
+function LinkSent({
+  busy,
+  onResend,
+  onUseOther,
+  sentTo,
+  waitMs,
+}: {
+  busy: boolean;
+  onResend: () => void;
+  onUseOther: () => void;
+  sentTo: string;
+  waitMs: number;
+}) {
+  const theme = useAppTheme();
+  const { t } = useI18n();
+  return (
+    <View style={{ gap: space.lg }}>
+      <View style={{ alignItems: 'center', gap: space.sm }}>
+        <Icon color={theme.color.primary} ios="envelope.open" md="mark_email_read" size={34} />
+        <Text accessibilityRole="header" style={{ textAlign: 'center' }} variant="section">
+          {t('signIn.sentTitle')}
+        </Text>
+        <Text style={{ textAlign: 'center' }} tone="muted">
+          {t('signIn.sentBody', { email: sentTo })}
+        </Text>
+      </View>
+      <Button
+        disabled={waitMs > 0 || busy}
+        busy={busy}
+        label={waitMs > 0 ? t('signIn.resendIn', { seconds: Math.ceil(waitMs / 1000) }) : t('signIn.resend')}
+        onPress={onResend}
+        variant="secondary"
+      />
+      <Button label={t('signIn.useOther')} onPress={onUseOther} variant="secondary" />
+    </View>
+  );
+}
+
+function EmailForm({
+  busy,
+  email,
+  method,
+  onChangeEmail,
+  onMethod,
+  onSend,
+  problem,
+}: {
+  busy: boolean;
+  email: string;
+  method: SignInMethodId;
+  onChangeEmail: (value: string) => void;
+  onMethod: (method: SignInMethodId) => void;
+  onSend: () => void;
+  problem: MessageKey | null;
+}) {
+  const { t } = useI18n();
+  return (
+    <View style={{ gap: space.lg }}>
+      <Text accessibilityRole="header" variant="bodyStrong">
+        {t('signIn.methodLabel')}
+      </Text>
+      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: space.md }}>
+        {SIGN_IN_METHODS.map((option) =>
+          option.id === 'email' ? (
+            <MethodOption
+              hint={t('signIn.method.emailHint')}
+              icon={{ ios: 'envelope', md: 'mail' }}
+              key={option.id}
+              label={t('signIn.method.email')}
+              onPress={() => onMethod('email')}
+              selected={method === 'email'}
+            />
+          ) : (
+            <MethodOption
+              hint={t('signIn.method.smsHint')}
+              icon={{ ios: 'message', md: 'sms' }}
+              key={option.id}
+              label={t('signIn.method.sms')}
+              onPress={() => onMethod('sms')}
+              selected={method === 'sms'}
+              soon={option.available ? undefined : t('common.comingSoon')}
+            />
+          )
+        )}
+      </View>
+      <TextField
+        autoCapitalize="none"
+        autoComplete="email"
+        autoCorrect={false}
+        inputMode="email"
+        keyboardType="email-address"
+        label={t('signIn.emailLabel')}
+        onChangeText={onChangeEmail}
+        onSubmitEditing={onSend}
+        returnKeyType="send"
+        textContentType="emailAddress"
+        value={email}
+      />
+      {problem ? (
+        <Banner tone="danger">
+          <Text accessibilityLiveRegion="polite" variant="secondary">
+            {t(problem)}
+          </Text>
+        </Banner>
+      ) : null}
+      <Button busy={busy} label={t('signIn.send')} onPress={onSend} />
+      <Text style={{ textAlign: 'center' }} tone="muted" variant="label">
+        {t('signIn.help')}
+      </Text>
+    </View>
+  );
+}
+
 /**
  * Sign-in by email link. The link opens the website's `/app/sign-in` page, which hands the token to
  * this screen as `citius://sign-in?token=…`; the app then verifies it itself. The same screen
@@ -140,114 +276,43 @@ export default function SignIn() {
   const waitMs = sentAt + RESEND_AFTER_MS - now;
   let body;
   if (verifying === 'running' || (verifying === 'done' && !signedIn)) {
-    body = (
-      <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
-        <ActivityIndicator color={theme.color.primary} />
-        <Text>{t('signIn.verifying')}</Text>
-      </View>
-    );
+    body = <VerifyingLink />;
   } else if (verifying === 'failed') {
     body = (
-      <View style={{ gap: space.lg }}>
-        <Banner tone="danger">
-          <Text variant="secondary">{t('signIn.linkFailed')}</Text>
-        </Banner>
-        <Button
-          label={t('signIn.newLink')}
-          onPress={() => {
-            setVerifying('idle');
-            router.setParams({ token: undefined });
-          }}
-        />
-      </View>
+      <LinkFailed
+        onNewLink={() => {
+          setVerifying('idle');
+          router.setParams({ token: undefined });
+        }}
+      />
     );
   } else if (sentTo) {
     body = (
-      <View style={{ gap: space.lg }}>
-        <View style={{ alignItems: 'center', gap: space.sm }}>
-          <Icon color={theme.color.primary} ios="envelope.open" md="mark_email_read" size={34} />
-          <Text accessibilityRole="header" style={{ textAlign: 'center' }} variant="section">
-            {t('signIn.sentTitle')}
-          </Text>
-          <Text style={{ textAlign: 'center' }} tone="muted">
-            {t('signIn.sentBody', { email: sentTo })}
-          </Text>
-        </View>
-        <Button
-          disabled={waitMs > 0 || busy}
-          busy={busy}
-          label={waitMs > 0 ? t('signIn.resendIn', { seconds: Math.ceil(waitMs / 1000) }) : t('signIn.resend')}
-          onPress={() => void send()}
-          variant="secondary"
-        />
-        <Button
-          label={t('signIn.useOther')}
-          onPress={() => {
-            setSentTo(null);
-            setEmail('');
-          }}
-          variant="secondary"
-        />
-      </View>
+      <LinkSent
+        busy={busy}
+        onResend={() => void send()}
+        onUseOther={() => {
+          setSentTo(null);
+          setEmail('');
+        }}
+        sentTo={sentTo}
+        waitMs={waitMs}
+      />
     );
   } else {
     body = (
-      <View style={{ gap: space.lg }}>
-        <Text accessibilityRole="header" variant="bodyStrong">
-          {t('signIn.methodLabel')}
-        </Text>
-        <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: space.md }}>
-          {SIGN_IN_METHODS.map((option) =>
-            option.id === 'email' ? (
-              <MethodOption
-                hint={t('signIn.method.emailHint')}
-                icon={{ ios: 'envelope', md: 'mail' }}
-                key={option.id}
-                label={t('signIn.method.email')}
-                onPress={() => setMethod('email')}
-                selected={method === 'email'}
-              />
-            ) : (
-              <MethodOption
-                hint={t('signIn.method.smsHint')}
-                icon={{ ios: 'message', md: 'sms' }}
-                key={option.id}
-                label={t('signIn.method.sms')}
-                onPress={() => setMethod('sms')}
-                selected={method === 'sms'}
-                soon={option.available ? undefined : t('common.comingSoon')}
-              />
-            )
-          )}
-        </View>
-        <TextField
-          autoCapitalize="none"
-          autoComplete="email"
-          autoCorrect={false}
-          inputMode="email"
-          keyboardType="email-address"
-          label={t('signIn.emailLabel')}
-          onChangeText={(value) => {
-            setEmail(value);
-            setProblem(null);
-          }}
-          onSubmitEditing={() => void send()}
-          returnKeyType="send"
-          textContentType="emailAddress"
-          value={email}
-        />
-        {problem ? (
-          <Banner tone="danger">
-            <Text accessibilityLiveRegion="polite" variant="secondary">
-              {t(problem)}
-            </Text>
-          </Banner>
-        ) : null}
-        <Button busy={busy} label={t('signIn.send')} onPress={() => void send()} />
-        <Text style={{ textAlign: 'center' }} tone="muted" variant="label">
-          {t('signIn.help')}
-        </Text>
-      </View>
+      <EmailForm
+        busy={busy}
+        email={email}
+        method={method}
+        onChangeEmail={(value) => {
+          setEmail(value);
+          setProblem(null);
+        }}
+        onMethod={setMethod}
+        onSend={() => void send()}
+        problem={problem}
+      />
     );
   }
 

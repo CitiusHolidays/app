@@ -8,6 +8,7 @@ import { useAppStore } from '@/lib/app-store';
 import { clearLocalAuthSession } from '@/lib/auth-storage';
 import { clients } from '@/lib/clients';
 import { useOnline } from '@/lib/network';
+import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 
 import { type AuthSessionState, type Gate, resolveGate, sessionRejectedByServer } from './gate';
@@ -100,19 +101,21 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
   const end = useCallback(
     async (revoke: boolean) => {
       setSigningOut(true);
-      try {
-        await signOutDevice({
-          clearSession: clearLocalAuthSession,
-          revoke: async () => {
-            if (revoke) await clients?.auth.signOut();
-          },
-          wipeData: wipeLocalData,
-        });
-      } finally {
-        profileLinked.current = false;
-        setEpoch((value) => value + 1);
-        setSigningOut(false);
-      }
+      await runThen(
+        () =>
+          signOutDevice({
+            clearSession: clearLocalAuthSession,
+            revoke: async () => {
+              if (revoke) await clients?.auth.signOut();
+            },
+            wipeData: wipeLocalData,
+          }),
+        () => {
+          profileLinked.current = false;
+          setEpoch((value) => value + 1);
+          setSigningOut(false);
+        }
+      );
     },
     [wipeLocalData]
   );

@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { initials } from '@/lib/initials';
+
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
 
@@ -360,11 +362,8 @@ export function Segmented<T extends string>({
               borderRadius: theme.radius.chip,
               flex: 1,
               justifyContent: 'center',
+              boxShadow: selected ? '0 1px 3px rgba(0, 0, 0, 0.08)' : 'none',
               minHeight: 40,
-              shadowColor: '#000',
-              shadowOffset: { height: 1, width: 0 },
-              shadowOpacity: selected ? 0.08 : 0,
-              shadowRadius: 3,
             }}
           >
             <Text tone={selected ? 'ink' : 'muted'} variant="label">
@@ -412,16 +411,6 @@ export function TextField({ hint, label, style, ...rest }: TextInputProps & { hi
   );
 }
 
-/** Initials for a name: "Aanya Testguest" -> "AT". */
-export function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? [parts[0], parts.at(-1)] : parts.slice(0, 1);
-  return letters
-    .map((part) => part?.[0] ?? '')
-    .join('')
-    .toUpperCase();
-}
-
 /** A person: an initials circle, with a check badge once they are marked. */
 export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?: boolean; name: string; size?: number; tone?: 'light' | 'dark' }) {
   const theme = useAppTheme();
@@ -466,7 +455,6 @@ export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?:
     </View>
   );
 }
-
 
 export interface TrayAction {
   icon: { ios: string; md: string };
@@ -701,13 +689,6 @@ export function Placeholder({ label, lines = 3 }: { label: string; lines?: numbe
       ))}
     </View>
   );
-}
-
-export function haptic(kind: 'success' | 'error') {
-  if (Platform.OS === 'web') return;
-  void Haptics.notificationAsync(
-    kind === 'success' ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error
-  ).catch(() => undefined);
 }
 
 const styles = StyleSheet.create({

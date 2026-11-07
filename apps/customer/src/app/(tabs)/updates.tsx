@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListCard, PageTitle, QuietState, SectionTitle } from '@/components/kit';
 import { AnnouncementSkeleton } from '@/components/skeletons';
-import { tripDates } from '@/components/trip-cards';
+import { tripDates } from '@/features/trips/labels';
 import { AnnouncementItem } from '@/components/trip-sections';
 import { splitTrips } from '@/features/trips/model';
 import { useTrip, useTrips } from '@/features/trips/use-trips';

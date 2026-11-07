@@ -7,17 +7,20 @@ import { useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { haptic, Icon, ListCard, MessageScreen, Row, SectionTitle } from '@/components/kit';
+import { Icon, ListCard, MessageScreen, Row, SectionTitle } from '@/components/kit';
 import { TripSkeleton } from '@/components/skeletons';
 import { DestinationCover } from '@/components/destination-cover';
-import { datesAndNights, Freshness, timingText } from '@/components/trip-cards';
+import { Freshness } from '@/components/trip-cards';
 import { AnnouncementItem, ContactRow, DocumentsCard } from '@/components/trip-sections';
 import { useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL } from '@/features/support/contacts';
+import { datesAndNights, timingText } from '@/features/trips/labels';
 import { dayNumber, tripTiming } from '@/features/trips/model';
 import { useTrip } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
+import { haptic } from '@/lib/haptic';
+import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
 
@@ -222,13 +225,14 @@ function FamilyCard({ detail, tripId }: { detail: TripDetail; tripId: string }) 
     setBusy(minor.travellerId);
     setProblem(false);
     try {
-      await setConsent({ action, minorTravellerId: minor.travellerId, textVersion: PARENTAL_CONSENT_TEXT_VERSION, tripId });
+      await runThen(
+        () => setConsent({ action, minorTravellerId: minor.travellerId, textVersion: PARENTAL_CONSENT_TEXT_VERSION, tripId }),
+        () => setBusy(null)
+      );
       haptic('success');
     } catch (error) {
       logEvent('trip.consent-failed', error);
       setProblem(true);
-    } finally {
-      setBusy(null);
     }
   };
   const askToWithdraw = (minor: TripDetail['minors'][number]) => {

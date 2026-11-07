@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { PageTitle, Screen } from '@/components/kit';
 import { PlanSkeleton } from '@/components/skeletons';
-import { tripDates } from '@/components/trip-cards';
+import { tripDates } from '@/features/trips/labels';
 import { dayNumber } from '@/features/trips/model';
 import { useTrip } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
