@@ -57,4 +57,13 @@ describe('field sync pushes', () => {
     const group = createAnnouncement({ audience: { kind: 'trip' }, body: 'Hi', id: 'ann_2', now: 50, pack });
     expect(announcementPush(group).args).not.toHaveProperty('travelBatchId');
   });
+
+  it('marks a message to the whole group as a whole-trip announcement, and a batch message never', () => {
+    // The server keeps "trip" only from a whole-Job-Card grant that reached everyone travelling;
+    // only those reach trip organizers in the customer app.
+    const group = createAnnouncement({ audience: { kind: 'trip' }, body: 'Coach at 8', id: 'ann_3', now: 50, pack });
+    expect(announcementPush(group).args).toMatchObject({ audience: 'trip' });
+    const batch = createAnnouncement({ audience: { batchId: 'tb_1', kind: 'batch' }, body: 'Lunch', id: 'ann_4', now: 50, pack });
+    expect(announcementPush(batch).args).not.toHaveProperty('audience');
+  });
 });

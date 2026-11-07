@@ -24,7 +24,11 @@ export function headcountStopPush(state: HeadcountState, stop: HeadcountStop): F
   };
 }
 
-/** The announcement and its checklist. A batch audience is sent as that batch. */
+/**
+ * The announcement and its checklist. A batch audience is sent as that batch; "your group" is
+ * sent as the whole trip, which the server keeps only when the tour manager has the whole Job Card
+ * and everyone travelling received it (then trip organizers see it in the customer app).
+ */
 export function announcementPush(announcement: Announcement): FieldPush {
   const recipients = new Set(announcement.recipientIds);
   const args: AnnouncementArgs = {
@@ -37,7 +41,10 @@ export function announcementPush(announcement: Announcement): FieldPush {
     sharedAt: announcement.sharedAt,
   };
   return {
-    args: announcement.audience.kind === 'batch' ? { ...args, travelBatchId: announcement.audience.batchId } : args,
+    args:
+      announcement.audience.kind === 'batch'
+        ? { ...args, travelBatchId: announcement.audience.batchId }
+        : { ...args, audience: 'trip' },
     kind: 'announcement',
   };
 }

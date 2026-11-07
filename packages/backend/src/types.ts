@@ -158,6 +158,12 @@ export type HeadcountStopArgs = {
 
 /** One shared announcement. Body and batch are fixed once recorded; `seenByTravellerIds` updates. */
 export type AnnouncementArgs = {
+  /**
+   * "trip": sent to the whole trip. The server keeps it only from a whole-Job-Card grant, with no
+   * Travel Batch and every travelling traveller a recipient; the customer app shows organizers
+   * only these (website ADR 0020).
+   */
+  audience?: "trip";
   body: string;
   clientAnnouncementId: string;
   clientUpdatedAt?: number;
