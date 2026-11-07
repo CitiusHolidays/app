@@ -111,6 +111,18 @@ export function deleteAllReceipts() {
   }
 }
 
+/** The storage id in a Convex upload answer, or null when the answer is not the expected JSON. */
+function storageIdFrom(body: string) {
+  let answer: unknown;
+  try {
+    answer = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const storageId = typeof answer === 'object' && answer !== null ? (answer as { storageId?: unknown }).storageId : undefined;
+  return typeof storageId === 'string' && storageId ? storageId : null;
+}
+
 /** Uploads the receipt bytes to a Convex upload URL and returns the storage id. */
 export async function uploadReceipt(url: string, receipt: ReceiptFile) {
   const file = new File(receipt.uri);
@@ -121,7 +133,7 @@ export async function uploadReceipt(url: string, receipt: ReceiptFile) {
   if (result.status < 200 || result.status >= 300) {
     throw new TypeError(`Upload failed with status ${result.status}`);
   }
-  const { storageId } = JSON.parse(result.body) as { storageId?: string };
+  const storageId = storageIdFrom(result.body);
   if (!storageId) {
     throw new TypeError('Upload returned no storage id');
   }

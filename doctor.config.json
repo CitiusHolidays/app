@@ -1,0 +1,4 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "projects": ["apps/connect", "apps/customer", "packages/ui", "packages/core"]
+}

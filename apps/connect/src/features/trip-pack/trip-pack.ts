@@ -60,6 +60,14 @@ export interface TripPackSource {
   travellers: TravellerRow[];
 }
 
+/**
+ * A contact's list key. Tour managers are one entry per name and phone, and each office role is
+ * listed once, so role, name and phone together name exactly one contact.
+ */
+export function contactKey(contact: TripContact) {
+  return [contact.role, contact.name, contact.phone ?? ''].join('|');
+}
+
 export function dialable(phone: string | undefined | null) {
   const trimmed = (phone ?? '').trim();
   const digits = trimmed.replace(/[^\d]/g, '');

@@ -9,7 +9,6 @@ import {
   ActionPill,
   Avatar,
   CallButton,
-  formatDateRange,
   Icon,
   ListCard,
   PageTitle,
@@ -23,12 +22,13 @@ import { canOpenPassportInApp, passportWindowLine } from '@/features/passports/p
 import { useFieldPassports } from '@/features/passports/use-field-passports';
 import { callingPill, groupRoster, rosterMeta } from '@/features/trip-pack/roster';
 import { type ScheduleStep, tripSchedule } from '@/features/trip-pack/schedule';
-import type { TripPack } from '@/features/trip-pack/trip-pack';
+import { contactKey, type TripPack } from '@/features/trip-pack/trip-pack';
 import { resolveTripView, type TripView } from '@/features/trips/trip-view';
 import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { useNow } from '@/lib/use-now';
 import { useProgressiveCount } from '@/lib/use-progressive-count';
+import { formatDateRange, WEEKDAY_DATE } from '@/lib/dates';
 
 const VIEWS: { label: string; value: TripView }[] = [
   { label: 'Roster', value: 'roster' },
@@ -159,9 +159,7 @@ const STATE_WORDS = { current: 'today', done: 'done', undated: '', upcoming: 'co
 /** One stop on the timeline: a node joined to the next by a rule. */
 function Step({ last, step }: { last: boolean; step: ScheduleStep }) {
   const theme = useAppTheme();
-  const date = step.date
-    ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', weekday: 'short' }).format(step.date)
-    : null;
+  const date = step.date ? WEEKDAY_DATE.format(step.date) : null;
   const heading = [step.dayLabel, date].filter(Boolean).join(' · ');
   const node =
     step.state === 'done' ? (
@@ -258,7 +256,7 @@ function Contacts({ pack }: { pack: TripPack }) {
     <ListCard>
       {pack.contacts.map((contact, index) => (
         <Row
-          key={`${contact.role}-${index}`}
+          key={contactKey(contact)}
           last={index === pack.contacts.length - 1}
           leading={<Avatar name={contact.name} />}
           subtitle={[contact.role, contact.note].filter(Boolean).join(' · ')}
@@ -276,29 +274,63 @@ function Contacts({ pack }: { pack: TripPack }) {
   );
 }
 
-/** "Who is on this trip and how do I reach them?" The offline trip pack, read-only. */
-export default function TripPackScreen() {
-  const { pack, packLoading, packProblem, refreshPack, selected } = useTrips();
+/** The section on screen. Today opens this tab on a view ("Contacts"); follow the param when it changes. */
+function useTripSection() {
   const { view } = useLocalSearchParams<{ view?: string }>();
   const [section, setSection] = useState<TripView>(() => resolveTripView(view));
-  // Today opens this tab on a view ("Contacts"); follow the param when it changes.
   const [seenView, setSeenView] = useState(view);
   if (view !== seenView) {
     setSeenView(view);
     if (view) setSection(resolveTripView(view));
   }
-  const [refreshing, setRefreshing] = useState(false);
-  const now = useNow();
-  const { online, passports } = useFieldPassports(selected?.id ?? null);
-
-  const refresh = () => {
-    setRefreshing(true);
-    void refreshPack().finally(() => setRefreshing(false));
-  };
   const choose = (next: TripView) => {
     setSection(next);
     // Keeps the param in step, so a later link to the same view still switches to it.
     router.setParams({ view: next });
+  };
+  return { choose, section };
+}
+
+/** The chosen section of the saved pack, or why there is none to show yet. */
+function TripPackSection({
+  onRefresh,
+  refreshing,
+  section,
+}: {
+  onRefresh: () => void;
+  refreshing: boolean;
+  section: TripView;
+}) {
+  const { pack, packLoading, selected } = useTrips();
+  const now = useNow();
+  const { online, passports } = useFieldPassports(selected?.id ?? null);
+  if (!pack) {
+    return packLoading ? (
+      <Surface>
+        <Placeholder lines={6} />
+      </Surface>
+    ) : (
+      <Banner tone="attention">
+        <Text variant="bodyStrong">Not saved on this phone yet</Text>
+        <Text variant="secondary">Connect to the internet and refresh to save the trip pack for offline use.</Text>
+        <Button busy={refreshing} label="Save trip pack" onPress={onRefresh} />
+      </Banner>
+    );
+  }
+  if (section === 'roster') return <Roster now={now} online={online} pack={pack} passports={passports} />;
+  if (section === 'schedule') return <Schedule now={now} pack={pack} />;
+  return <Contacts pack={pack} />;
+}
+
+/** "Who is on this trip and how do I reach them?" The offline trip pack, read-only. */
+export default function TripPackScreen() {
+  const { pack, packProblem, refreshPack, selected } = useTrips();
+  const { choose, section } = useTripSection();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = () => {
+    setRefreshing(true);
+    void refreshPack().finally(() => setRefreshing(false));
   };
 
   if (!selected) {
@@ -320,21 +352,7 @@ export default function TripPackScreen() {
     >
       <FreshnessStamp problem={packProblem} savedAt={pack?.savedAt ?? null} />
       <Segmented label="Trip pack section" onChange={choose} options={VIEWS} value={section} />
-      {packLoading && !pack ? (
-        <Surface>
-          <Placeholder lines={6} />
-        </Surface>
-      ) : null}
-      {!packLoading && !pack ? (
-        <Banner tone="attention">
-          <Text variant="bodyStrong">Not saved on this phone yet</Text>
-          <Text variant="secondary">Connect to the internet and refresh to save the trip pack for offline use.</Text>
-          <Button busy={refreshing} label="Save trip pack" onPress={refresh} />
-        </Banner>
-      ) : null}
-      {pack && section === 'roster' ? <Roster now={now} online={online} pack={pack} passports={passports} /> : null}
-      {pack && section === 'schedule' ? <Schedule now={now} pack={pack} /> : null}
-      {pack && section === 'contacts' ? <Contacts pack={pack} /> : null}
+      <TripPackSection onRefresh={refresh} refreshing={refreshing} section={section} />
     </Screen>
   );
 }

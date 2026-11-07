@@ -26,17 +26,22 @@ export async function loadPack(store: KeyValueStore, jobCardId: string, now: num
   return pack;
 }
 
-/** Deletes expired packs; returns the Job Card ids removed. Run at start-up and on foreground. */
+/**
+ * Deletes expired packs; returns the Job Card ids removed. Run at start-up and on foreground.
+ * Each pack is checked on its own, so they are checked together.
+ */
 export async function purgeExpiredPacks(store: KeyValueStore, now: number) {
-  const removed: string[] = [];
-  for (const packKey of await store.keys(PREFIX)) {
-    const pack = await store.getJSON<TripPack>(packKey);
-    if (!pack || pack.version !== TRIP_PACK_VERSION || isPackExpired(pack, now)) {
+  const removed = await Promise.all(
+    (await store.keys(PREFIX)).map(async (packKey) => {
+      const pack = await store.getJSON<TripPack>(packKey);
+      if (pack && pack.version === TRIP_PACK_VERSION && !isPackExpired(pack, now)) {
+        return null;
+      }
       await store.delete(packKey);
-      removed.push(packKey.slice(PREFIX.length));
-    }
-  }
-  return removed;
+      return packKey.slice(PREFIX.length);
+    })
+  );
+  return removed.filter((jobCardId) => jobCardId !== null);
 }
 
 /**
@@ -46,13 +51,7 @@ export async function purgeExpiredPacks(store: KeyValueStore, now: number) {
  */
 export async function prunePacksNotIn(store: KeyValueStore, listedJobCardIds: readonly string[]) {
   const keep = new Set(listedJobCardIds);
-  const removed: string[] = [];
-  for (const packKey of await store.keys(PREFIX)) {
-    const jobCardId = packKey.slice(PREFIX.length);
-    if (!keep.has(jobCardId)) {
-      await store.delete(packKey);
-      removed.push(jobCardId);
-    }
-  }
-  return removed;
+  const unlisted = (await store.keys(PREFIX)).filter((packKey) => !keep.has(packKey.slice(PREFIX.length)));
+  await Promise.all(unlisted.map((packKey) => store.delete(packKey)));
+  return unlisted.map((packKey) => packKey.slice(PREFIX.length));
 }

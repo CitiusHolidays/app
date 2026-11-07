@@ -37,9 +37,8 @@ export default function SignIn() {
     } catch (error) {
       logEvent('auth.sign-in-failed', error);
       setProblem('Could not reach Citius. Check your connection and try again.');
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
 
   return (

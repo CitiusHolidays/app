@@ -8,12 +8,11 @@ import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
 
 import {
-  dueSyncItems,
+  drainSyncQueue,
   enqueuePush,
   type FieldPush,
   fieldOutboxKey,
   retrySyncNow,
-  sendItem,
   settleItem,
   type SyncDeps,
   type SyncItem,
@@ -65,27 +64,23 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
     };
     // Read straight from the live store: it already holds every change made during this run.
     const queued = () => (live.snapshot(fieldOutboxKey)?.value as SyncItem[] | null | undefined) ?? [];
-    try {
-      do {
-        again.current = false;
-        for (const item of dueSyncItems(queued(), Date.now(), staffId)) {
-          if (!current()) return;
-          const outcome = await sendItem(item, deps);
-          if (!current()) return;
-          await setItems((previous) =>
-            previous.map((candidate) =>
-              candidate.key === item.key && candidate.staffId === item.staffId ? settleItem(candidate, item, outcome) : candidate
-            )
-          );
-          if (outcome.kind === 'retry') logEvent('field-sync.retry-scheduled');
-          if (outcome.kind === 'refused') logEvent('field-sync.refused');
-        }
-      } while (again.current && current());
-    } catch (error) {
-      logEvent('field-sync.run-failed', error);
-    } finally {
-      running.current = false;
-    }
+    await drainSyncQueue({
+      again,
+      deps,
+      isCurrent: current,
+      queued,
+      settle: async (sent, outcome) => {
+        await setItems((previous) =>
+          previous.map((candidate) =>
+            candidate.key === sent.key && candidate.staffId === sent.staffId ? settleItem(candidate, sent, outcome) : candidate
+          )
+        );
+        if (outcome.kind === 'retry') logEvent('field-sync.retry-scheduled');
+        if (outcome.kind === 'refused') logEvent('field-sync.refused');
+      },
+      staffId,
+    }).catch((error: unknown) => logEvent('field-sync.run-failed', error));
+    running.current = false;
   }, [canSend, convex, live, loaded, setItems, staffId]);
 
   useEffect(() => {
@@ -112,8 +107,9 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
     items: items.filter((item) => item.staffId === staffId),
     retry: (keys) => {
       const now = Date.now();
+      const retried = new Set(keys);
       void setItems((previous) =>
-        previous.map((item) => (item.staffId === staffId && keys.includes(item.key) ? retrySyncNow(item, now) : item))
+        previous.map((item) => (item.staffId === staffId && retried.has(item.key) ? retrySyncNow(item, now) : item))
       );
       void Promise.resolve().then(run);
     },

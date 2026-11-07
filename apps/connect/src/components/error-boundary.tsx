@@ -2,15 +2,8 @@ import { Button } from '@citius/ui';
 import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
 
 import { MessageScreen } from '@/components/kit';
+import { isAccessRevokedError } from '@/features/gate/access-revoked';
 import { logEvent } from '@/lib/safe-log';
-
-/** The server's refusal codes that mean this account may no longer read trip data. */
-const REVOKED_CODES = new Set(['FORBIDDEN', 'NOT_STAFF']);
-
-export function isAccessRevokedError(error: unknown) {
-  const data = typeof error === 'object' && error !== null ? (error as { data?: unknown }).data : undefined;
-  return typeof data === 'string' && REVOKED_CODES.has(data);
-}
 
 interface Props {
   children: ReactNode;

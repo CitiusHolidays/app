@@ -25,8 +25,24 @@ jobs:
         with:
           node-version: 24
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Install
         run: bun install --frozen-lockfile
+
+      # React Doctor comes from the lockfile (the pinned version, nothing fetched at run time). Every
+      # run is the same scan of the same source: telemetry and the score API are off, the Socket.dev
+      # supply-chain lookups are off (their scores change without a change here; run `bun run doctor`
+      # locally when dependencies change), and nothing is reused from an earlier scan (it takes
+      # seconds). Any error or warning in any project in doctor.config.json fails the job.
+      # Exceptions: apps/connect/doctor.config.json and apps/customer/doctor.config.json, each one
+      # recorded in docs/react-doctor-triage.md.
+      - name: React Doctor
+        run: bunx react-doctor --no-telemetry --no-supply-chain --no-cache --yes --verbose --blocking warning
 
       - name: Typecheck every package
         run: bun run typecheck

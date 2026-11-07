@@ -4,13 +4,14 @@ import { useQuery } from 'convex/react';
 import { router } from 'expo-router';
 import { View } from 'react-native';
 
-import { formatDateRange, Icon, IconTile, ListCard, Placeholder, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
+import { Icon, IconTile, ListCard, Placeholder, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
 import { formatMoney } from '@/features/expenses/format';
 import type { OutboxItem } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
 import { categorySplit, formatAmount, spendEntries, submittedRows, totalsByCurrency, type SpendEntry } from '@/features/expenses/totals';
 import { useStaffSession } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
+import { formatDateRange } from '@/lib/dates';
 
 const PAGE_SIZE = 50;
 
@@ -188,6 +189,93 @@ function OutboxRow({ item, last, onDiscard, onRetry }: { item: OutboxItem; last:
   );
 }
 
+/** An expense the server holds, with where it is in approval. */
+function SubmittedRow({ last, row }: { last: boolean; row: ExpenseRow }) {
+  const pill = approvalPill(row);
+  const title = row.particulars || row.category;
+  const day = row.expenseDate || row.createdAt.slice(0, 10);
+  const date = formatDateRange(day, day);
+  return (
+    <Row
+      accessibilityLabel={[formatMoney(row.amount, row.currency), title, row.particulars ? row.category : null, date, pill.label].filter(Boolean).join(', ')}
+      detail={<StatusPill kind={pill.kind} label={pill.label} />}
+      last={last}
+      leading={<IconTile icon={iconFor(row.category)} />}
+      subtitle={[row.particulars ? row.category : null, date].filter(Boolean).join(' · ')}
+      title={title}
+      trailing={<Amount amount={row.amount} currency={row.currency} />}
+    />
+  );
+}
+
+/** Expenses queued on this phone and not yet done with: sending, sent, or needing attention. */
+function OnThisPhone({ items, onDiscard, onRetry }: { items: OutboxItem[]; onDiscard: (id: string) => void; onRetry: (id: string) => void }) {
+  if (items.length === 0) return null;
+  return (
+    <View style={{ gap: space.md }}>
+      <SectionTitle>On this phone</SectionTitle>
+      <ListCard>
+        {items.map((item, index) => (
+          <OutboxRow
+            item={item}
+            key={item.id}
+            last={index === items.length - 1}
+            onDiscard={() => onDiscard(item.id)}
+            onRetry={() => onRetry(item.id)}
+          />
+        ))}
+      </ListCard>
+    </View>
+  );
+}
+
+/** What the server holds for this trip, or why it cannot be shown yet. */
+function SubmittedList({
+  hasLocal,
+  server,
+  submitted,
+}: {
+  hasLocal: boolean;
+  server: { isDone: boolean } | null | undefined;
+  submitted: ExpenseRow[];
+}) {
+  if (server === null) {
+    return (
+      <Surface>
+        <QuietState text="Connect to the internet to see expenses already on the server." />
+      </Surface>
+    );
+  }
+  if (server === undefined) {
+    return (
+      <Surface>
+        <Placeholder lines={3} />
+      </Surface>
+    );
+  }
+  return (
+    <>
+      {server.isDone && submitted.length === 0 ? (
+        <Surface>
+          <QuietState text={hasLocal ? 'Nothing else submitted for this trip yet.' : 'No expenses on this trip yet.'} />
+        </Surface>
+      ) : null}
+      {submitted.length > 0 ? (
+        <ListCard>
+          {submitted.map((row, index) => (
+            <SubmittedRow key={row.id} last={index === submitted.length - 1} row={row} />
+          ))}
+        </ListCard>
+      ) : null}
+      {server.isDone ? null : (
+        <Text tone="muted" variant="secondary">
+          More expenses for this trip are on the server than are shown here. Check the full list on the Citius portal.
+        </Text>
+      )}
+    </>
+  );
+}
+
 /** "What have I spent and has it been sent?" */
 export default function Expenses() {
   const { gate, online } = useStaffSession();
@@ -199,7 +287,9 @@ export default function Expenses() {
     canQuery && selected ? { jobCardId: selected.id, paginationOpts: { cursor: null, numItems: PAGE_SIZE } } : 'skip'
   );
   const mine = items.filter((item) => !selected || item.jobCardId === selected.id);
-  const serverRows = canQuery && server ? server.page : null;
+  // null: offline, so nothing is asked of the server; undefined: still loading.
+  const shownServer = canQuery ? server : null;
+  const serverRows = shownServer ? shownServer.page : null;
   const entries = spendEntries(mine, serverRows);
   const submitted = serverRows ? submittedRows(mine, serverRows) : [];
   return (
@@ -207,69 +297,13 @@ export default function Expenses() {
       <SpendCard
         entries={entries}
         label={serverRows ? 'Spent on this trip' : 'Saved on this phone'}
-        loading={canQuery && server === undefined}
-        partial={Boolean(serverRows && server && !server.isDone)}
+        loading={shownServer === undefined}
+        partial={Boolean(shownServer && !shownServer.isDone)}
       />
-      {mine.length > 0 ? (
-        <View style={{ gap: space.md }}>
-          <SectionTitle>On this phone</SectionTitle>
-          <ListCard>
-            {mine.map((item, index) => (
-              <OutboxRow
-                item={item}
-                key={item.id}
-                last={index === mine.length - 1}
-                onDiscard={() => discard(item.id)}
-                onRetry={() => retry(item.id)}
-              />
-            ))}
-          </ListCard>
-        </View>
-      ) : null}
+      <OnThisPhone items={mine} onDiscard={discard} onRetry={retry} />
       <View style={{ gap: space.md }}>
         <SectionTitle>Submitted for this trip</SectionTitle>
-        {!canQuery ? (
-          <Surface>
-            <QuietState text="Connect to the internet to see expenses already on the server." />
-          </Surface>
-        ) : null}
-        {canQuery && server === undefined ? (
-          <Surface>
-            <Placeholder lines={3} />
-          </Surface>
-        ) : null}
-        {canQuery && server && server.isDone && submitted.length === 0 ? (
-          <Surface>
-            <QuietState text={mine.length > 0 ? 'Nothing else submitted for this trip yet.' : 'No expenses on this trip yet.'} />
-          </Surface>
-        ) : null}
-        {canQuery && server && submitted.length > 0 ? (
-          <ListCard>
-            {submitted.map((row, index) => {
-              const pill = approvalPill(row);
-              const title = row.particulars || row.category;
-              const day = row.expenseDate || row.createdAt.slice(0, 10);
-              const date = formatDateRange(day, day);
-              return (
-                <Row
-                  accessibilityLabel={[formatMoney(row.amount, row.currency), title, row.particulars ? row.category : null, date, pill.label].filter(Boolean).join(', ')}
-                  detail={<StatusPill kind={pill.kind} label={pill.label} />}
-                  key={row.id}
-                  last={index === submitted.length - 1}
-                  leading={<IconTile icon={iconFor(row.category)} />}
-                  subtitle={[row.particulars ? row.category : null, date].filter(Boolean).join(' · ')}
-                  title={title}
-                  trailing={<Amount amount={row.amount} currency={row.currency} />}
-                />
-              );
-            })}
-          </ListCard>
-        ) : null}
-        {canQuery && server && !server.isDone ? (
-          <Text tone="muted" variant="secondary">
-            More expenses for this trip are on the server than are shown here. Check the full list on the Citius portal.
-          </Text>
-        ) : null}
+        <SubmittedList hasLocal={mine.length > 0} server={shownServer} submitted={submitted} />
       </View>
     </Screen>
   );
