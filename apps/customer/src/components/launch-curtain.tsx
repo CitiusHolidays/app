@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { createContext, type ReactNode, use, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { PixelRatio, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Screen, ScreenContainer } from 'react-native-screens';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -14,8 +14,17 @@ import { scheduleOnRN } from 'react-native-worklets';
  */
 const planes =
   Platform.OS === 'ios' ? require('../../assets/images/launch-planes-p3.png') : require('../../assets/images/splash-icon.png');
-/** The website footer's travel doodles (`public/gallery/bgfooter.webp`) as a one-colour mask. */
+/**
+ * The website footer's travel doodles, byte for byte (`public/gallery/bgfooter.webp`): grey
+ * line art at about 7% alpha on transparent, 1919 x 956 pixels.
+ */
 const texture = require('../../assets/images/launch-texture.webp');
+const TEXTURE_PX = { height: 956, width: 1919 };
+/**
+ * The file's own alpha is too faint on a phone, so it is drawn this many times over itself,
+ * which roughly multiplies its strength (the owner's call: about twice).
+ */
+export const TEXTURE_LAYERS = 2;
 
 /**
  * Matches the native splash in app.json: Citius blue (#102a83), the planes 180 points wide,
@@ -23,8 +32,6 @@ const texture = require('../../assets/images/launch-texture.webp');
  */
 const SPLASH_BLUE = Platform.OS === 'ios' ? '#032b88' : citius.blue;
 const PLANES_SIZE = 180;
-/** How strongly the doodles darken the blue (the website multiplies them over its dark ground). */
-export const TEXTURE_OPACITY = 0.17;
 const TEXTURE_IN_MS = 420;
 const CURTAIN_OUT_MS = 260;
 /** If the texture never reports loaded, the native splash still goes after this long. */
@@ -75,6 +82,32 @@ function LightStatusBar({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The doodles tiled at their native size: one image pixel per screen pixel, never enlarged,
+ * repeated to fill the screen, composited over the blue as they are.
+ */
+function Doodles({ onReady }: { onReady: () => void }) {
+  const { height, width } = useWindowDimensions();
+  const scale = PixelRatio.get();
+  const tile = { height: TEXTURE_PX.height / scale, width: TEXTURE_PX.width / scale };
+  const columns = Math.ceil(width / tile.width);
+  const rows = Math.ceil(height / tile.height);
+  const tiles = Array.from({ length: TEXTURE_LAYERS * rows * columns }, (_, index) => {
+    const cell = index % (rows * columns);
+    return { key: `${index}`, left: (cell % columns) * tile.width, top: Math.floor(cell / columns) * tile.height };
+  });
+  return tiles.map(({ key, left, top }) => (
+    <Image
+      contentFit="fill"
+      key={key}
+      onDisplay={key === '0' ? onReady : undefined}
+      onError={key === '0' ? onReady : undefined}
+      source={texture}
+      style={[styles.tile, { height: tile.height, left, top, width: tile.width }]}
+    />
+  ));
+}
+
 function hideNativeSplash() {
   void SplashScreen.hideAsync().catch(() => undefined);
 }
@@ -102,12 +135,12 @@ function Curtain({ ready }: { ready: boolean }) {
     // then fades in over the blue.
     hideNativeSplash();
     if (reduced) {
-      textureOpacity.set(TEXTURE_OPACITY);
+      textureOpacity.set(1);
       setTextureShown(true);
       return;
     }
     textureOpacity.set(
-      withTiming(TEXTURE_OPACITY, { duration: TEXTURE_IN_MS }, (finished) => {
+      withTiming(1, { duration: TEXTURE_IN_MS }, (finished) => {
         if (finished) scheduleOnRN(setTextureShown, true);
       })
     );
@@ -137,14 +170,7 @@ function Curtain({ ready }: { ready: boolean }) {
     >
       <LightStatusBar>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, textureStyle]}>
-          <Image
-            contentFit="cover"
-            onDisplay={onTextureReady}
-            onError={onTextureReady}
-            source={texture}
-            style={StyleSheet.absoluteFill}
-            tintColor="#000000"
-          />
+          <Doodles onReady={onTextureReady} />
         </Animated.View>
         <View pointerEvents="none" style={styles.centre}>
           <Image contentFit="contain" source={planes} style={styles.planes} />
@@ -158,4 +184,5 @@ const styles = StyleSheet.create({
   centre: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   curtain: { backgroundColor: SPLASH_BLUE },
   planes: { height: PLANES_SIZE, width: PLANES_SIZE },
+  tile: { position: 'absolute' },
 });
