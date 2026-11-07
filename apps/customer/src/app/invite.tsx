@@ -74,6 +74,8 @@ function InviteForAccount({ token }: { token: string }) {
   const referenceNow = useReferenceNow();
   const preview = useQuery(customerApi.previewInvite.ref, { referenceNow, token });
   const claim = useMutation(customerApi.claimInvite.ref);
+  const profile = useQuery(customerApi.getMyProfile.ref, {});
+  const { signOut } = useCustomerSession();
   const [, setPending] = useStoredValue<string | null>(PENDING_INVITE_KEY, null);
   const [consents, setConsents] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -191,7 +193,22 @@ function InviteForAccount({ token }: { token: string }) {
             </Text>
           </Banner>
         ) : null}
-        <Button busy={busy} label={t('invite.accept')} onPress={() => void accept()} />
+        {/* Which account the trip goes to, before the traveller commits (a link forwarded by
+            someone else must not attach their trip to the wrong account). */}
+        {profile?.email ? (
+          <Text accessibilityLiveRegion="polite" tone="muted">
+            {t('invite.acceptingAs', { email: profile.email })}
+          </Text>
+        ) : null}
+        <Button busy={busy} disabled={!profile?.email} label={t('invite.accept')} onPress={() => void accept()} />
+        <Button
+          label={t('invite.notYou')}
+          onPress={() => {
+            // Keep the link so the right person can accept it after signing in.
+            void setPending(token).then(signOut);
+          }}
+          variant="secondary"
+        />
       </ScrollView>
     </View>
   );
