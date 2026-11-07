@@ -84,6 +84,9 @@ function Shell() {
         headerStyle: { backgroundColor: customerTheme.color.ground },
         headerTintColor: customerTheme.color.ink,
         headerTitleStyle: { ...face(customerTheme, 'semibold'), fontSize: 17 },
+        // Dark icons on the cream ground. Every screen states its style: one left unset falls
+        // back to whatever the last screen used (or light on Android), so 'light' would stick.
+        statusBarStyle: 'dark',
       }}
     >
       {/* Open whether signed in or not: email links and invite links land here. */}
@@ -93,7 +96,8 @@ function Shell() {
           on sign-in rather than on the router's alphabetical fallback. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Protected guard={signedIn} redirectTo="/sign-in">
-        <Stack.Screen name="trip/[id]/index" options={{ headerShown: false, statusBarStyle: 'light' }} />
+        {/* The trip screen sets its own status bar: light over the photo, dark on the cream sheet. */}
+        <Stack.Screen name="trip/[id]/index" options={{ headerShown: false }} />
         <Stack.Screen name="trip/[id]/plan" options={{ title: t('trip.plan') }} />
         <Stack.Screen name="trip/[id]/updates" options={{ title: t('trip.updates') }} />
         <Stack.Screen name="invite-entry" options={{ presentation: 'modal', title: t('invite.enterTitle') }} />

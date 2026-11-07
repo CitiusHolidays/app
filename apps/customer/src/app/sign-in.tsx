@@ -2,7 +2,7 @@ import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } fro
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, TextField } from '@/components/kit';
@@ -317,7 +317,7 @@ export default function SignIn() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ backgroundColor: theme.color.dark, flex: 1 }}>
+    <KeyboardAvoidingView behavior="padding" style={{ backgroundColor: theme.color.dark, flex: 1 }}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + space.xl }}
         contentInsetAdjustmentBehavior="never"
