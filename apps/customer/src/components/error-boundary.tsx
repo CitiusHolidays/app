@@ -1,7 +1,8 @@
 import { Button } from '@citius/ui';
-import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 
 import { MessageScreen } from '@/components/kit';
+import { useLaunchDone } from '@/components/launch-curtain';
 import { useI18n } from '@/i18n/i18n';
 import { logEvent } from '@/lib/safe-log';
 
@@ -13,6 +14,9 @@ interface Props {
 function Fallback({ onRetry, onSignOut }: { onRetry: () => void; onSignOut: () => Promise<void> }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
+  // A failure while the app was still starting must not stay hidden behind the loading screen.
+  const launchDone = useLaunchDone();
+  useEffect(launchDone, [launchDone]);
   return (
     <MessageScreen
       actions={
