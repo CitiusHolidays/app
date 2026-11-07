@@ -1,4 +1,8 @@
+import { SIGN_IN_DEVICE_HEADER } from '@citius/backend/customer';
+
 import { clients } from '@/lib/clients';
+
+import { signInDevice } from './sign-in-device';
 
 /**
  * How a traveller can sign in. The owner decided on email link and SMS, the traveller's choice
@@ -30,11 +34,18 @@ function failure(status: unknown): RequestResult {
   return { ok: false, reason: status === 429 ? 'rate-limited' : 'refused' };
 }
 
-/** Emails a one-time sign-in link. The server answers the same whether or not the address is known. */
+/**
+ * Emails a one-time sign-in link bound to this phone. The server answers the same whether or not
+ * the address is known, is staff, or has asked too often this hour.
+ */
 export async function requestEmailLink(email: string): Promise<RequestResult> {
   if (!clients) return { ok: false, reason: 'network' };
   try {
-    const { error } = await clients.auth.signIn.magicLink({ email: email.trim().toLowerCase() });
+    const { digest } = await signInDevice();
+    const { error } = await clients.auth.signIn.magicLink({
+      email: email.trim().toLowerCase(),
+      metadata: { deviceDigest: digest },
+    });
     return error ? failure(error.status) : { ok: true };
   } catch {
     return { ok: false, reason: 'network' };
@@ -43,12 +54,17 @@ export async function requestEmailLink(email: string): Promise<RequestResult> {
 
 /**
  * Turns the link's token into a session. The app calls the server itself, so the session cookie
- * lands in SecureStore through the Expo plugin and never travels in a URL.
+ * lands in SecureStore through the Expo plugin and never travels in a URL. The phone's secret
+ * goes with it: a link opened on another phone than the one that asked for it is refused.
  */
 export async function verifyEmailLink(token: string): Promise<RequestResult> {
   if (!clients) return { ok: false, reason: 'network' };
   try {
-    const { error } = await clients.auth.magicLink.verify({ query: { token } });
+    const { secret } = await signInDevice();
+    const { error } = await clients.auth.magicLink.verify({
+      fetchOptions: { headers: { [SIGN_IN_DEVICE_HEADER]: secret } },
+      query: { token },
+    });
     return error ? failure(error.status) : { ok: true };
   } catch {
     return { ok: false, reason: 'network' };

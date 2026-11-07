@@ -11,6 +11,7 @@ import {
   CUSTOMER_FUNCTIONS_PENDING_ON_WEBSITE,
   customerFunctionManifest,
   PARENTAL_CONSENT_TEXT_VERSION,
+  SIGN_IN_DEVICE_HEADER,
 } from "./customer";
 
 const websiteDir = process.env.CITIUS_WEBSITE_DIR;
@@ -53,6 +54,10 @@ describeWithWebsite("customer API contract with the website backend", () => {
     for (const code of [CUSTOMER_ERRORS.deletionConfirmation, CUSTOMER_ERRORS.deletionReauth, CUSTOMER_ERRORS.deletionStaff]) {
       expect(contract).toContain(`"${code}"`);
     }
+  });
+
+  it("binds sign-in links to the phone with the header the website checks", () => {
+    expect(source("lib/customerAppSignIn")).toContain(`SIGN_IN_DEVICE_HEADER = "${SIGN_IN_DEVICE_HEADER}"`);
   });
 
   it("hands sign-in and invite links to the app's own scheme", () => {

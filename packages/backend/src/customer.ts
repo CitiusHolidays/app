@@ -89,6 +89,9 @@ export type DeletionEligibility =
 /** The guardian consent wording version the app shows; the server accepts only known versions. */
 export const PARENTAL_CONSENT_TEXT_VERSION = "2026-11-07";
 
+/** The header that carries the phone's sign-in secret when the app opens an email link. */
+export const SIGN_IN_DEVICE_HEADER = "x-citius-sign-in-device";
+
 /** Error data the server throws (ConvexError) that the app turns into words. */
 export const CUSTOMER_ERRORS = {
   alreadyOnTrip: "TRIP_INVITE_ALREADY_ON_TRIP",
