@@ -1,6 +1,6 @@
 import type { TripSummary } from '@citius/backend/customer';
 
-import { documentProgress, featuredTrip, parseInviteToken, splitTrips, statusKind, tripTiming } from './model';
+import { documentProgress, featuredTrip, journeyRows, parseInviteToken, splitTrips, statusKind, tripTiming } from './model';
 
 const at = (year: number, month: number, day: number, hour = 10) => new Date(year, month - 1, day, hour).getTime();
 
@@ -95,5 +95,33 @@ describe('invite links', () => {
   it('rejects anything else', () => {
     expect(parseInviteToken('https://example.com')).toBeNull();
     expect(parseInviteToken(`https://x.test/app/invite#token=${token}extra`)).toBeNull();
+  });
+});
+
+describe('journeys list rows', () => {
+  it('leads with the trip under way, then upcoming and past under their headings', () => {
+    const rows = journeyRows([
+      trip({ phase: 'past', travelStartDate: '2026-01-01', tripId: 'old' }),
+      trip({ travelStartDate: '2026-12-10', tripId: 'later' }),
+      trip({ phase: 'ongoing', travelStartDate: '2026-11-05', tripId: 'now' }),
+    ]);
+    expect(rows.map((row) => (row.kind === 'section' ? `# ${row.section}` : `${row.kind} ${row.trip.tripId}`))).toEqual([
+      'lead now',
+      '# upcoming',
+      'card later',
+      '# past',
+      'card old',
+    ]);
+  });
+
+  it('gives every row a stable unique key', () => {
+    const rows = journeyRows([trip({ tripId: 'a' }), trip({ travelStartDate: '2027-01-01', tripId: 'b' })]);
+    expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
+    expect(rows.map((row) => row.key)).toEqual(['lead:a', 'section:upcoming', 'card:b']);
+  });
+
+  it('has no rows and no headings without trips', () => {
+    expect(journeyRows([])).toEqual([]);
+    expect(journeyRows([trip({ phase: 'past', tripId: 'p' })]).map((row) => row.key)).toEqual(['section:past', 'card:p']);
   });
 });

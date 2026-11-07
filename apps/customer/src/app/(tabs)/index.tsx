@@ -1,16 +1,21 @@
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { FlatList, Platform, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, PageTitle, Placeholder, Screen, SectionTitle } from '@/components/kit';
-import { prefetchCover, ScrollWindowContext } from '@/components/destination-cover';
+import { prefetchCover } from '@/components/destination-cover';
+import { Icon, PageTitle, SectionTitle } from '@/components/kit';
+import { JourneysSkeleton } from '@/components/skeletons';
 import { Freshness, TripCard } from '@/components/trip-cards';
 import { useCustomerSession } from '@/features/session/session';
-import { featuredTrip, splitTrips } from '@/features/trips/model';
+import { featuredTrip, type JourneyRow, journeyRows } from '@/features/trips/model';
 import { useTrips } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
 import { useNow } from '@/lib/use-now';
+
+/** Room under the list for the floating tab bar. */
+const TAB_BAR_CLEARANCE = 96;
 
 function openTrip(tripId: string) {
   router.push({ params: { id: tripId }, pathname: '/trip/[id]' });
@@ -35,62 +40,77 @@ function NoTrips() {
   );
 }
 
-/** Journeys: the trip happening now or next, then upcoming and past trips (past trips stay). */
+/**
+ * Journeys: the trip happening now or next, then upcoming and past trips (past trips stay). The
+ * list is virtualised, so only the cards on or near the screen are mounted and load their photos.
+ */
 export default function Journeys() {
+  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const i18n = useI18n();
   const { gate } = useCustomerSession();
   const trips = useTrips();
   const now = useNow();
-  const list = trips.data ?? [];
-  const lead = featuredTrip(list);
-  const { active, past } = splitTrips(list);
-  const upcoming = active.filter((trip) => trip.tripId !== lead?.tripId);
+  const { width } = useWindowDimensions();
+  const list = useMemo(() => trips.data ?? [], [trips.data]);
+  const rows = useMemo(() => journeyRows(list), [list]);
   const offline = gate.kind === 'signedIn' && gate.offline;
-  const { height, width } = useWindowDimensions();
-  const [scrollY, setScrollY] = useState(0);
-  const scrollWindow = useMemo(() => ({ scrollY, viewport: height }), [height, scrollY]);
+
   // The trip most likely to be opened next: start its header photo now.
-  const leadCover = lead?.cover ?? null;
+  const leadCover = featuredTrip(list)?.cover ?? null;
   useEffect(() => {
     prefetchCover(leadCover, width);
   }, [leadCover, width]);
+
   const kicker = new Intl.DateTimeFormat(i18n.language.intl, { day: 'numeric', month: 'long', weekday: 'long' }).format(new Date(now));
-  return (
-    <ScrollWindowContext.Provider value={scrollWindow}>
-    <Screen
-      header={<PageTitle kicker={kicker} title={i18n.t('journeys.title')} />}
-      onScroll={(event) => setScrollY(Math.max(0, event.nativeEvent.contentOffset.y))}
-      scrollEventThrottle={200}
-    >
+  const header = (
+    <View style={{ gap: space.lg + 4, paddingBottom: space.lg + 4 }}>
+      <PageTitle kicker={kicker} title={i18n.t('journeys.title')} />
       <Freshness offline={offline} savedAt={trips.live ? null : trips.savedAt} />
-      {trips.loading ? (
-        <Surface variant="hero" style={{ height: 460, justifyContent: 'flex-end' }}>
-          <Placeholder label={i18n.t('common.loading')} lines={3} />
-        </Surface>
-      ) : list.length === 0 ? (
-        <NoTrips />
-      ) : null}
-      {lead ? <TripCard lead now={now} onPress={() => openTrip(lead.tripId)} trip={lead} /> : null}
-      {upcoming.length ? (
-        <View style={{ gap: space.md }}>
-          <SectionTitle>{i18n.t('journeys.upcoming')}</SectionTitle>
-          {upcoming.map((trip) => (
-            <TripCard key={trip.tripId} now={now} onPress={() => openTrip(trip.tripId)} trip={trip} />
-          ))}
+      {trips.loading ? <JourneysSkeleton label={i18n.t('common.loading')} /> : null}
+      {!trips.loading && list.length === 0 ? <NoTrips /> : null}
+    </View>
+  );
+
+  const renderItem = ({ item }: { item: JourneyRow }) => {
+    if (item.kind === 'section') {
+      return (
+        <View style={{ paddingBottom: space.md, paddingTop: space.lg }}>
+          <SectionTitle>{i18n.t(item.section === 'past' ? 'journeys.past' : 'journeys.upcoming')}</SectionTitle>
         </View>
-      ) : null}
-      {past.length ? (
-        <View style={{ gap: space.md }}>
-          <SectionTitle>{i18n.t('journeys.past')}</SectionTitle>
-          {past.map((trip) => (
-            <TripCard key={trip.tripId} now={now} onPress={() => openTrip(trip.tripId)} trip={trip} />
-          ))}
-        </View>
-      ) : null}
-      {list.length > 0 ? (
-        <Button label={i18n.t('journeys.haveLink')} onPress={() => router.push('/invite-entry')} variant="secondary" />
-      ) : null}
-    </Screen>
-    </ScrollWindowContext.Provider>
+      );
+    }
+    return (
+      <View style={{ paddingBottom: space.md }}>
+        <TripCard lead={item.kind === 'lead'} now={now} onPress={() => openTrip(item.trip.tripId)} trip={item.trip} />
+      </View>
+    );
+  };
+
+  return (
+    <FlatList
+      ListFooterComponent={
+        list.length > 0 ? (
+          <View style={{ paddingTop: space.lg }}>
+            <Button label={i18n.t('journeys.haveLink')} onPress={() => router.push('/invite-entry')} variant="secondary" />
+          </View>
+        ) : undefined
+      }
+      ListHeaderComponent={header}
+      contentContainerStyle={{
+        paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
+        paddingHorizontal: theme.frame,
+        paddingTop: Platform.OS === 'ios' ? space.sm : insets.top + space.md,
+      }}
+      contentInsetAdjustmentBehavior="automatic"
+      data={rows}
+      initialNumToRender={3}
+      keyExtractor={(row) => row.key}
+      maxToRenderPerBatch={2}
+      removeClippedSubviews={Platform.OS === 'android'}
+      renderItem={renderItem}
+      style={{ backgroundColor: theme.color.ground }}
+      windowSize={5}
+    />
   );
 }

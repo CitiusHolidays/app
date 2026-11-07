@@ -1,8 +1,9 @@
 import type { DestinationPhoto } from '@citius/backend/customer';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { type ComponentRef, createContext, useContext, useRef, useState } from 'react';
+import { useState } from 'react';
 import { PixelRatio, type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { coverUri, originalCoverUri, PREVIEW_WIDTH, photoWidth } from '@/features/trips/cover';
 
@@ -25,32 +26,12 @@ function Poster() {
 }
 
 /**
- * Lazy loading for a scrolling list of covers. The list shares how far it has scrolled and the
- * screen height; a cover starts its full photo once it is within two screens of the bottom edge.
- * Outside a list (the trip header) every cover loads at once.
- */
-export interface ScrollWindow {
-  scrollY: number;
-  viewport: number;
-}
-
-export const ScrollWindowContext = createContext<ScrollWindow>({ scrollY: 0, viewport: Number.POSITIVE_INFINITY });
-
-function useNearScreen(contentY: number | null) {
-  const { scrollY, viewport } = useContext(ScrollWindowContext);
-  const near = contentY !== null && contentY <= scrollY + viewport * 2;
-  // Once near, a cover stays loaded (React's "adjust state while rendering" pattern).
-  const [seen, setSeen] = useState(near);
-  if (near && !seen) setSeen(true);
-  return seen || near;
-}
-
-/**
  * The destination as the centrepiece, loaded the way a slow connection needs without giving up
  * quality: the photo's BlurHash at once (no network), then a ~3 KB preview, then the photo at the
  * cover's real pixel width and the website's full quality, each fading over the last. Everything
- * is kept on the phone, so the next time it opens sharp. Covers far down a list wait until they
- * are near the screen. The foot is darkened so white type reads on any picture.
+ * is kept on the phone, so the next time it opens sharp. Lists are virtualised, so a cover far
+ * down a list is not mounted and loads nothing until it nears the screen. The foot is darkened so
+ * white type reads on any picture. Under reduced motion the layers swap without fading.
  */
 export function DestinationCover({
   photo,
@@ -64,28 +45,19 @@ export function DestinationCover({
   scrim?: 'bottom' | 'full';
   style?: StyleProp<ViewStyle>;
 }) {
-  const scroll = useContext(ScrollWindowContext);
-  const frame = useRef<ComponentRef<typeof View>>(null);
-  const [layout, setLayout] = useState<{ width: number; y: number } | null>(null);
+  const reduced = useReducedMotion();
+  const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
   const [fallback, setFallback] = useState<'optimized' | 'original' | 'none'>('optimized');
-  const near = useNearScreen(layout?.y ?? null);
-  const width = layout ? photoWidth(Math.ceil(layout.width * PixelRatio.get())) : null;
+  const width = layoutWidth ? photoWidth(Math.ceil(layoutWidth * PixelRatio.get())) : null;
   let source: string | null = null;
-  if (photo && width && near) {
+  if (photo && width) {
     source = fallback === 'optimized' ? coverUri(photo.path, width) : fallback === 'original' ? originalCoverUri(photo.path) : null;
   }
   return (
     <View
       importantForAccessibility="no-hide-descendants"
-      collapsable={false}
-      onLayout={(event) => {
-        const { width: w } = event.nativeEvent.layout;
-        const scrolledAtLayout = scroll.scrollY;
-        // Where the cover sits in the list's content, for lazy loading.
-        frame.current?.measureInWindow((_x, windowY) => setLayout({ width: w, y: windowY + scrolledAtLayout }));
-      }}
+      onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
       pointerEvents="none"
-      ref={frame}
       style={[StyleSheet.absoluteFill, { backgroundColor: '#0b1026' }, style]}
     >
       {photo ? (
@@ -98,7 +70,7 @@ export function DestinationCover({
           recyclingKey={`${photo.path}:preview`}
           source={{ uri: coverUri(photo.path, PREVIEW_WIDTH) }}
           style={StyleSheet.absoluteFill}
-          transition={150}
+          transition={reduced ? 0 : 150}
         />
       ) : (
         <Poster />
@@ -112,7 +84,7 @@ export function DestinationCover({
           recyclingKey={source}
           source={{ uri: source }}
           style={StyleSheet.absoluteFill}
-          transition={350}
+          transition={reduced ? 0 : 350}
         />
       ) : null}
       <LinearGradient

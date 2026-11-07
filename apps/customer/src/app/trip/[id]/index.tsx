@@ -7,7 +7,8 @@ import { useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { haptic, Icon, ListCard, MessageScreen, Placeholder, Row, SectionTitle } from '@/components/kit';
+import { haptic, Icon, ListCard, MessageScreen, Row, SectionTitle } from '@/components/kit';
+import { TripSkeleton } from '@/components/skeletons';
 import { DestinationCover } from '@/components/destination-cover';
 import { datesAndNights, Freshness, timingText } from '@/components/trip-cards';
 import { AnnouncementItem, ContactRow, DocumentsCard } from '@/components/trip-sections';
@@ -288,11 +289,7 @@ export default function TripScreen() {
     );
   }
   if (!detail) {
-    return (
-      <View style={{ backgroundColor: theme.color.ground, flex: 1, gap: space.lg, padding: theme.frame, paddingTop: insets.top + space.xxl }}>
-        <Placeholder label={t('common.loading')} lines={5} />
-      </View>
-    );
+    return <TripSkeleton back={<BackButton />} label={t('common.loading')} />;
   }
   const offline = gate.kind === 'signedIn' && gate.offline;
   const latest = detail.announcements.slice(0, 2);

@@ -49,6 +49,27 @@ export function featuredTrip(trips: readonly TripSummary[]) {
   return active.find((trip) => trip.phase === 'ongoing') ?? active[0] ?? null;
 }
 
+export type JourneyRow =
+  | { key: string; kind: 'lead' | 'card'; trip: TripSummary }
+  | { key: string; kind: 'section'; section: 'upcoming' | 'past' };
+
+/**
+ * The Journeys screen as one flat list, so it can be virtualised: the lead trip, then upcoming
+ * and past trips under their headings. Headings appear only above trips.
+ */
+export function journeyRows(trips: readonly TripSummary[]): JourneyRow[] {
+  const lead = featuredTrip(trips);
+  const { active, past } = splitTrips(trips);
+  const upcoming = active.filter((trip) => trip.tripId !== lead?.tripId);
+  const rows: JourneyRow[] = lead ? [{ key: `lead:${lead.tripId}`, kind: 'lead', trip: lead }] : [];
+  for (const [section, list] of [['upcoming', upcoming], ['past', past]] as const) {
+    if (list.length === 0) continue;
+    rows.push({ key: `section:${section}`, kind: 'section', section });
+    for (const trip of list) rows.push({ key: `card:${trip.tripId}`, kind: 'card', trip });
+  }
+  return rows;
+}
+
 const GOOD = new Set(['Received', 'Uploaded', 'Not Required', 'Approved', 'Issued']);
 const DANGER = new Set(['Rejected']);
 const NEUTRAL = new Set(['Cancelled', 'Refunded', 'Refund Pending']);

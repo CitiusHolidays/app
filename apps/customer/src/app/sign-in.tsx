@@ -1,7 +1,8 @@
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Image } from 'expo-image';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, TextField } from '@/components/kit';
@@ -259,9 +260,8 @@ export default function SignIn() {
       >
         <View style={{ gap: space.md, paddingBottom: space.xxl, paddingHorizontal: theme.frame + space.xs }}>
           <Image
-            accessibilityIgnoresInvertColors
             accessible={false}
-            resizeMode="contain"
+            contentFit="contain"
             source={planes}
             style={{ alignSelf: 'flex-start', height: 96, marginLeft: -26, width: 150 }}
           />

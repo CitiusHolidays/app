@@ -7,7 +7,8 @@ import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DestinationCover } from '@/components/destination-cover';
-import { haptic, Icon, MessageScreen, Placeholder, TopTint } from '@/components/kit';
+import { haptic, Icon, MessageScreen, TopTint } from '@/components/kit';
+import { InviteSkeleton } from '@/components/skeletons';
 import { PENDING_INVITE_KEY, useCustomerSession } from '@/features/session/session';
 import { inviteErrorMessage } from '@/features/trips/errors';
 import { parseInviteToken } from '@/features/trips/model';
@@ -84,7 +85,7 @@ function InviteForAccount({ token }: { token: string }) {
   if (preview === undefined) {
     return (
       <View style={{ backgroundColor: theme.color.ground, flex: 1, padding: theme.frame, paddingTop: insets.top + space.xxl }}>
-        <Placeholder label={t('common.loading')} lines={4} />
+        <InviteSkeleton label={t('common.loading')} />
       </View>
     );
   }

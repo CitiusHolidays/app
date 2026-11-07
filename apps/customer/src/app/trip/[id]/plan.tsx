@@ -3,7 +3,8 @@ import { tripSchedule } from '@citius/core/src/schedule';
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { PageTitle, Placeholder, Screen } from '@/components/kit';
+import { PageTitle, Screen } from '@/components/kit';
+import { PlanSkeleton } from '@/components/skeletons';
 import { tripDates } from '@/components/trip-cards';
 import { dayNumber } from '@/features/trips/model';
 import { useTrip } from '@/features/trips/use-trips';
@@ -23,8 +24,8 @@ export default function PlanScreen() {
   const detail = trip.data;
   if (!detail) {
     return (
-      <Screen tabBar={false}>
-        <Placeholder label={i18n.t('common.loading')} lines={6} />
+      <Screen contentInsetAdjustmentBehavior="automatic" tabBar={false}>
+        <PlanSkeleton label={i18n.t('common.loading')} />
       </Screen>
     );
   }
