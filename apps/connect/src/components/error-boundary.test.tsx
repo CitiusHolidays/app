@@ -2,9 +2,10 @@ import { fireEvent, screen } from '@testing-library/react-native';
 import { ConvexError } from 'convex/values';
 import { Text } from 'react-native';
 
+import { isAccessRevokedError } from '@/features/gate/access-revoked';
 import { renderWithTheme } from '@/test/render';
 
-import { AppErrorBoundary, isAccessRevokedError } from './error-boundary';
+import { AppErrorBoundary } from './error-boundary';
 
 let mockThrow: Error | null = null;
 function Child() {

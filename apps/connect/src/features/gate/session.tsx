@@ -36,6 +36,9 @@ interface StaffSession {
 
 const SessionContext = createContext<StaffSession | null>(null);
 
+/** The empty task queue, shared: a settled promise never changes. */
+const SETTLED: Promise<void> = Promise.resolve();
+
 const NO_SESSION: AuthSessionState = { data: null, error: null, isPending: false };
 const noSession = () => NO_SESSION;
 /** Better Auth's session state; `clients` is fixed at start-up, so the hook choice never changes. */
@@ -92,7 +95,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const [signingOut, setSigningOut] = useState(false);
   const now = useNow();
   // Wipes and verification writes run one at a time, in order.
-  const queue = useRef<Promise<void>>(Promise.resolve());
+  const queue = useRef<Promise<void>>(SETTLED);
 
   const serially = useCallback((task: () => Promise<void>) => {
     const run = queue.current.then(task, task);
@@ -157,20 +160,18 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     setSigningOut(true);
-    try {
-      await serially(() =>
-        signOutDevice({
-          clearSession: clearLocalAuthSession,
-          revoke: async () => {
-            await clients?.auth.signOut();
-          },
-          wipeData: wipeLocalData,
-        })
-      );
-    } finally {
+    await serially(() =>
+      signOutDevice({
+        clearSession: clearLocalAuthSession,
+        revoke: async () => {
+          await clients?.auth.signOut();
+        },
+        wipeData: wipeLocalData,
+      })
+    ).finally(() => {
       setAuthEpoch((value) => value + 1);
       setSigningOut(false);
-    }
+    });
   };
 
   // A hanging connection never errors, so after a while stop waiting and use the offline rules.

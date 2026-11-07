@@ -5,6 +5,17 @@ export const OFFICE_TIME_ZONE = 'Asia/Kolkata';
 
 type PassportWindow = Pick<FieldPassportRow, 'closesAt' | 'opensAt'>;
 
+/** One "4 Nov" formatter per time zone, built on first use: an Intl formatter is slow to construct. */
+const dayFormats = new Map<string, Intl.DateTimeFormat>();
+function dayFormat(timeZone: string) {
+  let format = dayFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone });
+    dayFormats.set(timeZone, format);
+  }
+  return format;
+}
+
 /**
  * The window in a few words: "Opens on 4 Nov", "Available during the trip, until 11 Nov",
  * "Closed after 11 Nov". The server's window opens at 00:00 on the day before travel and closes
@@ -14,7 +25,7 @@ export function passportWindowLabel(window: PassportWindow, now: number, timeZon
   if (window.opensAt === null || window.closesAt === null) {
     return 'Opens once the trip dates are set';
   }
-  const day = (at: number) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone }).format(at);
+  const day = (at: number) => dayFormat(timeZone).format(at);
   if (now < window.opensAt) {
     return `Opens on ${day(window.opensAt)}`;
   }

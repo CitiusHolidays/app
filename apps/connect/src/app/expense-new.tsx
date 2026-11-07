@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Chip, ChipRow, haptic, Icon, QuietState, Screen, TextField } from '@/components/kit';
+import { Chip, ChipRow, Icon, QuietState, Screen, TextField } from '@/components/kit';
 import { parseAmount } from '@/features/expenses/format';
 import { createOutboxItem, type ReceiptFile } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
@@ -17,6 +17,7 @@ import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
+import { haptic } from '@/lib/haptics';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 

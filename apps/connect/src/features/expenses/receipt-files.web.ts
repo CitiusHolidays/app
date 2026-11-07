@@ -22,7 +22,12 @@ export function deleteReceipt() {}
 export function deleteAllReceipts() {}
 
 export async function uploadReceipt(url: string, receipt: ReceiptFile) {
-  const blob = await (await fetch(receipt.uri)).blob();
+  const picked = await fetch(receipt.uri);
+  if (!picked.ok) {
+    // The picked photo is gone (the preview was reloaded): the same refusal as a missing file on a phone.
+    throw Object.assign(new Error('Receipt file missing'), { data: 'Receipt file missing' });
+  }
+  const blob = await picked.blob();
   const response = await fetch(url, { body: blob, headers: { 'Content-Type': receipt.mimeType }, method: 'POST' });
   if (!response.ok) {
     throw new TypeError(`Upload failed with status ${response.status}`);

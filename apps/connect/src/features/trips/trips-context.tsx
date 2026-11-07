@@ -104,7 +104,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     // Signing out (or a change of user) wipes the store; a refresh begun before that must not
     // write the previous user's trips back.
     const current = live.fence();
-    try {
+    const load = async () => {
       // Only the trips this tour manager is assigned to, one row per Job Card.
       const result = await collectPages(
         (cursor) => convex.query(staffApi.listMyAssignedJobCards.ref, { paginationOpts: firstPage(cursor) }),
@@ -121,12 +121,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         );
       }
       setTripsProblem(null);
-    } catch (error) {
-      logEvent('trips.refresh-failed', error);
-      setTripsProblem('Could not refresh your trips. Showing the saved list.');
-    } finally {
-      setRefreshing(false);
-    }
+    };
+    await load()
+      .catch((error: unknown) => {
+        logEvent('trips.refresh-failed', error);
+        setTripsProblem('Could not refresh your trips. Showing the saved list.');
+      })
+      .finally(() => setRefreshing(false));
   }, [canReachServer, convex, live, setCache, store]);
 
   const selectedTripId = selected?.id ?? null;

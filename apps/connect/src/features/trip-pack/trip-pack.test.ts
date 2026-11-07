@@ -1,4 +1,4 @@
-import { buildTripPack, freshnessLabel, isPackExpired, packExpiresAt, TRIP_PACK_TTL_DAYS } from './trip-pack';
+import { buildTripPack, contactKey, freshnessLabel, isPackExpired, packExpiresAt, TRIP_PACK_TTL_DAYS } from './trip-pack';
 import { batches, commandCenter, tourManagers, travellers } from './fixtures';
 
 const SAVED_AT = new Date(2026, 10, 6, 7, 12).getTime();
@@ -98,6 +98,16 @@ describe('buildTripPack labels and contacts', () => {
     expect(pack.contacts.filter((contact) => contact.name === 'Test Tour Manager')).toEqual([
       { name: 'Test Tour Manager', note: 'Lobby at 07:30', phone: '+919000000009', role: 'Tour manager · Bus 1, Bus 2' },
     ]);
+  });
+
+  it('gives every contact its own stable key, even one person holding two office roles', () => {
+    const sameOwner = { ...commandCenter, jobCard: { ...commandCenter.jobCard, ticketingOwnerName: commandCenter.jobCard.operationsOwnerName } };
+    const namesake = { ...tourManagers[0]!, id: 'tm_4', phone: '+91 90000 00010', travelBatchId: 'tb_2' };
+    const pack = buildTripPack({ batches, commandCenter: sameOwner, complete: true, savedAt: SAVED_AT, tourManagers: [...tourManagers, namesake], travellers });
+    const keys = pack.contacts.map(contactKey);
+    expect(new Set(keys).size).toBe(pack.contacts.length);
+    expect(pack.contacts.map(contactKey)).toEqual(keys);
+    expect(contactKey(pack.contacts[0]!)).toBe(contactKey({ ...pack.contacts[0]! }));
   });
 });
 

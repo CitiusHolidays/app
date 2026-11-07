@@ -4,12 +4,13 @@ import { useQuery } from 'convex/react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { formatDateRange, Icon, PageTitle, Placeholder, QuietState, Screen, SectionTitle } from '@/components/kit';
+import { Icon, PageTitle, Placeholder, QuietState, Screen, SectionTitle } from '@/components/kit';
 import { formatMoney } from '@/features/expenses/format';
 import { useStaffSession } from '@/features/gate/session';
 import { fullTime } from '@/features/inbox/relative-time';
 import { useInbox } from '@/features/inbox/use-inbox';
 import { useTrips } from '@/features/trips/trips-context';
+import { formatDateRange } from '@/lib/dates';
 
 function Lines({ lines }: { lines: { label: string; value: string }[] }) {
   const theme = useAppTheme();

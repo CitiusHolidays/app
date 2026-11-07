@@ -196,6 +196,27 @@ function requireExpenseId(item: OutboxItem) {
   return item.expenseId;
 }
 
+/**
+ * One run over the queue: sends this staff member's due items one at a time, in queue order, and
+ * saves each outcome. Sequential on purpose: each item's saved stage is what a crash resumes from,
+ * and a sign-out (`isCurrent` turning false) must stop the run before its next request.
+ */
+export async function drainOutbox(run: {
+  deps: OutboxDeps;
+  isCurrent: () => boolean;
+  items: OutboxItem[];
+  onSettled: (item: OutboxItem) => void;
+  staffId: string;
+}) {
+  for (const item of dueItems(run.items, run.deps.now(), run.staffId)) {
+    if (!run.isCurrent()) return;
+    const result = await processItem(item, run.deps);
+    if (!run.isCurrent()) return;
+    await run.deps.save(result);
+    run.onSettled(result);
+  }
+}
+
 export async function processItem(start: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> {
   let item = start;
   while (item.status === 'pending') {

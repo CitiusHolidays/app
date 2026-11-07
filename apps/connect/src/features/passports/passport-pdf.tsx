@@ -1,32 +1,10 @@
 import { space, Text, useAppTheme } from '@citius/ui';
 import { useState } from 'react';
 import { View } from 'react-native';
-import type PdfView from 'react-native-pdf';
 
 import { logEvent } from '@/lib/safe-log';
 
-type PdfComponent = typeof PdfView;
-
-/**
- * react-native-pdf, loaded behind a guard: a build made before it was added has no native module,
- * and would otherwise fail to start. Such a build says it cannot show PDFs instead.
- */
-function loadPdfView(): PdfComponent | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return (require('react-native-pdf') as { default: PdfComponent }).default;
-  } catch (error) {
-    logEvent('passport.pdf-view-missing', error);
-    return null;
-  }
-}
-
-const NativePdf = loadPdfView();
-
-/** Whether this build can show a PDF passport. Checked before any file is written. */
-export function canShowPdf() {
-  return NativePdf !== null;
-}
+import { NativePdf } from './pdf-support';
 
 /**
  * A PDF passport from a private `file://` URI: swipe between pages, pinch or double-tap to zoom.
