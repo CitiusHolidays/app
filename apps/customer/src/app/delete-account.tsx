@@ -10,7 +10,7 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Linking, View } from 'react-native';
 
-import { haptic, Icon, MessageScreen, Placeholder, Screen, TextField } from '@/components/kit';
+import { Icon, MessageScreen, Placeholder, Screen, TextField } from '@/components/kit';
 import { requestEmailLink } from '@/features/auth/methods';
 import { RETURN_TO_KEY, useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL } from '@/features/support/contacts';
@@ -18,7 +18,9 @@ import { serverCode } from '@/features/trips/errors';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
+import { haptic } from '@/lib/haptic';
 import { logEvent } from '@/lib/safe-log';
+import { runThen } from '@/lib/run-then';
 
 type Check = { kind: 'loading' } | { kind: 'unavailable' } | { kind: 'answer'; value: DeletionEligibility };
 
@@ -92,11 +94,16 @@ export default function DeleteAccount() {
 
   const sendLink = async () => {
     if (!profile?.email) return;
+    const email = profile.email;
     setBusy(true);
     setProblem(null);
-    await setReturnTo('/delete-account');
-    const result = await requestEmailLink(profile.email);
-    setBusy(false);
+    const result = await runThen(
+      async () => {
+        await setReturnTo('/delete-account');
+        return await requestEmailLink(email);
+      },
+      () => setBusy(false)
+    );
     if (result.ok) setLinkSent(true);
     else setProblem(result.reason === 'rate-limited' ? 'signIn.tooMany' : 'signIn.network');
   };
@@ -105,7 +112,7 @@ export default function DeleteAccount() {
     setBusy(true);
     setProblem(null);
     try {
-      const result = await deleteAccount({ confirmation: typed.trim() });
+      const result = await runThen(() => deleteAccount({ confirmation: typed.trim() }), () => setBusy(false));
       haptic('success');
       setDone(result.reference);
     } catch (error) {
@@ -119,8 +126,6 @@ export default function DeleteAccount() {
       } else {
         setProblem('delete.failed');
       }
-    } finally {
-      setBusy(false);
     }
   };
 

@@ -4,13 +4,14 @@ import { useEffect, useMemo } from 'react';
 import { FlatList, Platform, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { prefetchCover } from '@/components/destination-cover';
 import { Icon, PageTitle, SectionTitle } from '@/components/kit';
 import { JourneysSkeleton } from '@/components/skeletons';
 import { Freshness, TripCard } from '@/components/trip-cards';
 import { useCustomerSession } from '@/features/session/session';
 import { featuredTrip, type JourneyRow, journeyRows } from '@/features/trips/model';
+import { prefetchCover } from '@/features/trips/prefetch-cover';
 import { useTrips } from '@/features/trips/use-trips';
+import { formatLongDate } from '@/i18n/format';
 import { useI18n } from '@/i18n/i18n';
 import { useNow } from '@/lib/use-now';
 
@@ -62,7 +63,7 @@ export default function Journeys() {
     prefetchCover(leadCover, width);
   }, [leadCover, width]);
 
-  const kicker = new Intl.DateTimeFormat(i18n.language.intl, { day: 'numeric', month: 'long', weekday: 'long' }).format(new Date(now));
+  const kicker = formatLongDate(i18n.language.intl, now);
   const header = (
     <View style={{ gap: space.lg + 4, paddingBottom: space.lg + 4 }}>
       <PageTitle kicker={kicker} title={i18n.t('journeys.title')} />

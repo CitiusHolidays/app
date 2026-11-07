@@ -64,3 +64,15 @@ export function dayTile(intl: string, value: string | null) {
     month: dayFormat(intl, { month: 'short' }).format(date),
   };
 }
+
+const longDates = new Map<string, Intl.DateTimeFormat>();
+
+/** "Friday, 6 November": the Journeys heading's kicker. One formatter per language. */
+export function formatLongDate(intl: string, value: number) {
+  let format = longDates.get(intl);
+  if (!format) {
+    format = new Intl.DateTimeFormat(intl, { day: 'numeric', month: 'long', weekday: 'long' });
+    longDates.set(intl, format);
+  }
+  return format.format(new Date(value));
+}
