@@ -100,11 +100,15 @@ export const staffApi = {
     "getDetail",
     "view:jobCards; canSeeJobCardRecord, null when not visible"
   ),
-  getFieldPassportFile: define<"action", { travellerId: string }, FieldPassportFile>(
+  getFieldPassportFile: define<
+    "action",
+    { openId?: string; travellerId: string; variant?: "full" | "preview" },
+    FieldPassportFile
+  >(
     "action",
     "crm/fieldPassportActions",
     "getFieldPassportFile",
-    "Tour Manager role; portal file rate limit; own group; trip window (IST); writes a fieldPassportAccessAudit row before reading"
+    "Tour Manager role; app pilot on; portal file rate limit counted per open; own group; trip window (IST); one fieldPassportAccessAudit row per openId"
   ),
   getMyPortalAccess: define<"query", EmptyArgs, PortalAccess>(
     "query",

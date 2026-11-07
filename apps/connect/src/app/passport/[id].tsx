@@ -8,9 +8,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ActionPill, PageTitle, Placeholder, QuietState, Screen } from '@/components/kit';
+import { ActionPill, PageTitle, QuietState, Screen } from '@/components/kit';
 import { useStaffSession } from '@/features/gate/session';
 import { canShowPdf, PassportPdf } from '@/features/passports/passport-pdf';
+import { PassportSkeleton } from '@/features/passports/passport-skeleton';
 import { deleteAllPassportPdfs, deletePassportPdf, writePassportPdf } from '@/features/passports/passport-pdf-file';
 import { base64FromBytes, passportProblem, passportViewKind } from '@/features/passports/passport-window';
 import { useTrips } from '@/features/trips/trips-context';
@@ -18,7 +19,9 @@ import { logEvent } from '@/lib/safe-log';
 
 type ScanState =
   | { kind: 'loading' }
-  | { kind: 'image'; uri: string }
+  // `quality`: a small preview on screen while the full scan loads ('preview'), the full scan
+  // ('full'), or the preview kept because the full scan failed ('previewOnly').
+  | { aspect?: number; kind: 'image'; previewUri?: string; quality: 'full' | 'preview' | 'previewOnly'; uri: string }
   | { kind: 'pdf'; uri: string }
   | { kind: 'other' | 'pdfUnsupported' }
   | { kind: 'hidden' }
@@ -46,6 +49,8 @@ export default function PassportViewer() {
   const name = pack?.roster.find((entry) => entry.id === id)?.name ?? 'Traveller';
   const [view, setView] = useState<ScanState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // The scan's own shape once it has loaded, so a landscape data page is not boxed as portrait.
+  const [imageAspect, setImageAspect] = useState(1.42);
   const fetched = useRef<number | null>(null);
   // False while the app is in the background: a read that lands then is not shown or written.
   const foreground = useRef(true);
@@ -57,27 +62,66 @@ export default function PassportViewer() {
     }
     fetched.current = attempt;
     let active = true;
-    convex
-      .action(staffApi.getFieldPassportFile.ref, { travellerId: id })
-      .then((file) => {
-        if (!active) return;
-        if (!foreground.current) {
-          setView({ kind: 'hidden' });
-          return;
+    // Both reads of this open share one audit row and one rate-limit count on the server.
+    const openId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+    const read = (variant: 'full' | 'preview') =>
+      convex.action(staffApi.getFieldPassportFile.ref, { openId, travellerId: id, variant });
+    const shown = () => active && foreground.current;
+    const dataUri = (mimeType: string, bytes: ArrayBuffer) => `data:${mimeType};base64,${base64FromBytes(bytes)}`;
+
+    // On 3G a full scan takes many seconds: show a ~60 KB preview first, then fade to full quality.
+    const open = async () => {
+      const first = await read('preview');
+      if (!active) return;
+      if (!foreground.current) {
+        setView({ kind: 'hidden' });
+        return;
+      }
+      if ('variant' in first && first.variant === 'preview') {
+        const previewUri = dataUri(first.mimeType, first.bytes);
+        const aspect = first.width > 0 && first.height > 0 ? first.width / first.height : undefined;
+        setView({ aspect, kind: 'image', quality: 'preview', uri: previewUri });
+        try {
+          const full = await read('full');
+          if (!active) return;
+          if (!foreground.current) {
+            setView({ kind: 'hidden' });
+            return;
+          }
+          if (!('bytes' in full)) throw new Error('Full scan missing');
+          setView({ aspect, kind: 'image', previewUri, quality: 'full', uri: dataUri(full.mimeType, full.bytes) });
+        } catch (error) {
+          logEvent('passport.full-failed', error);
+          if (shown()) setView({ aspect, kind: 'image', quality: 'previewOnly', uri: previewUri });
         }
+        return;
+      }
+      // A PDF (or a file the server cannot preview) has no preview: read the file itself.
+      const file = 'bytes' in first ? first : await read('full');
+      if (!active) return;
+      if (!foreground.current) {
+        setView({ kind: 'hidden' });
+        return;
+      }
+      if (!('bytes' in file)) throw new Error('Passport file missing');
+      showFile(file);
+    };
+
+    const showFile = (file: { bytes: ArrayBuffer; mimeType: string }) => {
         const kind = passportViewKind(file.mimeType);
         if (kind === 'image') {
-          setView({ kind, uri: `data:${file.mimeType};base64,${base64FromBytes(file.bytes)}` });
+          setView({ kind, quality: 'full', uri: dataUri(file.mimeType, file.bytes) });
         } else if (kind === 'pdf') {
           setView(canShowPdf() ? { kind, uri: writePassportPdf(file.bytes) } : { kind: 'pdfUnsupported' });
         } else {
           setView({ kind });
         }
-      })
-      .catch((error: unknown) => {
-        logEvent('passport.open-failed', error);
-        if (active) setView({ kind: 'problem', problem: passportProblem(error) });
-      });
+    };
+
+    open().catch((error: unknown) => {
+      logEvent('passport.open-failed', error);
+      if (active) setView({ kind: 'problem', problem: passportProblem(error) });
+    });
     return () => {
       active = false;
     };
@@ -119,11 +163,7 @@ export default function PassportViewer() {
       </Banner>
     );
   } else if (view.kind === 'loading') {
-    body = (
-      <Surface>
-        <Placeholder lines={6} />
-      </Surface>
-    );
+    body = <PassportSkeleton />;
   } else if (view.kind === 'image') {
     body = (
       <Surface style={{ padding: space.sm }}>
@@ -132,9 +172,32 @@ export default function PassportViewer() {
           accessible
           cachePolicy="none"
           contentFit="contain"
+          onLoad={({ source }) => {
+            if (source.width > 0 && source.height > 0) setImageAspect(source.width / source.height);
+          }}
+          placeholder={view.previewUri ? { uri: view.previewUri } : undefined}
+          placeholderContentFit="contain"
           source={{ uri: view.uri }}
-          style={{ aspectRatio: 0.75, backgroundColor: theme.color.inset, borderRadius: theme.radius.inset, width: '100%' }}
+          style={{
+            aspectRatio: view.aspect ?? imageAspect,
+            backgroundColor: theme.color.inset,
+            borderRadius: theme.radius.inset,
+            width: '100%',
+          }}
+          transition={180}
         />
+        {view.quality === 'preview' ? (
+          <Text accessibilityLiveRegion="polite" style={{ marginTop: space.sm }} tone="muted" variant="secondary">
+            Loading full quality…
+          </Text>
+        ) : view.quality === 'previewOnly' ? (
+          <View style={{ gap: space.sm, marginTop: space.sm }}>
+            <Text accessibilityLiveRegion="polite" tone="muted" variant="secondary">
+              Showing a lower-quality copy. The full scan could not be loaded.
+            </Text>
+            <Button label="Try full quality" onPress={again} variant="secondary" />
+          </View>
+        ) : null}
       </Surface>
     );
   } else if (view.kind === 'pdf') {

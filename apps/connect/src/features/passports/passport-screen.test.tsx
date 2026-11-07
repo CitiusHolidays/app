@@ -103,11 +103,54 @@ describe('passport viewer', () => {
     await renderViewer();
     expect(await screen.findByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
     expect(getFunctionName(mockAction.mock.calls[0]?.[0])).toBe('crm/fieldPassportActions:getFieldPassportFile');
-    expect(mockAction.mock.calls[0]?.[1]).toEqual({ travellerId: 't_2' });
+    expect(mockAction.mock.calls[0]?.[1]).toEqual({ openId: expect.any(String), travellerId: 't_2', variant: 'preview' });
     expect(mockStore.writes).toEqual([]);
     expect(await mockStore.keys('')).toEqual([]);
     expect(fakeFileSystem.log).toEqual([]);
     expect(mockPdfProps).not.toHaveBeenCalled();
+  });
+
+  it('shows a small preview at once, then fades to the full scan read in the same open', async () => {
+    const PREVIEW = new TextEncoder().encode('small preview bytes');
+    mockAction.mockImplementation(async (_ref: unknown, args: { variant?: string }) =>
+      args.variant === 'preview'
+        ? { bytes: PREVIEW.buffer, fileName: 'passport-preview.jpg', fullMimeType: 'image/jpeg', height: 900, mimeType: 'image/jpeg', variant: 'preview', width: 675 }
+        : { bytes: SCAN.buffer, fileName: 'passport.jpg', height: 4032, mimeType: 'image/jpeg', variant: 'full', width: 3024 }
+    );
+    await renderViewer();
+    expect(await screen.findByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
+    await act(async () => undefined);
+    const calls = mockAction.mock.calls.map(([, args]) => args as { openId: string; variant: string });
+    expect(calls.map((call) => call.variant)).toEqual(['preview', 'full']);
+    expect(calls[0]?.openId).toBe(calls[1]?.openId);
+    expect(screen.queryByText('Loading full quality…')).not.toBeOnTheScreen();
+    expect(mockStore.writes).toEqual([]);
+    expect(fakeFileSystem.log).toEqual([]);
+  });
+
+  it('keeps the preview and offers a retry when the full scan cannot be loaded', async () => {
+    const PREVIEW = new TextEncoder().encode('small preview bytes');
+    mockAction.mockImplementation(async (_ref: unknown, args: { variant?: string }) => {
+      if (args.variant === 'preview') {
+        return { bytes: PREVIEW.buffer, fileName: 'p.jpg', fullMimeType: 'image/jpeg', height: 900, mimeType: 'image/jpeg', variant: 'preview', width: 675 };
+      }
+      throw new Error('network lost');
+    });
+    await renderViewer();
+    expect(await screen.findByText(/Showing a lower-quality copy/)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Try full quality' })).toBeOnTheScreen();
+  });
+
+  it('reads a PDF in full when the server has no preview for it, in the same open', async () => {
+    mockAction.mockImplementation(async (_ref: unknown, args: { variant?: string }) =>
+      args.variant === 'preview' ? { variant: 'none' } : { bytes: PDF.buffer, fileName: 'passport.pdf', mimeType: 'application/pdf', variant: 'full' }
+    );
+    await renderViewer();
+    expect(await screen.findByTestId('native-pdf')).toBeOnTheScreen();
+    const calls = mockAction.mock.calls.map(([, args]) => args as { openId: string; variant: string });
+    expect(calls.map((call) => call.variant)).toEqual(['preview', 'full']);
+    expect(calls[0]?.openId).toBe(calls[1]?.openId);
   });
 
   it('forgets the scan as soon as the app goes to the background', async () => {

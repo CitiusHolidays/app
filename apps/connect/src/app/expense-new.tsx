@@ -70,11 +70,11 @@ export default function NewExpense() {
       setProblem('Camera access is off. Allow it in Settings, or choose a photo from your library.');
       return;
     }
-    await keep(await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.7 }));
+    await keep(await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 1 }));
   };
 
   const choosePhoto = async () => {
-    await keep(await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7 }));
+    await keep(await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 1 }));
   };
 
   const save = () => {

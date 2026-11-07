@@ -11,6 +11,7 @@ import { type HeadcountState, headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize 
 import { useHeadcount } from '@/features/headcount/use-headcount';
 import { useTrips } from '@/features/trips/trips-context';
 import { useAnnounce } from '@/lib/use-announce';
+import { useProgressiveCount } from '@/lib/use-progressive-count';
 
 type Show = 'all' | 'missing';
 
@@ -37,6 +38,8 @@ export default function Headcount() {
   const summary = pack && state ? summarize(state, pack.roster, batchId) : null;
   const answer = summary && pack ? headcountAnswer(summary, pack) : null;
   useAnnounce(answer);
+  // A large group draws its first screens at once and fills in over the next few frames.
+  const shown = useProgressiveCount(pack?.roster.length ?? 0);
 
   if (!pack || !state || !summary || !answer) {
     return (
@@ -108,7 +111,7 @@ export default function Headcount() {
         </Surface>
       ) : (
         <ListCard>
-          {people.map((entry, index) => {
+          {people.slice(0, shown).map((entry, index) => {
             const here = present.has(entry.id);
             const meta = [entry.batchLabel, entry.guestType].filter(Boolean).join(' · ');
             return (
@@ -126,7 +129,7 @@ export default function Headcount() {
                 <View
                   style={[
                     styles.row,
-                    { borderBottomColor: theme.color.rule, borderBottomWidth: index === people.length - 1 ? 0 : StyleSheet.hairlineWidth },
+                    { borderBottomColor: theme.color.rule, borderBottomWidth: index === Math.min(people.length, shown) - 1 ? 0 : StyleSheet.hairlineWidth },
                   ]}
                 >
                   <Avatar checked={here} name={entry.name} />

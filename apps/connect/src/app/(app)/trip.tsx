@@ -28,6 +28,7 @@ import { resolveTripView, type TripView } from '@/features/trips/trip-view';
 import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { useNow } from '@/lib/use-now';
+import { useProgressiveCount } from '@/lib/use-progressive-count';
 
 const VIEWS: { label: string; value: TripView }[] = [
   { label: 'Roster', value: 'roster' },
@@ -35,10 +36,26 @@ const VIEWS: { label: string; value: TripView }[] = [
   { label: 'Contacts', value: 'contacts' },
 ];
 
+/** The groups and rows to draw when only the first `shown` rows of the roster are on screen. */
+function visibleGroups<Group extends { entries: readonly unknown[] }>(groups: readonly Group[], shown: number) {
+  const visible: { entries: Group['entries']; group: Group }[] = [];
+  let left = shown;
+  for (const group of groups) {
+    if (left <= 0) break;
+    const entries = group.entries.slice(0, left);
+    visible.push({ entries, group });
+    left -= entries.length;
+  }
+  return visible;
+}
+
 function Roster({ now, online, pack, passports }: { now: number; online: boolean; pack: TripPack; passports: FieldPassports | null }) {
   const groups = groupRoster(pack);
   const travelling = pack.roster.filter((entry) => entry.travelling).length;
   const passportById = new Map<string, FieldPassportRow>((passports?.travellers ?? []).map((row) => [row.travellerId, row]));
+  // A large roster draws its first screens at once and fills in over the next few frames.
+  const shown = useProgressiveCount(groups.reduce((sum, group) => sum + group.entries.length, 0));
+  const visible = visibleGroups(groups, shown);
   return (
     <View style={{ gap: space.lg }}>
       <Text tabular tone="muted" variant="secondary">
@@ -59,7 +76,7 @@ function Roster({ now, online, pack, passports }: { now: number; online: boolean
           <QuietState text="No travellers are on this trip's roster yet." />
         </Surface>
       ) : null}
-      {groups.map((group) => {
+      {visible.map(({ entries, group }) => {
         // A batch shares one trip window; the first traveller with a scan speaks for the group.
         const window = group.entries.map((entry) => passportById.get(entry.id)).find((row) => row?.hasPassportScan);
         return (
@@ -83,7 +100,7 @@ function Roster({ now, online, pack, passports }: { now: number; online: boolean
               </Text>
             ) : null}
             <ListCard>
-              {group.entries.map((entry, index) => {
+              {entries.map((entry, index) => {
                 const pill = callingPill(entry.callingStatus);
                 const meta = rosterMeta(entry);
                 const passport = online ? passportById.get(entry.id) : undefined;
@@ -115,7 +132,7 @@ function Roster({ now, online, pack, passports }: { now: number; online: boolean
                       ) : undefined
                     }
                     key={entry.id}
-                    last={index === group.entries.length - 1}
+                    last={index === entries.length - 1}
                     leading={<Avatar name={entry.name} />}
                     subtitle={meta || undefined}
                     title={entry.name}
