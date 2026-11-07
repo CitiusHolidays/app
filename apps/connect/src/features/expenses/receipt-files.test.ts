@@ -64,14 +64,14 @@ describe('receipt files', () => {
     mockCopies.length = 0;
     mockResize.mockReset();
     mockSave.mockReset();
-    mockSave.mockResolvedValue({ height: 1200, uri: 'file:///manipulator/out.jpg', width: 1600 });
+    mockSave.mockResolvedValue({ height: 1536, uri: 'file:///manipulator/out.jpg', width: 2048 });
     mockManipulateFails = false;
   });
 
-  it('shrinks a camera photo to a 3G-friendly JPEG before keeping it', async () => {
+  it('shrinks a camera photo once, to a sharp 3G-friendly JPEG, before keeping it', async () => {
     const receipt = await keepReceipt({ height: 3024, mimeType: 'image/heic', uri: 'file:///picker/tmp.heic', width: 4032 }, 'exp_2');
-    expect(mockResize).toHaveBeenCalledWith({ height: null, width: 1600 });
-    expect(mockSave).toHaveBeenCalledWith({ compress: 0.6, format: 'jpeg' });
+    expect(mockResize).toHaveBeenCalledWith({ height: null, width: 2048 });
+    expect(mockSave).toHaveBeenCalledWith({ compress: 0.8, format: 'jpeg' });
     expect(receipt).toMatchObject({ mimeType: 'image/jpeg', uri: 'file:///app/Library/Caches/receipts/exp_2.jpg' });
   });
 
@@ -94,9 +94,10 @@ describe('receipt files', () => {
 });
 
 describe('receiptSize', () => {
-  it('caps the long edge at 1600 and never enlarges', () => {
-    expect(receiptSize(4032, 3024)).toEqual({ height: null, width: 1600 });
-    expect(receiptSize(3024, 4032)).toEqual({ height: 1600, width: null });
+  it('caps the long edge at 2048 and never enlarges', () => {
+    expect(receiptSize(4032, 3024)).toEqual({ height: null, width: 2048 });
+    expect(receiptSize(3024, 4032)).toEqual({ height: 2048, width: null });
+    expect(receiptSize(2048, 1536)).toBeNull();
     expect(receiptSize(1200, 900)).toBeNull();
     expect(receiptSize(undefined, undefined)).toBeNull();
   });

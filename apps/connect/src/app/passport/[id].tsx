@@ -8,9 +8,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ActionPill, PageTitle, Placeholder, QuietState, Screen } from '@/components/kit';
+import { ActionPill, PageTitle, QuietState, Screen } from '@/components/kit';
 import { useStaffSession } from '@/features/gate/session';
 import { canShowPdf, PassportPdf } from '@/features/passports/passport-pdf';
+import { PassportSkeleton } from '@/features/passports/passport-skeleton';
 import { deleteAllPassportPdfs, deletePassportPdf, writePassportPdf } from '@/features/passports/passport-pdf-file';
 import { base64FromBytes, passportProblem, passportViewKind } from '@/features/passports/passport-window';
 import { useTrips } from '@/features/trips/trips-context';
@@ -46,6 +47,8 @@ export default function PassportViewer() {
   const name = pack?.roster.find((entry) => entry.id === id)?.name ?? 'Traveller';
   const [view, setView] = useState<ScanState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // The scan's own shape once it has loaded, so a landscape data page is not boxed as portrait.
+  const [imageAspect, setImageAspect] = useState(1.42);
   const fetched = useRef<number | null>(null);
   // False while the app is in the background: a read that lands then is not shown or written.
   const foreground = useRef(true);
@@ -119,11 +122,7 @@ export default function PassportViewer() {
       </Banner>
     );
   } else if (view.kind === 'loading') {
-    body = (
-      <Surface>
-        <Placeholder lines={6} />
-      </Surface>
-    );
+    body = <PassportSkeleton />;
   } else if (view.kind === 'image') {
     body = (
       <Surface style={{ padding: space.sm }}>
@@ -132,8 +131,12 @@ export default function PassportViewer() {
           accessible
           cachePolicy="none"
           contentFit="contain"
+          onLoad={({ source }) => {
+            if (source.width > 0 && source.height > 0) setImageAspect(source.width / source.height);
+          }}
           source={{ uri: view.uri }}
-          style={{ aspectRatio: 0.75, backgroundColor: theme.color.inset, borderRadius: theme.radius.inset, width: '100%' }}
+          style={{ aspectRatio: imageAspect, backgroundColor: theme.color.inset, borderRadius: theme.radius.inset, width: '100%' }}
+          transition={180}
         />
       </Surface>
     );

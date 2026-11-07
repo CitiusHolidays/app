@@ -26,9 +26,13 @@ export interface PickedImage {
   width?: number;
 }
 
-/** A receipt stays readable at 1600 px on the long edge; a 12 MP photo is wasted bytes on 3G. */
-const RECEIPT_LONG_EDGE = 1600;
-const RECEIPT_QUALITY = 0.6;
+/**
+ * Small print on a receipt (GST numbers, totals) stays sharp at 2048 px on the long edge and JPEG
+ * quality 0.8, typically 400–700 KB; a 12 MP photo is several MB of wasted bytes on 3G. This is
+ * the only lossy step: the camera and library hand over the photo at full quality.
+ */
+export const RECEIPT_LONG_EDGE = 2048;
+export const RECEIPT_QUALITY = 0.8;
 
 /** The resize for a photo, or null when it is already small enough or its size is unknown. */
 export function receiptSize(width: number | undefined, height: number | undefined) {
