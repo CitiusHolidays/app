@@ -31,7 +31,7 @@ jobs:
       - name: Typecheck every package
         run: bun run typecheck
 
-      - name: Lint
+      - name: Lint Connect
         working-directory: apps/connect
         run: bunx expo lint
 
@@ -39,7 +39,15 @@ jobs:
         working-directory: apps/connect
         run: bunx jest --ci
 
-      # The contract suite checks every backend function the app calls exists in the website repo's
+      - name: Lint the customer app
+        working-directory: apps/customer
+        run: bunx expo lint
+
+      - name: Test the customer app
+        working-directory: apps/customer
+        run: bunx jest --ci
+
+      # The contract suite checks every backend function the apps call exists in the website repo's
       # main branch (public). A pull request can name another website ref in its body as
       # `website-ref: <branch>` when it depends on unmerged backend work.
       - name: Pick the website ref
@@ -56,7 +64,9 @@ jobs:
           repository: CitiusHolidays/website
           ref: ${{ steps.ref.outputs.ref }}
           path: website
-          sparse-checkout: convex
+          sparse-checkout: |
+            convex
+            src/components/customerApp
 
       - name: Contract suite against the website
         working-directory: apps/connect

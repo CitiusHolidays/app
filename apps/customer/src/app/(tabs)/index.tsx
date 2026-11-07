@@ -1,0 +1,116 @@
+import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { router } from 'expo-router';
+import { useEffect, useMemo } from 'react';
+import { FlatList, Platform, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { prefetchCover } from '@/components/destination-cover';
+import { Icon, PageTitle, SectionTitle } from '@/components/kit';
+import { JourneysSkeleton } from '@/components/skeletons';
+import { Freshness, TripCard } from '@/components/trip-cards';
+import { useCustomerSession } from '@/features/session/session';
+import { featuredTrip, type JourneyRow, journeyRows } from '@/features/trips/model';
+import { useTrips } from '@/features/trips/use-trips';
+import { useI18n } from '@/i18n/i18n';
+import { useNow } from '@/lib/use-now';
+
+/** Room under the list for the floating tab bar. */
+const TAB_BAR_CLEARANCE = 96;
+
+function openTrip(tripId: string) {
+  router.push({ params: { id: tripId }, pathname: '/trip/[id]' });
+}
+
+function NoTrips() {
+  const theme = useAppTheme();
+  const { t } = useI18n();
+  return (
+    <Surface variant="hero" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
+      <View style={{ alignItems: 'center', backgroundColor: theme.color.inset, borderRadius: 32, height: 64, justifyContent: 'center', width: 64 }}>
+        <Icon color={theme.color.primary} ios="airplane.departure" md="flight_takeoff" size={28} />
+      </View>
+      <Text accessibilityRole="header" variant="section">
+        {t('journeys.emptyTitle')}
+      </Text>
+      <Text style={{ maxWidth: 320, textAlign: 'center' }} tone="muted">
+        {t('journeys.emptyBody')}
+      </Text>
+      <Button label={t('journeys.haveLink')} onPress={() => router.push('/invite-entry')} variant="secondary" />
+    </Surface>
+  );
+}
+
+/**
+ * Journeys: the trip happening now or next, then upcoming and past trips (past trips stay). The
+ * list is virtualised, so only the cards on or near the screen are mounted and load their photos.
+ */
+export default function Journeys() {
+  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const i18n = useI18n();
+  const { gate } = useCustomerSession();
+  const trips = useTrips();
+  const now = useNow();
+  const { width } = useWindowDimensions();
+  const list = useMemo(() => trips.data ?? [], [trips.data]);
+  const rows = useMemo(() => journeyRows(list), [list]);
+  const offline = gate.kind === 'signedIn' && gate.offline;
+
+  // The trip most likely to be opened next: start its header photo now.
+  const leadCover = featuredTrip(list)?.cover ?? null;
+  useEffect(() => {
+    prefetchCover(leadCover, width);
+  }, [leadCover, width]);
+
+  const kicker = new Intl.DateTimeFormat(i18n.language.intl, { day: 'numeric', month: 'long', weekday: 'long' }).format(new Date(now));
+  const header = (
+    <View style={{ gap: space.lg + 4, paddingBottom: space.lg + 4 }}>
+      <PageTitle kicker={kicker} title={i18n.t('journeys.title')} />
+      <Freshness offline={offline} savedAt={trips.live ? null : trips.savedAt} />
+      {trips.loading ? <JourneysSkeleton label={i18n.t('common.loading')} /> : null}
+      {!trips.loading && list.length === 0 ? <NoTrips /> : null}
+    </View>
+  );
+
+  const renderItem = ({ item }: { item: JourneyRow }) => {
+    if (item.kind === 'section') {
+      return (
+        <View style={{ paddingBottom: space.md, paddingTop: space.lg }}>
+          <SectionTitle>{i18n.t(item.section === 'past' ? 'journeys.past' : 'journeys.upcoming')}</SectionTitle>
+        </View>
+      );
+    }
+    return (
+      <View style={{ paddingBottom: space.md }}>
+        <TripCard lead={item.kind === 'lead'} now={now} onPress={() => openTrip(item.trip.tripId)} trip={item.trip} />
+      </View>
+    );
+  };
+
+  return (
+    <FlatList
+      ListFooterComponent={
+        list.length > 0 ? (
+          <View style={{ paddingTop: space.lg }}>
+            <Button label={i18n.t('journeys.haveLink')} onPress={() => router.push('/invite-entry')} variant="secondary" />
+          </View>
+        ) : undefined
+      }
+      ListHeaderComponent={header}
+      contentContainerStyle={{
+        paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
+        paddingHorizontal: theme.frame,
+        paddingTop: Platform.OS === 'ios' ? space.sm : insets.top + space.md,
+      }}
+      contentInsetAdjustmentBehavior="automatic"
+      data={rows}
+      initialNumToRender={3}
+      keyExtractor={(row) => row.key}
+      maxToRenderPerBatch={2}
+      removeClippedSubviews={Platform.OS === 'android'}
+      renderItem={renderItem}
+      style={{ backgroundColor: theme.color.ground }}
+      windowSize={5}
+    />
+  );
+}
