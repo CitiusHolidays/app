@@ -170,14 +170,11 @@ export const customerApi = {
 export type CustomerApi = typeof customerApi;
 
 /**
- * Functions built in website PRs that may land after this app. The app treats a missing one as
- * "not available yet" (account deletion falls back to the support email), and the contract test
- * checks them only once the website has them.
+ * Functions built in website PRs that may land after this app. The contract test checks them only
+ * once the website has them. Empty: account deletion landed with website PR 312. The app still
+ * shows the support email if a deployment answers "Could not find public function".
  */
-export const CUSTOMER_FUNCTIONS_PENDING_ON_WEBSITE = new Set<keyof CustomerApi>([
-  "deleteMyAccount",
-  "getMyAccountDeletionEligibility",
-]);
+export const CUSTOMER_FUNCTIONS_PENDING_ON_WEBSITE = new Set<keyof CustomerApi>([]);
 
 export const customerFunctionManifest = (Object.keys(customerApi) as (keyof CustomerApi)[]).map((key) => ({
   key,

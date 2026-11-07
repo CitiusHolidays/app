@@ -47,10 +47,8 @@ describeWithWebsite("customer API contract with the website backend", () => {
     }
   });
 
-  it("matches the account deletion contract once the website has it", () => {
-    const contractPath = join(convexDir, "lib/accountDeletionContract.ts");
-    if (!existsSync(contractPath)) return;
-    const contract = readFileSync(contractPath, "utf8");
+  it("matches the website's account deletion contract", () => {
+    const contract = source("lib/accountDeletionContract");
     expect(contract).toContain(`ACCOUNT_DELETION_CONFIRMATION_PHRASE = "${ACCOUNT_DELETION_CONFIRMATION}"`);
     for (const code of [CUSTOMER_ERRORS.deletionConfirmation, CUSTOMER_ERRORS.deletionReauth, CUSTOMER_ERRORS.deletionStaff]) {
       expect(contract).toContain(`"${code}"`);
@@ -79,11 +77,8 @@ describe("customer API manifest", () => {
     }
   });
 
-  it("lets only account deletion wait on the website", () => {
-    expect([...CUSTOMER_FUNCTIONS_PENDING_ON_WEBSITE].sort()).toEqual([
-      "deleteMyAccount",
-      "getMyAccountDeletionEligibility",
-    ]);
+  it("waits on no website function", () => {
+    expect([...CUSTOMER_FUNCTIONS_PENDING_ON_WEBSITE]).toEqual([]);
   });
 
   it("keeps the staff list out of the customer entry", () => {
