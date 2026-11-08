@@ -21,6 +21,11 @@ jest.mock('react-native-reanimated', () => {
       done?.(true);
       return to;
     },
+    Easing: { bezier: () => () => 0, inOut: () => () => 0, sin: () => 0 },
+    interpolate: () => 0,
+    withDelay: (_delay: number, animation: unknown) => animation,
+    withRepeat: (animation: unknown) => animation,
+    withSequence: (...animations: unknown[]) => animations[animations.length - 1],
   };
 });
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args) }));
@@ -89,7 +94,7 @@ describe('launch curtain', () => {
         <ReadyWhen ready={false} />
       </LaunchCurtain>
     );
-    const tiles = screen.getAllByTestId('image').slice(0, -1); // the last image is the planes
+    const tiles = screen.getAllByTestId('image').slice(0, -2); // the last two images are the planes
     const first = StyleSheet.flatten(tiles[0]?.props.style);
     expect(first.width).toBeCloseTo(1919 / PixelRatio.get());
     expect(first.height).toBeCloseTo(956 / PixelRatio.get());

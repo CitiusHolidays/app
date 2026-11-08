@@ -1,10 +1,12 @@
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { FlatList, Platform, useWindowDimensions, View } from 'react-native';
+import { Platform, RefreshControl, useWindowDimensions, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, PageTitle, SectionTitle } from '@/components/kit';
+import { useEntrance } from '@/components/motion';
 import { JourneysSkeleton } from '@/components/skeletons';
 import { Freshness, TripCard } from '@/components/trip-cards';
 import { useCustomerSession } from '@/features/session/session';
@@ -14,6 +16,7 @@ import { useTrips } from '@/features/trips/use-trips';
 import { formatLongDate } from '@/i18n/format';
 import { useI18n } from '@/i18n/i18n';
 import { useNow } from '@/lib/use-now';
+import { usePullRefresh } from '@/lib/use-pull-refresh';
 
 /** Room under the list for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
@@ -56,6 +59,8 @@ export default function Journeys() {
   const list = useMemo(() => trips.data ?? [], [trips.data]);
   const rows = useMemo(() => journeyRows(list), [list]);
   const offline = gate.kind === 'signedIn' && gate.offline;
+  const refresh = usePullRefresh(trips.live);
+  const entrance = useEntrance(!trips.loading);
 
   // The trip most likely to be opened next: start its header photo now.
   const leadCover = featuredTrip(list)?.cover ?? null;
@@ -89,7 +94,7 @@ export default function Journeys() {
   };
 
   return (
-    <FlatList
+    <Animated.FlatList
       ListFooterComponent={
         list.length > 0 ? (
           <View style={{ paddingTop: space.lg }}>
@@ -98,6 +103,7 @@ export default function Journeys() {
         ) : undefined
       }
       ListHeaderComponent={header}
+      refreshControl={<RefreshControl onRefresh={refresh.onRefresh} refreshing={refresh.refreshing} tintColor={theme.color.muted} />}
       contentContainerStyle={{
         paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
         paddingHorizontal: theme.frame,
@@ -110,7 +116,7 @@ export default function Journeys() {
       maxToRenderPerBatch={2}
       removeClippedSubviews={Platform.OS === 'android'}
       renderItem={renderItem}
-      style={{ backgroundColor: theme.color.ground }}
+      style={[{ backgroundColor: theme.color.ground }, entrance]}
       windowSize={5}
     />
   );

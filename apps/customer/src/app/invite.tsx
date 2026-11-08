@@ -171,14 +171,15 @@ function InviteForAccount({ token }: { token: string }) {
                 checked={consents.has(minor.travellerId)}
                 key={minor.travellerId}
                 label={t('invite.consentLabel', { name: minor.firstName })}
-                onToggle={() =>
+                onToggle={() => {
+                  haptic('selection');
                   setConsents((current) => {
                     const next = new Set(current);
                     if (next.has(minor.travellerId)) next.delete(minor.travellerId);
                     else next.add(minor.travellerId);
                     return next;
-                  })
-                }
+                  });
+                }}
               />
             ))}
             <Text tone="muted" variant="label">
