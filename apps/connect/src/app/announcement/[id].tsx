@@ -2,7 +2,7 @@ import { Button, face, PressableScale, space, StatusPill, Surface, Text, useAppT
 import { useLocalSearchParams } from 'expo-router';
 import { Share, StyleSheet, View } from 'react-native';
 
-import { Avatar, Icon, ListCard, PageTitle, QuietState, Screen, SectionTitle, TickStrip } from '@/components/kit';
+import { Avatar, EveryoneSeal, Icon, ListCard, PageTitle, QuietState, Screen, SectionTitle, StepNumber, TickStrip } from '@/components/kit';
 import { ackSummary, composeShareText } from '@/features/announcements/announcements';
 import { useAnnouncements } from '@/features/announcements/use-announcements';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
@@ -11,6 +11,7 @@ import { syncKey } from '@/features/field-sync/queue';
 import { SyncLine } from '@/features/field-sync/sync-line';
 import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
+import { haptic, tick } from '@/lib/haptics';
 import { logEvent } from '@/lib/safe-log';
 
 const ignoredNote = (count: number) =>
@@ -72,12 +73,11 @@ export default function AnnouncementDetail() {
       <Surface style={{ gap: space.md }} variant="hero">
         <View accessibilityLabel={answer} accessibilityLiveRegion="polite" accessible style={{ gap: space.md }}>
           <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
-            <Text tabular variant="answer">
-              {acks.acknowledged}
-            </Text>
+            <StepNumber value={String(acks.acknowledged)} />
             <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
               / {acks.total} have seen it
             </Text>
+            <EveryoneSeal shown={acks.total > 0 && acks.acknowledged >= acks.total} />
           </View>
           <TickStrip marked={acks.acknowledged} total={acks.total} />
         </View>
@@ -99,7 +99,12 @@ export default function AnnouncementDetail() {
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: seen }}
                   key={travellerId}
-                  onPress={() => toggleAck(announcement.id, travellerId)}
+                  onPress={() => {
+                    // One buzz per tick; the last one to confirm gets the success buzz with the seal.
+                    if (!seen && acks.acknowledged === acks.total - 1) haptic('success');
+                    else tick();
+                    toggleAck(announcement.id, travellerId);
+                  }}
                 >
                   <View
                     style={[

@@ -2,19 +2,34 @@ import type { NotificationRow } from '@citius/backend';
 import { space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { FreshnessStamp } from '@/components/freshness';
-import { ListCard, Placeholder, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
+import { Arrive, ListCard, Placeholder, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
 import { fullTime, relativeTime } from '@/features/inbox/relative-time';
 import { useInbox } from '@/features/inbox/use-inbox';
 import { useNow } from '@/lib/use-now';
 
-/** An 8pt Citius-blue dot for unread; read rows keep the space so titles line up. */
+/**
+ * An 8pt Citius-blue dot for unread; read rows keep the space so titles line up. Opening a
+ * notification marks it read: the dot shrinks and fades (160 ms) instead of blinking out.
+ */
 function UnreadDot({ unread }: { unread: boolean }) {
   const theme = useAppTheme();
   return (
     <View style={{ alignSelf: 'flex-start', height: 22, justifyContent: 'center', width: 8 }}>
-      {unread ? <View style={{ backgroundColor: theme.color.accent, borderRadius: 4, height: 8, width: 8 }} /> : null}
+      <Animated.View
+        style={{
+          backgroundColor: theme.color.accent,
+          borderRadius: 4,
+          height: 8,
+          opacity: unread ? 1 : 0,
+          transform: [{ scale: unread ? 1 : 0.6 }],
+          transitionDuration: 160,
+          transitionProperty: ['opacity', 'transform'],
+          width: 8,
+        }}
+      />
     </View>
   );
 }
@@ -59,26 +74,30 @@ export default function Inbox() {
           <Placeholder lines={5} />
         </Surface>
       ) : null}
-      {loaded && unread.length === 0 ? (
-        <Surface>
-          <QuietState good text="You're all caught up." />
-        </Surface>
+      {loaded ? (
+        <Arrive gap={space.lg + 4}>
+          {unread.length === 0 ? (
+            <Surface>
+              <QuietState good text="You're all caught up." />
+            </Surface>
+          ) : null}
+          {unread.length > 0 ? (
+            <View style={{ gap: space.md }}>
+              <SectionTitle>{`New · ${unread.length}`}</SectionTitle>
+              <NotificationList now={now} rows={unread} />
+            </View>
+          ) : null}
+          {read.length > 0 ? (
+            <View style={{ gap: space.md }}>
+              <SectionTitle>Earlier</SectionTitle>
+              <NotificationList now={now} rows={read} />
+            </View>
+          ) : null}
+          <Text tone="muted" variant="secondary">
+            Push alerts are not switched on yet. New notifications appear here when the app is open.
+          </Text>
+        </Arrive>
       ) : null}
-      {unread.length > 0 ? (
-        <View style={{ gap: space.md }}>
-          <SectionTitle>{`New · ${unread.length}`}</SectionTitle>
-          <NotificationList now={now} rows={unread} />
-        </View>
-      ) : null}
-      {read.length > 0 ? (
-        <View style={{ gap: space.md }}>
-          <SectionTitle>Earlier</SectionTitle>
-          <NotificationList now={now} rows={read} />
-        </View>
-      ) : null}
-      <Text tone="muted" variant="secondary">
-        Push alerts are not switched on yet. New notifications appear here when the app is open.
-      </Text>
     </Screen>
   );
 }

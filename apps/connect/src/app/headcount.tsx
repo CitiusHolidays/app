@@ -1,8 +1,9 @@
 import { Banner, Button, face, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 
-import { Avatar, Chip, ChipRow, Icon, ListCard, QuietState, Screen, Segmented, StepNumber, TextField, TickStrip } from '@/components/kit';
+import { Avatar, Chip, ChipRow, EveryoneSeal, Icon, ListCard, QuietState, Screen, Segmented, StepNumber, TextField, TickStrip } from '@/components/kit';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { headcountStopPush } from '@/features/field-sync/pushes';
 import { syncKey } from '@/features/field-sync/queue';
@@ -13,7 +14,9 @@ import type { RosterEntry } from '@/features/trip-pack/trip-pack';
 import { useTrips } from '@/features/trips/trips-context';
 import { haptic, tick } from '@/lib/haptics';
 import { useAnnounce } from '@/lib/use-announce';
+import { useLingering } from '@/lib/use-lingering';
 import { useProgressiveCount } from '@/lib/use-progressive-count';
+import { CLOSE_UP, ROW_OUT } from '@/lib/motion';
 
 type Show = 'all' | 'missing';
 
@@ -43,6 +46,7 @@ function HeadcountHero({ answer, summary }: { answer: string; summary: Headcount
           <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
             {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
           </Text>
+          <EveryoneSeal shown={everyone} />
         </View>
         <TickStrip marked={summary.present} total={summary.expected} />
       </View>
@@ -117,6 +121,8 @@ export default function Headcount() {
   };
   const [batchId, setBatchId] = useState<string | undefined>(undefined);
   const [show, setShow] = useState<Show>('all');
+  // In "Not marked", a row someone just marked stays put for a moment showing "Here", then leaves.
+  const { hold, held } = useLingering();
   const summary = pack && state ? summarize(state, pack.roster, batchId) : null;
   const answer = summary && pack ? headcountAnswer(summary, pack) : null;
   useAnnounce(answer);
@@ -136,7 +142,7 @@ export default function Headcount() {
   const todaysKeys = new Set(state.stops.map((stop) => syncKey(headcountStopPush(state, stop))));
   const syncItems = sync.items.filter((item) => todaysKeys.has(item.key));
   const people = pack.roster.filter(
-    (entry) => entry.travelling && (!batchId || entry.batchId === batchId) && (show === 'all' || !present.has(entry.id))
+    (entry) => entry.travelling && (!batchId || entry.batchId === batchId) && (show === 'all' || !present.has(entry.id) || held.has(entry.id))
   );
 
   return (
@@ -161,6 +167,7 @@ export default function Headcount() {
         onToggle={(entry) => {
           const wasLast = !present.has(entry.id) && summary.missing.length === 1 && summary.missing[0]?.id === entry.id;
           send(toggle(entry.id));
+          if (show === 'missing') hold(entry.id);
           if (wasLast) haptic('success');
           else tick();
         }}
@@ -188,6 +195,7 @@ function TravellerList({
   show: Show;
   shown: number;
 }) {
+  const reduced = useReducedMotion();
   if (people.length === 0) {
     return (
       <Surface>
@@ -196,16 +204,15 @@ function TravellerList({
     );
   }
   const rows = people.slice(0, shown);
+  // Only "Not marked" removes rows; there, a leaving row fades and the rows below close the gap.
+  // The full list never animates its rows: it is read, not changed. Reduced motion: no movement.
+  const animated = show === 'missing' && !reduced;
   return (
     <ListCard>
       {rows.map((entry, index) => (
-        <TravellerRow
-          entry={entry}
-          here={present.has(entry.id)}
-          key={entry.id}
-          last={index === rows.length - 1}
-          onPress={() => onToggle(entry)}
-        />
+        <Animated.View exiting={animated ? ROW_OUT : undefined} key={entry.id} layout={animated ? CLOSE_UP : undefined}>
+          <TravellerRow entry={entry} here={present.has(entry.id)} last={index === rows.length - 1} onPress={() => onToggle(entry)} />
+        </Animated.View>
       ))}
     </ListCard>
   );

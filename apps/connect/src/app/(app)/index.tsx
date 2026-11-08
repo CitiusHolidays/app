@@ -6,7 +6,9 @@ import { View } from 'react-native';
 import { DestinationCover } from '@/components/destination-cover';
 import { FreshnessStamp } from '@/components/freshness';
 import {
+  Arrive,
   Avatar,
+  EveryoneSeal,
   Icon,
   ListCard,
   Placeholder,
@@ -68,72 +70,75 @@ function HeadcountCard() {
   const missingShown = summary.missing.slice(0, MISSING_SHOWN);
   const more = summary.missing.length - missingShown.length;
   return (
-    <Surface style={{ gap: space.lg }} variant="hero">
-      <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text variant="label">Headcount · {summary.stopLabel}</Text>
-        <Icon color={theme.color.muted} ios="person.3" md="groups" size={18} />
-      </View>
-      <View accessible accessibilityLabel={`${answer} at ${summary.stopLabel}`} style={{ gap: space.md }}>
-        <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
-          <StepNumber value={everyone ? 'All' : String(summary.present)} />
-          <Text tabular tone="muted" variant="section" style={face(theme, 'medium')}>
-            {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
-          </Text>
+    <Arrive>
+      <Surface style={{ gap: space.lg }} variant="hero">
+        <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text variant="label">Headcount · {summary.stopLabel}</Text>
+          <Icon color={theme.color.muted} ios="person.3" md="groups" size={18} />
         </View>
-        <TickStrip marked={summary.present} total={summary.expected} />
-      </View>
-      {pack.complete ? null : (
-        <Text tone="warning" variant="secondary">
-          {PARTIAL_ROSTER_NOTICE}
-        </Text>
-      )}
-      {summary.missing.length > 0 ? (
-        <Surface style={{ gap: space.md }} variant="inset">
-          <Text tone="muted" variant="label">
-            Still to mark · {summary.missing.length}
+        <View accessible accessibilityLabel={`${answer} at ${summary.stopLabel}`} style={{ gap: space.md }}>
+          <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
+            <StepNumber value={everyone ? 'All' : String(summary.present)} />
+            <Text tabular tone="muted" variant="section" style={face(theme, 'medium')}>
+              {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
+            </Text>
+            <EveryoneSeal shown={everyone} />
+          </View>
+          <TickStrip marked={summary.present} total={summary.expected} />
+        </View>
+        {pack.complete ? null : (
+          <Text tone="warning" variant="secondary">
+            {PARTIAL_ROSTER_NOTICE}
           </Text>
-          <View accessibilityLabel={`Not marked yet: ${summary.missing.map((entry) => entry.name).join(', ')}`} accessible style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            {missingShown.map((entry) => (
-              <View key={entry.id} style={{ alignItems: 'center', gap: 6, width: 46 }}>
-                <Avatar name={entry.name} size={40} />
-                <Text numberOfLines={1} tone="muted" variant="label" style={{ fontSize: 12 }}>
-                  {entry.name.split(' ')[0]}
-                </Text>
-              </View>
-            ))}
-            {more > 0 ? (
-              <View style={{ alignItems: 'center', gap: 6, width: 46 }}>
-                <View
-                  style={{
-                    alignItems: 'center',
-                    borderColor: theme.color.border,
-                    borderRadius: 20,
-                    borderWidth: 1,
-                    height: 40,
-                    justifyContent: 'center',
-                    width: 40,
-                  }}
-                >
-                  <Text tabular variant="label">
-                    +{more}
+        )}
+        {summary.missing.length > 0 ? (
+          <Surface style={{ gap: space.md }} variant="inset">
+            <Text tone="muted" variant="label">
+              Still to mark · {summary.missing.length}
+            </Text>
+            <View accessibilityLabel={`Not marked yet: ${summary.missing.map((entry) => entry.name).join(', ')}`} accessible style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {missingShown.map((entry) => (
+                <View key={entry.id} style={{ alignItems: 'center', gap: 6, width: 46 }}>
+                  <Avatar name={entry.name} size={40} />
+                  <Text numberOfLines={1} tone="muted" variant="label" style={{ fontSize: 12 }}>
+                    {entry.name.split(' ')[0]}
                   </Text>
                 </View>
-              </View>
-            ) : null}
+              ))}
+              {more > 0 ? (
+                <View style={{ alignItems: 'center', gap: 6, width: 46 }}>
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      borderColor: theme.color.border,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      height: 40,
+                      justifyContent: 'center',
+                      width: 40,
+                    }}
+                  >
+                    <Text tabular variant="label">
+                      +{more}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          </Surface>
+        ) : (
+          <QuietState good text={`Everyone is marked here at ${summary.stopLabel}.`} />
+        )}
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <View style={{ flex: 1.3 }}>
+            <Button label="Take headcount" onPress={() => router.push('/headcount')} />
           </View>
-        </Surface>
-      ) : (
-        <QuietState good text={`Everyone is marked here at ${summary.stopLabel}.`} />
-      )}
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
-        <View style={{ flex: 1.3 }}>
-          <Button label="Take headcount" onPress={() => router.push('/headcount')} />
+          <View style={{ flex: 1 }}>
+            <Button label="Announce" onPress={() => router.push('/announce')} variant="secondary" />
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Button label="Announce" onPress={() => router.push('/announce')} variant="secondary" />
-        </View>
-      </View>
-    </Surface>
+      </Surface>
+    </Arrive>
   );
 }
 
