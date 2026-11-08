@@ -99,7 +99,16 @@ function Shell() {
         <Stack.Screen name="trip/[id]/index" options={{ headerShown: false }} />
         <Stack.Screen name="trip/[id]/plan" options={{ title: t('trip.plan') }} />
         <Stack.Screen name="trip/[id]/updates" options={{ title: t('trip.updates') }} />
-        <Stack.Screen name="invite-entry" options={{ presentation: 'modal', title: t('invite.enterTitle') }} />
+        {/* A short interruption (paste a link): the platform's own sheet on iOS, with its grabber and
+            drag-to-dismiss; Android form sheets cannot carry a header, so it stays a modal there. */}
+        <Stack.Screen
+          name="invite-entry"
+          options={
+            Platform.OS === 'ios'
+              ? { presentation: 'formSheet', sheetAllowedDetents: [0.62, 0.95], sheetGrabberVisible: true, title: t('invite.enterTitle') }
+              : { presentation: 'modal', title: t('invite.enterTitle') }
+          }
+        />
         <Stack.Screen name="language" options={{ title: t('language.title') }} />
         <Stack.Screen name="delete-account" options={{ title: t('delete.title') }} />
       </Stack.Protected>

@@ -9,8 +9,10 @@ import { useConvex, useMutation, useQuery } from 'convex/react';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Linking, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Icon, MessageScreen, Placeholder, Screen, TextField } from '@/components/kit';
+import { STEP_IN, TEXT_SWAP_IN } from '@/components/motion';
 import { requestEmailLink } from '@/features/auth/methods';
 import { RETURN_TO_KEY, useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL } from '@/features/support/contacts';
@@ -130,9 +132,12 @@ export default function DeleteAccount() {
   };
 
   let action;
+  let step: string;
   if (check.kind === 'loading' || profile === undefined) {
+    step = 'loading';
     action = <Placeholder label={t('common.loading')} lines={2} />;
   } else if (check.kind === 'unavailable') {
+    step = 'unavailable';
     action = (
       <View style={{ gap: space.md }}>
         <Text>{t('delete.unavailable', { email: CITIUS_EMAIL })}</Text>
@@ -140,8 +145,10 @@ export default function DeleteAccount() {
       </View>
     );
   } else if (check.value?.status === 'staff_account') {
+    step = 'staff';
     action = <Text>{t('delete.staff')}</Text>;
   } else if (check.value?.status === 'ready') {
+    step = 'ready';
     action = (
       <View style={{ gap: space.md }}>
         <TextField
@@ -163,6 +170,7 @@ export default function DeleteAccount() {
       </View>
     );
   } else {
+    step = 'reauth';
     action = (
       <View style={{ gap: space.md }}>
         <Text accessibilityRole="header" variant="section">
@@ -170,9 +178,11 @@ export default function DeleteAccount() {
         </Text>
         <Text tone="muted">{t('delete.reauthBody', { email: profile?.email ?? '' })}</Text>
         {linkSent ? (
-          <Banner tone="good">
-            <Text variant="secondary">{t('delete.reauthSent')}</Text>
-          </Banner>
+          <Animated.View entering={TEXT_SWAP_IN}>
+            <Banner tone="good">
+              <Text variant="secondary">{t('delete.reauthSent')}</Text>
+            </Banner>
+          </Animated.View>
         ) : null}
         <Button busy={busy} disabled={!profile?.email} label={t('delete.reauthSend')} onPress={() => void sendLink()} variant="secondary" />
       </View>
@@ -190,13 +200,21 @@ export default function DeleteAccount() {
           {t('delete.notUndone')}
         </Text>
       </Surface>
-      <Surface style={{ gap: space.md }}>{action}</Surface>
+      {/* Each step (confirm it's you, then type the word) takes the last one's place from 8pt
+          to the right, so the flow reads as moving forward. */}
+      <Surface style={{ gap: space.md }}>
+        <Animated.View entering={step === 'loading' ? undefined : STEP_IN} key={step}>
+          {action}
+        </Animated.View>
+      </Surface>
       {problem ? (
+        <Animated.View entering={TEXT_SWAP_IN}>
         <Banner tone="danger">
           <Text accessibilityLiveRegion="polite" variant="secondary">
             {t(problem)}
           </Text>
         </Banner>
+        </Animated.View>
       ) : null}
     </Screen>
   );

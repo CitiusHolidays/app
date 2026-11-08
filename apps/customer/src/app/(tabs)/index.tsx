@@ -1,12 +1,13 @@
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { Platform, RefreshControl, useWindowDimensions, View } from 'react-native';
+import { Platform, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, PageTitle, SectionTitle } from '@/components/kit';
 import { useEntrance } from '@/components/motion';
+import { Pop } from '@/components/motion-views';
 import { JourneysSkeleton } from '@/components/skeletons';
 import { Freshness, TripCard } from '@/components/trip-cards';
 import { useCustomerSession } from '@/features/session/session';
@@ -30,8 +31,17 @@ function NoTrips() {
   const { t } = useI18n();
   return (
     <Surface variant="hero" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
-      <View style={{ alignItems: 'center', backgroundColor: theme.color.inset, borderRadius: 32, height: 64, justifyContent: 'center', width: 64 }}>
-        <Icon color={theme.color.primary} ios="airplane.departure" md="flight_takeoff" size={28} />
+      {/* First run: the mark settles inside two soft rings, once (the owner's empty-state reference). */}
+      <View style={{ alignItems: 'center', height: 136, justifyContent: 'center', width: 136 }}>
+        <Pop delay={160} style={[StyleSheet.absoluteFill, { borderColor: theme.color.border, borderRadius: 68, borderWidth: 1 }]}>
+          <View />
+        </Pop>
+        <Pop delay={80} style={{ borderColor: theme.color.border, borderRadius: 50, borderWidth: 1, height: 100, position: 'absolute', width: 100 }}>
+          <View />
+        </Pop>
+        <Pop style={{ alignItems: 'center', backgroundColor: theme.color.inset, borderRadius: 32, height: 64, justifyContent: 'center', width: 64 }}>
+          <Icon color={theme.color.primary} ios="airplane.departure" md="flight_takeoff" size={28} />
+        </Pop>
       </View>
       <Text accessibilityRole="header" variant="section">
         {t('journeys.emptyTitle')}
