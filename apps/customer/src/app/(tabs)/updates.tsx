@@ -1,10 +1,12 @@
 import type { TripSummary } from '@citius/backend/customer';
 import { space, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
-import { FlatList, Platform, View } from 'react-native';
+import { Platform, RefreshControl, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListCard, PageTitle, QuietState, SectionTitle } from '@/components/kit';
+import { useEntrance } from '@/components/motion';
 import { AnnouncementSkeleton } from '@/components/skeletons';
 import { tripDates } from '@/features/trips/labels';
 import { AnnouncementItem } from '@/components/trip-sections';
@@ -12,6 +14,7 @@ import { splitTrips } from '@/features/trips/model';
 import { useTrip, useTrips } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
 import { useNow } from '@/lib/use-now';
+import { usePullRefresh } from '@/lib/use-pull-refresh';
 
 /** At most this many trips feed the tab: the ones under way or coming up. */
 const MAX_TRIPS = 4;
@@ -50,8 +53,10 @@ export default function Updates() {
   const now = useNow();
   const { active } = splitTrips(trips.data ?? []);
   const shown = active.slice(0, MAX_TRIPS);
+  const refresh = usePullRefresh(trips.live);
+  const entrance = useEntrance(!trips.loading);
   return (
-    <FlatList
+    <Animated.FlatList
       ItemSeparatorComponent={() => <View style={{ height: space.xl }} />}
       ListEmptyComponent={
         trips.loading ? (
@@ -75,10 +80,11 @@ export default function Updates() {
       }}
       contentInsetAdjustmentBehavior="automatic"
       data={shown}
+      refreshControl={<RefreshControl onRefresh={refresh.onRefresh} refreshing={refresh.refreshing} tintColor={theme.color.muted} />}
       initialNumToRender={2}
       keyExtractor={(trip) => trip.tripId}
       renderItem={({ item }) => <TripUpdates now={now} trip={item} />}
-      style={{ backgroundColor: theme.color.ground }}
+      style={[{ backgroundColor: theme.color.ground }, entrance]}
     />
   );
 }

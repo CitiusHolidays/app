@@ -1,25 +1,35 @@
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image } from 'expo-image';
 import { ActivityIndicator, KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import Animated, { Easing, FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, TextField } from '@/components/kit';
+import { SignInHero } from '@/components/sign-in-hero';
+import { SHEET_OVERLAP } from '@/features/auth/sign-in-artwork';
 import { isEmail, requestEmailLink, SIGN_IN_METHODS, type SignInMethodId, verifyEmailLink } from '@/features/auth/methods';
 import { PENDING_INVITE_KEY, RETURN_TO_KEY, useCustomerSession } from '@/features/session/session';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
+import { haptic } from '@/lib/haptic';
+import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 import { useNow } from '@/lib/use-now';
 
 const RESEND_AFTER_MS = 30_000;
 
-const planes = require('@/assets/images/splash-icon.png');
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+/** The sheet's content rises in once, just after the photograph's title. */
+const sheetEntering = FadeInDown.duration(380).delay(200).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 12 }] });
+/** Between the form, "check your email" and a failed link: a quick crossfade, no movement. */
+const stateEntering = FadeIn.duration(220).easing(EASE_OUT);
+const stateExiting = FadeOut.duration(120);
 
-function MethodOption({
+/** A sign-in method as a pill: filled when chosen, outlined with "Coming soon" when not yet open. */
+function MethodPill({
   hint,
   icon,
   label,
@@ -35,36 +45,36 @@ function MethodOption({
   soon?: string;
 }) {
   const theme = useAppTheme();
+  const ink = selected ? theme.color.onPrimary : soon ? theme.color.muted : theme.color.ink;
   return (
     <PressableScale
-      accessibilityLabel={[label, hint, soon].filter(Boolean).join(', ')}
+      accessibilityHint={hint}
+      accessibilityLabel={[label, soon].filter(Boolean).join(', ')}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected, disabled: Boolean(soon) }}
       disabled={Boolean(soon)}
       onPress={onPress}
-      outerStyle={{ flex: 1 }}
       style={{
-        backgroundColor: selected ? theme.color.inset : theme.color.surface,
-        borderColor: selected ? theme.color.primary : theme.color.border,
-        borderRadius: theme.radius.inset,
-        borderWidth: selected ? 2 : 1,
-        gap: space.xs,
-        minHeight: 108,
-        padding: space.md,
+        alignItems: 'center',
+        backgroundColor: selected ? theme.color.primary : 'transparent',
+        borderColor: selected ? theme.color.primary : theme.color.controlBorder,
+        borderRadius: theme.radius.chip,
+        borderWidth: 1,
+        flexDirection: 'row',
+        gap: space.sm,
+        minHeight: theme.minTarget,
+        paddingHorizontal: space.lg,
       }}
     >
-      <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Icon color={selected ? theme.color.primary : theme.color.muted} ios={icon.ios} md={icon.md} size={20} />
-        {soon ? (
-          <Text tone="warning" variant="label">
-            {soon}
-          </Text>
-        ) : null}
-      </View>
-      <Text variant="bodyStrong">{label}</Text>
-      <Text tone="muted" variant="label">
-        {hint}
+      <Icon color={ink} ios={icon.ios} md={icon.md} size={17} />
+      <Text style={{ color: ink }} variant="bodyStrong">
+        {label}
       </Text>
+      {soon ? (
+        <Text tone="warning" variant="label">
+          {soon}
+        </Text>
+      ) : null}
     </PressableScale>
   );
 }
@@ -150,32 +160,40 @@ function EmailForm({
   const { t } = useI18n();
   return (
     <View style={{ gap: space.lg }}>
-      <Text accessibilityRole="header" variant="bodyStrong">
-        {t('signIn.methodLabel')}
-      </Text>
-      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: space.md }}>
-        {SIGN_IN_METHODS.map((option) =>
-          option.id === 'email' ? (
-            <MethodOption
-              hint={t('signIn.method.emailHint')}
-              icon={{ ios: 'envelope', md: 'mail' }}
-              key={option.id}
-              label={t('signIn.method.email')}
-              onPress={() => onMethod('email')}
-              selected={method === 'email'}
-            />
-          ) : (
-            <MethodOption
-              hint={t('signIn.method.smsHint')}
-              icon={{ ios: 'message', md: 'sms' }}
-              key={option.id}
-              label={t('signIn.method.sms')}
-              onPress={() => onMethod('sms')}
-              selected={method === 'sms'}
-              soon={option.available ? undefined : t('common.comingSoon')}
-            />
-          )
-        )}
+      <View style={{ gap: space.sm }}>
+        <Text accessibilityRole="header" variant="bodyStrong">
+          {t('signIn.methodLabel')}
+        </Text>
+        <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {SIGN_IN_METHODS.map((option) =>
+            option.id === 'email' ? (
+              <MethodPill
+                hint={t('signIn.method.emailHint')}
+                icon={{ ios: 'envelope', md: 'mail' }}
+                key={option.id}
+                label={t('signIn.method.email')}
+                onPress={() => {
+                  if (method !== 'email') haptic('selection');
+                  onMethod('email');
+                }}
+                selected={method === 'email'}
+              />
+            ) : (
+              <MethodPill
+                hint={t('signIn.method.smsHint')}
+                icon={{ ios: 'message', md: 'sms' }}
+                key={option.id}
+                label={t('signIn.method.sms')}
+                onPress={() => onMethod('sms')}
+                selected={method === 'sms'}
+                soon={option.available ? undefined : t('common.comingSoon')}
+              />
+            )
+          )}
+        </View>
+        <Text tone="muted" variant="label">
+          {t('signIn.method.emailHint')}
+        </Text>
       </View>
       <TextField
         autoCapitalize="none"
@@ -263,21 +281,28 @@ export default function SignIn() {
     if (!isEmail(email)) return setProblem('signIn.emailInvalid');
     setBusy(true);
     setProblem(null);
-    const result = await requestEmailLink(email, pendingInvite);
-    setBusy(false);
+    const result = await runThen(
+      () => requestEmailLink(email, pendingInvite),
+      () => setBusy(false)
+    );
     if (result.ok) {
+      haptic('success');
       setSentTo(email.trim().toLowerCase());
       setSentAt(Date.now());
     } else {
+      haptic('error');
       setProblem(result.reason === 'rate-limited' ? 'signIn.tooMany' : 'signIn.network');
     }
   };
 
   const waitMs = sentAt + RESEND_AFTER_MS - now;
   let body;
+  let bodyKey: string;
   if (verifying === 'running' || (verifying === 'done' && !signedIn)) {
+    bodyKey = 'verifying';
     body = <VerifyingLink />;
   } else if (verifying === 'failed') {
+    bodyKey = 'failed';
     body = (
       <LinkFailed
         onNewLink={() => {
@@ -287,6 +312,7 @@ export default function SignIn() {
       />
     );
   } else if (sentTo) {
+    bodyKey = 'sent';
     body = (
       <LinkSent
         busy={busy}
@@ -300,6 +326,7 @@ export default function SignIn() {
       />
     );
   } else {
+    bodyKey = 'form';
     body = (
       <EmailForm
         busy={busy}
@@ -317,39 +344,32 @@ export default function SignIn() {
   }
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ backgroundColor: theme.color.dark, flex: 1 }}>
+    <KeyboardAvoidingView behavior="padding" style={{ backgroundColor: theme.color.ground, flex: 1 }}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + space.xl }}
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1 }}
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
+        overScrollMode="never"
       >
-        <View style={{ gap: space.md, paddingBottom: space.xxl, paddingHorizontal: theme.frame + space.xs }}>
-          <Image
-            accessible={false}
-            contentFit="contain"
-            source={planes}
-            style={{ alignSelf: 'flex-start', height: 96, marginLeft: -26, width: 150 }}
-          />
-          <Text tone="onDarkMuted" variant="mono">
-            {t('signIn.kicker')}
-          </Text>
-          <Text accessibilityRole="header" tone="onDark" variant="display">
-            {t('signIn.title')}
-          </Text>
-          <Text tone="onDarkMuted">{pendingInvite ? t('signIn.inviteWaiting') : t('signIn.intro')}</Text>
-        </View>
+        <SignInHero intro={pendingInvite ? t('signIn.inviteWaiting') : t('signIn.intro')} />
         <Surface
           style={{
             borderBottomLeftRadius: 0,
             borderBottomRightRadius: 0,
             borderRadius: theme.radius.hero,
             flexGrow: 1,
+            marginTop: -SHEET_OVERLAP,
             padding: theme.frame,
             paddingBottom: insets.bottom + space.xxl,
             paddingTop: space.xl,
           }}
         >
-          {body}
+          <Animated.View entering={sheetEntering}>
+            <Animated.View entering={stateEntering} exiting={stateExiting} key={bodyKey}>
+              {body}
+            </Animated.View>
+          </Animated.View>
         </Surface>
       </ScrollView>
     </KeyboardAvoidingView>

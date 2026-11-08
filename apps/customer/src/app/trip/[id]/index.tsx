@@ -5,7 +5,13 @@ import { useMutation } from 'convex/react';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  type SharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,9 +57,19 @@ function BackButton() {
 }
 
 /** The destination edge to edge, with the trip's name, dates, timing and the traveller's own line. */
-function TripHeader({ detail, now }: { detail: TripDetail; now: number }) {
+function TripHeader({ detail, now, scrollY }: { detail: TripDetail; now: number; scrollY: SharedValue<number> }) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  const heroHeight = insets.top + 470;
+  // The photo stays pinned and stretches when pulled down (iOS), and drifts at half speed as the
+  // page scrolls up, so the sheet slides over it. Transform only, on the UI thread.
+  const photoStyle = useAnimatedStyle(() => {
+    if (reduced) return { transform: [] };
+    const y = scrollY.get();
+    if (y < 0) return { transform: [{ translateY: y / 2 }, { scale: 1 - y / heroHeight }] };
+    return { transform: [{ translateY: Math.min(y, heroHeight) * 0.45 }] };
+  });
   const i18n = useI18n();
   const { trip } = detail;
   const timing = tripTiming(trip, now);
@@ -63,8 +79,10 @@ function TripHeader({ detail, now }: { detail: TripDetail; now: number }) {
     detail.minors.length ? i18n.tn('journeys.withChildren', detail.minors.length) : null,
   ].filter((item): item is string => Boolean(item));
   return (
-    <View style={{ backgroundColor: theme.color.dark, minHeight: insets.top + 470, overflow: 'hidden' }}>
-      <DestinationCover photo={trip.cover} priority="high" scrim="full" />
+    <View style={{ backgroundColor: theme.color.dark, minHeight: heroHeight }}>
+      <Animated.View style={[StyleSheet.absoluteFill, photoStyle]}>
+        <DestinationCover photo={trip.cover} priority="high" scrim="full" />
+      </Animated.View>
       <View style={{ flex: 1, justifyContent: 'space-between', paddingBottom: space.xxl + space.xl, paddingHorizontal: theme.frame, paddingTop: insets.top + space.sm }}>
         <BackButton />
         <View style={{ gap: space.sm }}>
@@ -289,7 +307,9 @@ export default function TripScreen() {
   const [onSheet, setOnSheet] = useState(false);
   const sheetTop = useSharedValue(0);
   const sheetUnderBar = useSharedValue(false);
+  const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.set(event.contentOffset.y);
     const top = sheetTop.get();
     const next = top > 0 && event.contentOffset.y >= top;
     if (next !== sheetUnderBar.get()) {
@@ -325,7 +345,7 @@ export default function TripScreen() {
       contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}
       contentInsetAdjustmentBehavior="never"
       onScroll={onScroll}
-      scrollEventThrottle={32}
+      scrollEventThrottle={16}
       style={{ backgroundColor: theme.color.ground }}
     >
       <Stack.Screen options={{ statusBarStyle: onSheet ? 'dark' : 'light' }} />
@@ -334,7 +354,7 @@ export default function TripScreen() {
           sheetTop.set(event.nativeEvent.layout.height - theme.radius.hero - space.sm - insets.top);
         }}
       >
-        <TripHeader detail={detail} now={now} />
+        <TripHeader detail={detail} now={now} scrollY={scrollY} />
       </View>
       <View
         style={{
