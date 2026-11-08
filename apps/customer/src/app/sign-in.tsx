@@ -14,6 +14,7 @@ import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
 import { haptic } from '@/lib/haptic';
+import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 import { useNow } from '@/lib/use-now';
@@ -280,8 +281,10 @@ export default function SignIn() {
     if (!isEmail(email)) return setProblem('signIn.emailInvalid');
     setBusy(true);
     setProblem(null);
-    const result = await requestEmailLink(email, pendingInvite);
-    setBusy(false);
+    const result = await runThen(
+      () => requestEmailLink(email, pendingInvite),
+      () => setBusy(false)
+    );
     if (result.ok) {
       haptic('success');
       setSentTo(email.trim().toLowerCase());
