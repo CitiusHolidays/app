@@ -74,7 +74,10 @@
             ]
           }
         ]
-      }
+      },
+      "associatedDomains": [
+        "applinks:www.citiusholidays.com"
+      ]
     },
     "android": {
       "package": "com.citiusholidays.app",
@@ -84,7 +87,29 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.citiusholidays.com",
+              "pathPrefix": "/app/sign-in"
+            },
+            {
+              "scheme": "https",
+              "host": "www.citiusholidays.com",
+              "pathPrefix": "/app/invite"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "single",
