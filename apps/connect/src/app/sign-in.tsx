@@ -2,8 +2,9 @@ import { Banner, PressableScale, space, Text, useAppTheme } from '@citius/ui';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { type ComponentRef, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, {
   Easing,
   FadeIn,
@@ -43,12 +44,18 @@ const rise = (delay: number) => FadeInUp.duration(520).delay(delay).easing(EASE_
 const MARK_IN = rise(180);
 const SHEET_IN = rise(320);
 const PROBLEM_IN = FadeIn.duration(200);
+/**
+ * Room kept under the focused field. Typing the email, the password field and the Sign in button
+ * stay in view below it; typing the password, the button does.
+ */
+const SIGN_IN_CLEARANCE = 200;
 
 /** Staff sign in with their existing email and password. There is no sign-up in this app. */
 export default function SignIn() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [reveal, setReveal] = useState(false);
@@ -118,125 +125,129 @@ export default function SignIn() {
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView
-          bounces={false}
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
-          contentInsetAdjustmentBehavior="never"
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={{ minHeight: photoHeight - 64, justifyContent: 'flex-end', paddingBottom: space.xl, paddingHorizontal: theme.frame + space.xs, paddingTop: insets.top + space.xl }}>
-            <Animated.View accessibilityRole="header" accessible entering={MARK_IN} style={{ gap: space.md }}>
-              <Image accessibilityIgnoresInvertColors source={mark} style={{ borderRadius: 14, height: 56, width: 56 }} />
-              <View style={{ gap: space.xs }}>
-                <Text style={{ color: '#ffffff', fontSize: 40, lineHeight: 44 }} variant="display">
-                  Citius Connect
-                </Text>
-                <Text style={{ color: theme.color.onDarkMuted }} variant="secondary">
-                  For Citius Holidays tour managers, on the road with a group.
-                </Text>
-              </View>
-            </Animated.View>
-          </View>
-          <Animated.View
-            entering={SHEET_IN}
-            style={{
-              backgroundColor: theme.color.ground,
-              borderTopLeftRadius: 32,
-              borderTopRightRadius: 32,
-              gap: space.lg,
-              paddingBottom: insets.bottom + space.xl,
-              paddingHorizontal: theme.frame + space.xs,
-              paddingTop: space.xl,
-            }}
-          >
+      {/* Follows the keyboard on both platforms: the focused field lifts clear with the Sign in
+          button still in view under it (Android had no keyboard handling here before). */}
+      <KeyboardAwareScrollView
+        bottomOffset={SIGN_IN_CLEARANCE}
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+        contentInsetAdjustmentBehavior="never"
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={{ minHeight: photoHeight - 64, justifyContent: 'flex-end', paddingBottom: space.xl, paddingHorizontal: theme.frame + space.xs, paddingTop: insets.top + space.xl }}>
+          <Animated.View accessibilityRole="header" accessible entering={MARK_IN} style={{ gap: space.md }}>
+            <Image accessibilityIgnoresInvertColors source={mark} style={{ borderRadius: 14, height: 56, width: 56 }} />
             <View style={{ gap: space.xs }}>
-              <Text variant="display">Welcome back</Text>
-              <Text tone="muted" variant="secondary">
-                Sign in with your Citius staff account.
+              <Text style={{ color: '#ffffff', fontSize: 40, lineHeight: 44 }} variant="display">
+                Citius Connect
+              </Text>
+              <Text style={{ color: theme.color.onDarkMuted }} variant="secondary">
+                For Citius Holidays tour managers, on the road with a group.
               </Text>
             </View>
-            <Animated.View style={[{ gap: space.md }, shakeStyle]}>
-              <TextField
-                autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect={false}
-                icon={{ ios: 'envelope', md: 'mail' }}
-                inputMode="email"
-                keyboardType="email-address"
-                label="Work email"
-                onChangeText={setEmail}
-                placeholder="name@citiusholidays.com"
-                returnKeyType="next"
-                textContentType="username"
-                value={email}
-              />
-              <TextField
-                autoCapitalize="none"
-                autoComplete="current-password"
-                icon={{ ios: 'lock', md: 'lock' }}
-                label="Password"
-                onChangeText={setPassword}
-                onSubmitEditing={() => void submit()}
-                returnKeyType="go"
-                secureTextEntry={!reveal}
-                textContentType="password"
-                trailing={
-                  <PressableScale
-                    accessibilityLabel={reveal ? 'Hide password' : 'Show password'}
-                    accessibilityRole="button"
-                    hitSlop={8}
-                    onPress={() => setReveal((value) => !value)}
-                    style={{ alignItems: 'center', height: 44, justifyContent: 'center', width: 44 }}
-                  >
-                    <Icon color={theme.color.muted} ios={reveal ? 'eye.slash' : 'eye'} md={reveal ? 'visibility_off' : 'visibility'} size={19} />
-                  </PressableScale>
-                }
-                value={password}
-              />
-            </Animated.View>
-            {problem ? (
-              <Animated.View entering={PROBLEM_IN}>
-                <Banner tone="danger">
-                  <Text accessibilityLiveRegion="polite" variant="secondary">
-                    {problem}
-                  </Text>
-                </Banner>
-              </Animated.View>
-            ) : null}
-            <PressableScale
-              accessibilityLabel="Sign in"
-              accessibilityRole="button"
-              accessibilityState={{ busy, disabled: busy }}
-              disabled={busy}
-              onPress={() => void submit()}
-              style={{
-                alignItems: 'center',
-                backgroundColor: theme.color.primary,
-                borderRadius: theme.radius.chip,
-                flexDirection: 'row',
-                gap: space.sm,
-                justifyContent: 'center',
-                minHeight: 54,
-              }}
-            >
-              {busy ? (
-                <ActivityIndicator color={theme.color.onPrimary} />
-              ) : (
-                <>
-                  <Text tone="onPrimary" variant="bodyStrong">
-                    Sign in
-                  </Text>
-                  <Icon color={theme.color.onPrimary} ios="arrow.right" md="arrow_forward" size={17} />
-                </>
-              )}
-            </PressableScale>
-            <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
-              Citius Holidays sets up staff accounts. If you cannot sign in, contact HR or your manager.
-            </Text>
           </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+        <Animated.View
+          entering={SHEET_IN}
+          style={{
+            backgroundColor: theme.color.ground,
+            borderTopLeftRadius: 32,
+            borderTopRightRadius: 32,
+            gap: space.lg,
+            paddingBottom: insets.bottom + space.xl,
+            paddingHorizontal: theme.frame + space.xs,
+            paddingTop: space.xl,
+          }}
+        >
+          <View style={{ gap: space.xs }}>
+            <Text variant="display">Welcome back</Text>
+            <Text tone="muted" variant="secondary">
+              Sign in with your Citius staff account.
+            </Text>
+          </View>
+          <Animated.View style={[{ gap: space.md }, shakeStyle]}>
+            <TextField
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              icon={{ ios: 'envelope', md: 'mail' }}
+              inputMode="email"
+              keyboardType="email-address"
+              label="Work email"
+              onChangeText={setEmail}
+              placeholder="name@citiusholidays.com"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              returnKeyType="next"
+              submitBehavior="submit"
+              textContentType="username"
+              value={email}
+            />
+            <TextField
+              autoCapitalize="none"
+              autoComplete="current-password"
+              icon={{ ios: 'lock', md: 'lock' }}
+              label="Password"
+              onChangeText={setPassword}
+              onSubmitEditing={() => void submit()}
+              ref={passwordRef}
+              returnKeyType="go"
+              secureTextEntry={!reveal}
+              textContentType="password"
+              trailing={
+                <PressableScale
+                  accessibilityLabel={reveal ? 'Hide password' : 'Show password'}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => setReveal((value) => !value)}
+                  style={{ alignItems: 'center', height: 44, justifyContent: 'center', width: 44 }}
+                >
+                  <Icon color={theme.color.muted} ios={reveal ? 'eye.slash' : 'eye'} md={reveal ? 'visibility_off' : 'visibility'} size={19} />
+                </PressableScale>
+              }
+              value={password}
+            />
+          </Animated.View>
+          {problem ? (
+            <Animated.View entering={PROBLEM_IN}>
+              <Banner tone="danger">
+                <Text accessibilityLiveRegion="polite" variant="secondary">
+                  {problem}
+                </Text>
+              </Banner>
+            </Animated.View>
+          ) : null}
+          <PressableScale
+            accessibilityLabel="Sign in"
+            accessibilityRole="button"
+            accessibilityState={{ busy, disabled: busy }}
+            disabled={busy}
+            onPress={() => void submit()}
+            style={{
+              alignItems: 'center',
+              backgroundColor: theme.color.primary,
+              borderRadius: theme.radius.chip,
+              flexDirection: 'row',
+              gap: space.sm,
+              justifyContent: 'center',
+              minHeight: 54,
+            }}
+          >
+            {busy ? (
+              <ActivityIndicator color={theme.color.onPrimary} />
+            ) : (
+              <>
+                <Text tone="onPrimary" variant="bodyStrong">
+                  Sign in
+                </Text>
+                <Icon color={theme.color.onPrimary} ios="arrow.right" md="arrow_forward" size={17} />
+              </>
+            )}
+          </PressableScale>
+          <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
+            Citius Holidays sets up staff accounts. If you cannot sign in, contact HR or your manager.
+          </Text>
+        </Animated.View>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

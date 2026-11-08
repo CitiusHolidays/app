@@ -34,6 +34,8 @@ jest.mock('react-native-reanimated', () => {
     withTiming: () => 0,
   };
 });
+// The keyboard controller's own Jest mock: plain ScrollView stand-ins, no native module.
+jest.mock('react-native-keyboard-controller', () => jest.requireActual('react-native-keyboard-controller/jest'));
 jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light' },
   impactAsync: jest.fn(async () => undefined),

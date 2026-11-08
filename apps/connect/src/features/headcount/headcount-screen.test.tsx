@@ -62,6 +62,21 @@ describe('headcount screen', () => {
     expect(screen.getByText(/Temple car park/)).toBeOnTheScreen();
   });
 
+  it("starts the new stop from the keyboard's Go key, without reaching for the button", async () => {
+    await renderWithTheme(
+      <AppStoreProvider fallback={null}>
+        <Headcount />
+      </AppStoreProvider>
+    );
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Zed Example' }));
+    const field = screen.getByLabelText('Next stop');
+    await fireEvent.changeText(field, 'Lunch stop');
+    await fireEvent(field, 'submitEditing');
+    expect(await screen.findByLabelText('0 of 3 here')).toBeOnTheScreen();
+    expect(screen.getByText(/Lunch stop/)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Next stop').props.value).toBe('');
+  });
+
   it('sends each change of the stop to the office, as a count of the whole group', async () => {
     await renderWithTheme(
       <AppStoreProvider fallback={null}>
