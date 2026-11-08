@@ -14,17 +14,29 @@ jest.mock('react-native-reanimated', () => {
     FadeIn: builder,
     FadeInDown: builder,
     FadeInUp: builder,
+    FadeOut: builder,
     FadeOutDown: builder,
+    LinearTransition: builder,
+    ZoomIn: builder,
     Keyframe: class {
       duration() {
         return this;
       }
     },
     LayoutAnimationConfig: Fragment,
+    useAnimatedStyle: (factory: () => object) => factory(),
     useReducedMotion: () => false,
+    useSharedValue: (initial: number) => {
+      let value = initial;
+      return { get: () => value, set: (next: number) => (value = typeof next === 'number' ? next : value) };
+    },
+    withSequence: () => 0,
+    withTiming: () => 0,
   };
 });
 jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(async () => undefined),
   NotificationFeedbackType: { Error: 'error', Success: 'success' },
   notificationAsync: jest.fn(async () => undefined),
   selectionAsync: jest.fn(async () => undefined),

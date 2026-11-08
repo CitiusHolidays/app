@@ -3,8 +3,9 @@ import { Button, citius, face, space, StatusPill, Surface, Text, type StatusKind
 import { useQuery } from 'convex/react';
 import { router } from 'expo-router';
 import { View } from 'react-native';
+import Animated, { FadeIn, FadeInUp, LayoutAnimationConfig } from 'react-native-reanimated';
 
-import { Icon, IconTile, ListCard, Placeholder, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
+import { Arrive, Icon, IconTile, ListCard, Placeholder, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
 import { formatMoney } from '@/features/expenses/format';
 import type { OutboxItem } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
@@ -12,6 +13,7 @@ import { categorySplit, formatAmount, spendEntries, submittedRows, totalsByCurre
 import { useStaffSession } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { formatDateRange } from '@/lib/dates';
+import { CLOSE_UP, EASE_OUT, ROW_OUT } from '@/lib/motion';
 
 const PAGE_SIZE = 50;
 
@@ -39,6 +41,9 @@ const SEGMENTS = [
 ];
 const segment = (index: number) => SEGMENTS[index] ?? SEGMENTS[SEGMENTS.length - 1]!;
 
+
+const ROW_IN = FadeInUp.duration(240).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 8 }] });
+const PILL_IN = FadeIn.duration(150);
 function outboxStatus(item: OutboxItem): { kind: StatusKind; label: string } {
   if (item.status === 'done') return { kind: 'good', label: 'Sent' };
   if (item.status === 'needsAttention') return { kind: 'attention', label: 'Needs attention' };
@@ -150,6 +155,20 @@ function SpendCard({ entries, label, loading, partial }: { entries: SpendEntry[]
   );
 }
 
+/**
+ * A status pill that crossfades when the expense moves on (Saved on phone, Sending, Sent): 150 ms,
+ * so the change reads as progress rather than a flicker. Shows still when the screen opens.
+ */
+function SwapPill({ kind, label }: { kind: StatusKind; label: string }) {
+  return (
+    <LayoutAnimationConfig skipEntering>
+      <Animated.View entering={PILL_IN} key={label}>
+        <StatusPill kind={kind} label={label} />
+      </Animated.View>
+    </LayoutAnimationConfig>
+  );
+}
+
 function OutboxRow({ item, last, onDiscard, onRetry }: { item: OutboxItem; last: boolean; onDiscard: () => void; onRetry: () => void }) {
   const theme = useAppTheme();
   const status = outboxStatus(item);
@@ -161,7 +180,7 @@ function OutboxRow({ item, last, onDiscard, onRetry }: { item: OutboxItem; last:
     <View>
       <Row
         accessibilityLabel={[formatMoney(amount, currency), title, particulars ? category : null, date, status.label].filter(Boolean).join(', ')}
-        detail={<StatusPill kind={status.kind} label={status.label} />}
+        detail={<SwapPill kind={status.kind} label={status.label} />}
         last={last || attention}
         leading={<IconTile icon={iconFor(category)} />}
         subtitle={[particulars ? category : null, date].filter(Boolean).join(' · ')}
@@ -216,13 +235,16 @@ function OnThisPhone({ items, onDiscard, onRetry }: { items: OutboxItem[]; onDis
       <SectionTitle>On this phone</SectionTitle>
       <ListCard>
         {items.map((item, index) => (
-          <OutboxRow
-            item={item}
-            key={item.id}
-            last={index === items.length - 1}
-            onDiscard={() => onDiscard(item.id)}
-            onRetry={() => onRetry(item.id)}
-          />
+          // A new expense rises 8pt into the list when it lands after saving; one that is sent
+          // fades out and the rows below close the gap (the list was open as it changed).
+          <Animated.View entering={ROW_IN} exiting={ROW_OUT} key={item.id} layout={CLOSE_UP}>
+            <OutboxRow
+              item={item}
+              last={index === items.length - 1}
+              onDiscard={() => onDiscard(item.id)}
+              onRetry={() => onRetry(item.id)}
+            />
+          </Animated.View>
         ))}
       </ListCard>
     </View>
@@ -254,7 +276,7 @@ function SubmittedList({
     );
   }
   return (
-    <>
+    <Arrive gap={space.lg + 4}>
       {server.isDone && submitted.length === 0 ? (
         <Surface>
           <QuietState text={hasLocal ? 'Nothing else submitted for this trip yet.' : 'No expenses on this trip yet.'} />
@@ -272,7 +294,7 @@ function SubmittedList({
           More expenses for this trip are on the server than are shown here. Check the full list on the Citius portal.
         </Text>
       )}
-    </>
+    </Arrive>
   );
 }
 

@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { Keyframe } from 'react-native-reanimated';
 
 import { Chip, ChipRow, Icon, QuietState, Screen, TextField } from '@/components/kit';
 import { parseAmount } from '@/features/expenses/format';
@@ -19,10 +20,16 @@ import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 import { haptic } from '@/lib/haptics';
 import { useToast } from '@/lib/toast';
+import { EASE_OUT } from '@/lib/motion';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Receipt photo, amount and currency, saved to the outbox at once; it sends when online. */
+
+const PHOTO_IN = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.96 }] },
+  100: { easing: EASE_OUT, opacity: 1, transform: [{ scale: 1 }] },
+}).duration(240);
 export default function NewExpense() {
   const theme = useAppTheme();
   const staff = useStaff();
@@ -151,14 +158,18 @@ export default function NewExpense() {
           Receipt
         </Text>
         {receipt ? (
-          <View style={[tile, { borderStyle: 'solid', borderColor: theme.color.rule, borderWidth: StyleSheet.hairlineWidth, padding: space.sm }]}>
+          // The photo settles in (scale 0.96 -> 1 and fade, 240 ms) where the camera button was.
+          <Animated.View
+            entering={PHOTO_IN}
+            style={[tile, { borderStyle: 'solid', borderColor: theme.color.rule, borderWidth: StyleSheet.hairlineWidth, padding: space.sm }]}
+          >
             <Image
               accessibilityLabel="Receipt photo"
               contentFit="contain"
               source={{ uri: receipt.uri }}
               style={{ aspectRatio: 3 / 4, borderRadius: theme.radius.control, maxHeight: 320, width: '100%' }}
             />
-          </View>
+          </Animated.View>
         ) : (
           <PressableScale
             accessibilityHint="Opens the camera"

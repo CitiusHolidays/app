@@ -13,14 +13,17 @@ import {
   type TextInputProps,
   View,
 } from 'react-native';
-import Animated, { cubicBezier, Easing, FadeInUp, LayoutAnimationConfig, useReducedMotion } from 'react-native-reanimated';
+import Animated, { cubicBezier, Easing, LayoutAnimationConfig, useReducedMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ARRIVE, ROLL_DOWN, ROLL_UP, rollsUp } from '@/lib/motion';
+
 /** A small overshoot for a check landing: the one place Connect lets something bounce. */
 const POP = cubicBezier(0.34, 1.56, 0.64, 1);
-/** The headcount number rising 6pt into its new value (ease-out, 160 ms). */
-const STEP_IN = FadeInUp.duration(160).easing(Easing.bezier(0.23, 1, 0.32, 1)).withInitialValues({ transform: [{ translateY: 6 }] });
+/** Strong ease-in-out for things that move across the screen. */
+const EASE_IN_OUT = cubicBezier(0.77, 0, 0.175, 1);
+const SEAL_IN = ZoomIn.duration(320).easing(Easing.bezier(0.34, 1.56, 0.64, 1)).withInitialValues({ transform: [{ scale: 0.6 }] });
 
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
@@ -72,15 +75,30 @@ export function Screen({
       contentContainerStyle={{ paddingHorizontal: theme.frame }}
       contentInsetAdjustmentBehavior={tabBar ? 'automatic' : 'never'}
       keyboardShouldPersistTaps="handled"
-      refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={Boolean(refreshing)} /> : undefined}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            onRefresh={() => {
+              // A light tap as the pull commits, on the same frame the spinner starts (apple-design: causality).
+              if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              onRefresh();
+            }}
+            refreshing={Boolean(refreshing)}
+          />
+        ) : undefined
+      }
       style={{ backgroundColor: theme.color.ground }}
       {...rest}
     >
       <Spacer height={top} />
-      <View style={{ gap: space.lg + 4 }}>
-        {header ?? (title ? <PageTitle kicker={kicker} title={title} /> : null)}
-        {children}
-      </View>
+      {/* Whatever is on screen as it opens shows at once; blocks that arrive later (an <Arrive>
+          replacing a placeholder) fade in. */}
+      <LayoutAnimationConfig skipEntering>
+        <View style={{ gap: space.lg + 4 }}>
+          {header ?? (title ? <PageTitle kicker={kicker} title={title} /> : null)}
+          {children}
+        </View>
+      </LayoutAnimationConfig>
       <Spacer height={insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl)} />
     </ScrollView>
   );
@@ -298,21 +316,28 @@ export function Chip({ label, onPress, selected }: { label: string; onPress: () 
         void Haptics.selectionAsync().catch(() => undefined);
         onPress();
       }}
-      style={{
-        alignItems: 'center',
-        backgroundColor: selected ? theme.color.primary : theme.color.surface,
-        borderColor: selected ? theme.color.primary : theme.color.border,
-        borderRadius: theme.radius.chip,
-        borderWidth: 1,
-        justifyContent: 'center',
-        minHeight: theme.minTarget,
-        minWidth: theme.minTarget,
-        paddingHorizontal: space.lg,
-      }}
     >
-      <Text variant="label" tone={selected ? 'onPrimary' : 'ink'}>
-        {label}
-      </Text>
+      {/* The fill lives on an inner view: PressableScale owns the outer transition (the press scale),
+          so the colour change gets its own 140 ms fade here instead of snapping. */}
+      <Animated.View
+        style={{
+          alignItems: 'center',
+          backgroundColor: selected ? theme.color.primary : theme.color.surface,
+          borderColor: selected ? theme.color.primary : theme.color.border,
+          borderRadius: theme.radius.chip,
+          borderWidth: 1,
+          justifyContent: 'center',
+          minHeight: theme.minTarget,
+          minWidth: theme.minTarget,
+          paddingHorizontal: space.lg,
+          transitionDuration: 140,
+          transitionProperty: ['backgroundColor', 'borderColor'],
+        }}
+      >
+        <Text variant="label" tone={selected ? 'onPrimary' : 'ink'}>
+          {label}
+        </Text>
+      </Animated.View>
     </PressableScale>
   );
 }
@@ -338,7 +363,11 @@ export function ChipRow({ children, label, showLabel }: { children: ReactNode; l
   );
 }
 
-/** A segmented control: a stone track with a white thumb under the chosen option. */
+/**
+ * A segmented control: a stone track with a white thumb under the chosen option. The thumb slides
+ * to a new choice (220 ms ease-in-out, like iOS's own control) as one absolute view with no
+ * children, so nothing else re-lays-out; the content below swaps at once. Reduced motion: it jumps.
+ */
 export function Segmented<T extends string>({
   label,
   onChange,
@@ -351,12 +380,37 @@ export function Segmented<T extends string>({
   value: T;
 }) {
   const theme = useAppTheme();
+  const reduced = useReducedMotion();
+  const [trackWidth, setTrackWidth] = useState(0);
+  const index = Math.max(0, options.findIndex((option) => option.value === value));
+  const segment = trackWidth > 0 ? (trackWidth - 8) / options.length : 0;
   return (
     <View
       accessibilityLabel={label}
       accessibilityRole="tablist"
+      onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
       style={{ backgroundColor: theme.color.track, borderRadius: theme.radius.chip, flexDirection: 'row', padding: 4 }}
     >
+      {segment > 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            backgroundColor: theme.color.surface,
+            borderRadius: theme.radius.chip,
+            // The selected tab lifts off the track, on iOS and Android alike.
+            boxShadow: SELECTED_TAB_SHADOW,
+            bottom: 4,
+            left: 4,
+            position: 'absolute',
+            top: 4,
+            transform: [{ translateX: index * segment }],
+            transitionDuration: reduced ? 0 : 220,
+            transitionProperty: 'transform',
+            transitionTimingFunction: EASE_IN_OUT,
+            width: segment,
+          }}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -373,10 +427,7 @@ export function Segmented<T extends string>({
             }}
             style={{
               alignItems: 'center',
-              backgroundColor: selected ? theme.color.surface : 'transparent',
               borderRadius: theme.radius.chip,
-              // The selected tab lifts off the track, on iOS and Android alike.
-              boxShadow: selected ? SELECTED_TAB_SHADOW : undefined,
               flex: 1,
               justifyContent: 'center',
               minHeight: 40,
@@ -808,17 +859,66 @@ const styles = StyleSheet.create({
 });
 
 /**
- * The headcount's big number. When it changes, the new value rises 6pt into place over 160 ms;
- * opening the screen shows it still (skipEntering), so the motion only ever answers a tap.
+ * A big count that rolls to its new value, like iOS's numeric text: up when it grows, down when it
+ * shrinks (160 ms). Opening the screen shows it still (skipEntering), so motion only answers a tap.
  */
 export function StepNumber({ value }: { value: string }) {
+  // The direction of a change is decided against the value shown before it (adjusted in render).
+  const [shown, setShown] = useState(value);
+  const [rising, setRising] = useState(true);
+  if (shown !== value) {
+    setRising(rollsUp(shown, value));
+    setShown(value);
+  }
   return (
     <LayoutAnimationConfig skipEntering>
-      <Animated.View entering={STEP_IN} key={value}>
+      <Animated.View entering={rising ? ROLL_UP : ROLL_DOWN} key={value}>
         <Text tabular variant="answer">
           {value}
         </Text>
       </Animated.View>
     </LayoutAnimationConfig>
+  );
+}
+
+/**
+ * The everyone-here seal beside "All": a green check that pops in when the last traveller is marked
+ * (320 ms with a small overshoot, the delight moment of a stop). Opening a screen where everyone is
+ * already marked shows it still, so it only ever celebrates the tap that completed the count.
+ */
+export function EveryoneSeal({ shown }: { shown: boolean }) {
+  const theme = useAppTheme();
+  return (
+    <LayoutAnimationConfig skipEntering>
+      {shown ? (
+        <Animated.View
+          entering={SEAL_IN}
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            alignItems: 'center',
+            alignSelf: 'center',
+            backgroundColor: theme.color.successSoft,
+            borderRadius: 16,
+            height: 32,
+            justifyContent: 'center',
+            width: 32,
+          }}
+        >
+          <Icon color={theme.color.success} ios="checkmark" md="check" size={16} />
+        </Animated.View>
+      ) : null}
+    </LayoutAnimationConfig>
+  );
+}
+
+/**
+ * Wraps content that replaces a placeholder inside a `Screen`: it fades in (220 ms ease-out) when it
+ * arrives after loading, and shows at once when it was already there as the screen opened.
+ */
+export function Arrive({ children, gap }: { children: ReactNode; gap?: number }) {
+  return (
+    <Animated.View entering={ARRIVE} style={gap === undefined ? undefined : { gap }}>
+      {children}
+    </Animated.View>
   );
 }

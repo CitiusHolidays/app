@@ -8,6 +8,7 @@ import { FreshnessStamp } from '@/components/freshness';
 import { TripBand } from '@/components/trip-band';
 import {
   ActionPill,
+  Arrive,
   Avatar,
   CallButton,
   Icon,
@@ -317,9 +318,14 @@ function TripPackSection({
       </Banner>
     );
   }
-  if (section === 'roster') return <Roster now={now} online={online} pack={pack} passports={passports} />;
-  if (section === 'schedule') return <Schedule now={now} pack={pack} />;
-  return <Contacts pack={pack} />;
+  // Fades in only when the pack arrives after the placeholder; switching sections swaps at once.
+  return (
+    <Arrive>
+      {section === 'roster' ? <Roster now={now} online={online} pack={pack} passports={passports} /> : null}
+      {section === 'schedule' ? <Schedule now={now} pack={pack} /> : null}
+      {section === 'contacts' ? <Contacts pack={pack} /> : null}
+    </Arrive>
+  );
 }
 
 /** "Who is on this trip and how do I reach them?" The offline trip pack, read-only. */

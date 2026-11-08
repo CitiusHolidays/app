@@ -4,7 +4,17 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, FadeIn, FadeInUp, Keyframe } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInUp,
+  Keyframe,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, TextField } from '@/components/kit';
@@ -45,12 +55,23 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   useAnnounce(problem);
+  const reduced = useReducedMotion();
+  // A refused sign-in shakes the fields (8, 6, 4 px over 320 ms) on the same frame as the error
+  // buzz, the way a password field says no. Reduced motion: no shake; the message still fades in.
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.get() }] }));
+  const refuse = () => {
+    haptic('error');
+    if (reduced) return;
+    const leg = (to: number) => withTiming(to, { duration: 40, easing: Easing.linear });
+    shakeX.set(withSequence(leg(-8), leg(8), leg(-6), leg(6), leg(-4), leg(4), withTiming(0, { duration: 80, easing: EASE_OUT })));
+  };
 
   const submit = async () => {
     if (!clients || busy) return;
     if (!email.trim() || !password) {
       setProblem('Enter your work email and password.');
-      haptic('error');
+      refuse();
       return;
     }
     setBusy(true);
@@ -59,7 +80,8 @@ export default function SignIn() {
       const { error } = await clients.auth.signIn.email({ email: email.trim(), password });
       if (error) {
         logEvent('auth.sign-in-refused');
-        haptic('error');
+        if (error.status === 429) haptic('error');
+        else refuse();
         setProblem(
           error.status === 429
             ? 'Too many attempts. Wait a minute, then try again.'
@@ -70,6 +92,7 @@ export default function SignIn() {
       }
     } catch (error) {
       logEvent('auth.sign-in-failed', error);
+      // Not the person's mistake (no connection), so no shake: the buzz and the message say it.
       haptic('error');
       setProblem('Could not reach Citius. Check your connection and try again.');
     }
@@ -133,7 +156,7 @@ export default function SignIn() {
                 Sign in with your Citius staff account.
               </Text>
             </View>
-            <View style={{ gap: space.md }}>
+            <Animated.View style={[{ gap: space.md }, shakeStyle]}>
               <TextField
                 autoCapitalize="none"
                 autoComplete="email"
@@ -171,7 +194,7 @@ export default function SignIn() {
                 }
                 value={password}
               />
-            </View>
+            </Animated.View>
             {problem ? (
               <Animated.View entering={PROBLEM_IN}>
                 <Banner tone="danger">
