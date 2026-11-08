@@ -21,7 +21,7 @@ export default function InviteEntry() {
     router.replace({ params: { token }, pathname: '/invite' });
   };
   return (
-    <Screen tabBar={false}>
+    <Screen contentInsetAdjustmentBehavior="automatic" form tabBar={false}>
       <View style={{ gap: space.lg, paddingTop: space.lg }}>
         <Text tone="muted">{t('invite.enterBody')}</Text>
         <TextField

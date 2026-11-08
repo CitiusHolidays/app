@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Pop, Rise } from '@/components/motion-views';
 import { initials } from '@/lib/initials';
+import { useRevealEndOnKeyboard } from '@/lib/use-reveal-end-on-keyboard';
 
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
@@ -27,6 +28,7 @@ const TAB_BAR_CLEARANCE = 96;
  */
 export function Screen({
   children,
+  form = false,
   header,
   kicker,
   onRefresh,
@@ -36,6 +38,8 @@ export function Screen({
   ...rest
 }: ScrollViewProps & {
   children: ReactNode;
+  /** A screen with a text field: it stays above the keyboard, with its last button in sight. */
+  form?: boolean;
   header?: ReactNode;
   kicker?: string;
   onRefresh?: () => void;
@@ -47,11 +51,14 @@ export function Screen({
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const opens = Boolean(title || header);
+  const { keyboardInset, props: reveal } = useRevealEndOnKeyboard({ active: form, pad: Platform.OS === 'android' });
   return (
     <ScrollView
+      // iOS insets the scroll view by the keyboard itself, which is right inside sheets too.
+      automaticallyAdjustKeyboardInsets={form}
       contentContainerStyle={{
         gap: space.lg + 4,
-        paddingBottom: insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl),
+        paddingBottom: insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl) + keyboardInset,
         paddingHorizontal: theme.frame,
         // iOS tab screens let the system inset the content for the status bar ('automatic');
         // Android tab screens and header-less stack screens pad for it themselves.
@@ -61,6 +68,7 @@ export function Screen({
       keyboardShouldPersistTaps="handled"
       refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={Boolean(refreshing)} /> : undefined}
       style={{ backgroundColor: theme.color.ground }}
+      {...(form ? reveal : null)}
       {...rest}
     >
       {header ?? (title ? <PageTitle kicker={kicker} title={title} /> : null)}
