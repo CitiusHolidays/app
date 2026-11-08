@@ -17,6 +17,7 @@ import { haptic } from '@/lib/haptic';
 import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
+import { useRevealEndOnKeyboard } from '@/lib/use-reveal-end-on-keyboard';
 import { useNow } from '@/lib/use-now';
 
 const RESEND_AFTER_MS = 30_000;
@@ -245,20 +246,21 @@ export default function SignIn() {
   const [verifying, setVerifying] = useState<'idle' | 'running' | 'done' | 'failed'>(token ? 'running' : 'idle');
   const now = useNow(1_000);
   const verifiedToken = useRef<string | null>(null);
+  const { props: reveal } = useRevealEndOnKeyboard();
   useAnnounce(problem ? t(problem) : null);
 
+  const signedIn = gate.kind === 'signedIn';
   useEffect(() => {
     if (!token || verifiedToken.current === token) return;
     verifiedToken.current = token;
     setVerifying('running');
-    void verifyEmailLink(token).then((result) => {
+    void verifyEmailLink(token, { signedIn }).then((result) => {
       if (!result.ok) logEvent('auth.link-refused');
       setVerifying(result.ok ? 'done' : 'failed');
     });
-  }, [token]);
+  }, [signedIn, token]);
 
   // Once the session is live, go where the traveller was heading.
-  const signedIn = gate.kind === 'signedIn';
   useEffect(() => {
     if (!signedIn || verifying === 'running' || verifying === 'failed') return;
     if (returnTo) {
@@ -351,6 +353,7 @@ export default function SignIn() {
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         overScrollMode="never"
+        {...reveal}
       >
         <SignInHero intro={pendingInvite ? t('signIn.inviteWaiting') : t('signIn.intro')} />
         <Surface

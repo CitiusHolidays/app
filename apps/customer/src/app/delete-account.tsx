@@ -190,7 +190,7 @@ export default function DeleteAccount() {
   }
 
   return (
-    <Screen contentInsetAdjustmentBehavior="automatic" tabBar={false}>
+    <Screen contentInsetAdjustmentBehavior="automatic" form tabBar={false}>
       <Surface style={{ gap: space.md }}>
         <Text variant="bodyStrong">{t('delete.intro')}</Text>
         <Point text={t('delete.point1')} />
