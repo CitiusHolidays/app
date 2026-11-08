@@ -46,6 +46,11 @@ export interface JobCardRow {
 }
 
 export interface CommandCenter {
+  /**
+   * The trip's destination photo on the website (path and BlurHash), or null when none matches.
+   * Optional so a client still reads a server from before the field existed.
+   */
+  destinationCover?: { path: string; placeholder: string } | null;
   jobCard: JobCardRow;
   proposal: {
     itinerarySummary: string;

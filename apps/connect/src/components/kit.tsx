@@ -1,7 +1,7 @@
 import { face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import type { ComponentProps, ReactNode } from 'react';
+import { type ComponentProps, type ReactNode, useState } from 'react';
 import {
   Linking,
   Platform,
@@ -13,8 +13,14 @@ import {
   type TextInputProps,
   View,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, { cubicBezier, Easing, FadeInUp, LayoutAnimationConfig, useReducedMotion } from 'react-native-reanimated';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+/** A small overshoot for a check landing: the one place Connect lets something bounce. */
+const POP = cubicBezier(0.34, 1.56, 0.64, 1);
+/** The headcount number rising 6pt into its new value (ease-out, 160 ms). */
+const STEP_IN = FadeInUp.duration(160).easing(Easing.bezier(0.23, 1, 0.32, 1)).withInitialValues({ transform: [{ translateY: 6 }] });
 
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
@@ -386,32 +392,69 @@ export function Segmented<T extends string>({
   );
 }
 
-export function TextField({ hint, label, style, ...rest }: TextInputProps & { hint?: string; label: string }) {
+/**
+ * A labelled field. `icon` sits inside the field on the left; `trailing` (a small control, such as
+ * a show-password toggle) sits on the right. The border turns Citius blue while the field has focus.
+ */
+export function TextField({
+  hint,
+  icon,
+  label,
+  onBlur,
+  onFocus,
+  style,
+  trailing,
+  ...rest
+}: TextInputProps & { hint?: string; icon?: { ios: string; md: string }; label: string; trailing?: ReactNode }) {
   const theme = useAppTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: space.xs + 2 }}>
       <Text variant="label">{label}</Text>
-      <TextInput
-        accessibilityHint={hint}
-        accessibilityLabel={label}
-        placeholderTextColor={theme.color.muted}
-        style={[
-          {
-            backgroundColor: theme.color.surface,
-            borderColor: theme.color.controlBorder,
-            borderRadius: theme.radius.control,
-            borderWidth: 1,
-            color: theme.color.ink,
-            ...face(theme, 'regular'),
-            fontSize: 17,
-            minHeight: 50,
-            paddingHorizontal: space.lg,
-            paddingVertical: space.sm,
-          },
-          style,
-        ]}
-        {...rest}
-      />
+      <Animated.View
+        style={{
+          alignItems: rest.multiline ? 'flex-start' : 'center',
+          backgroundColor: theme.color.surface,
+          borderColor: focused ? theme.color.accent : theme.color.controlBorder,
+          borderRadius: theme.radius.control,
+          borderWidth: 1,
+          flexDirection: 'row',
+          minHeight: 52,
+          paddingLeft: icon ? space.md : 0,
+          paddingRight: trailing ? space.xs : 0,
+          transitionDuration: 160,
+          transitionProperty: 'borderColor',
+        }}
+      >
+        {icon ? <Icon color={focused ? theme.color.accent : theme.color.muted} ios={icon.ios} md={icon.md} size={18} /> : null}
+        <TextInput
+          accessibilityHint={hint}
+          accessibilityLabel={label}
+          onBlur={(event) => {
+            setFocused(false);
+            onBlur?.(event);
+          }}
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          placeholderTextColor={theme.color.muted}
+          style={[
+            {
+              color: theme.color.ink,
+              flex: 1,
+              ...face(theme, 'regular'),
+              fontSize: 17,
+              minHeight: 50,
+              paddingHorizontal: icon ? space.sm + 2 : space.lg,
+              paddingVertical: space.sm,
+            },
+            style,
+          ]}
+          {...rest}
+        />
+        {trailing}
+      </Animated.View>
       {hint ? (
         <Text variant="secondary" tone="muted">
           {hint}
@@ -434,6 +477,7 @@ function initials(name: string) {
 /** A person: an initials circle, with a check badge once they are marked. */
 export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?: boolean; name: string; size?: number; tone?: 'light' | 'dark' }) {
   const theme = useAppTheme();
+  const reduced = useReducedMotion();
   const dark = tone === 'dark';
   return (
     <View importantForAccessibility="no-hide-descendants" style={{ height: size, width: size }}>
@@ -453,25 +497,29 @@ export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?:
           {initials(name)}
         </Text>
       </View>
-      {checked ? (
-        <View
-          style={{
-            alignItems: 'center',
-            backgroundColor: theme.color.surface,
-            borderColor: theme.color.border,
-            borderRadius: 10,
-            borderWidth: 1,
-            height: 20,
-            justifyContent: 'center',
-            position: 'absolute',
-            right: -4,
-            top: -4,
-            width: 20,
-          }}
-        >
-          <Icon color={theme.color.success} ios="checkmark" md="check" size={11} />
-        </View>
-      ) : null}
+      {/* Always mounted, so a row scrolling into view does not replay the pop; only a change does. */}
+      <Animated.View
+        style={{
+          alignItems: 'center',
+          backgroundColor: theme.color.surface,
+          borderColor: theme.color.border,
+          borderRadius: 10,
+          borderWidth: 1,
+          height: 20,
+          justifyContent: 'center',
+          opacity: checked ? 1 : 0,
+          position: 'absolute',
+          right: -4,
+          top: -4,
+          transform: [{ scale: checked || reduced ? 1 : 0.5 }],
+          transitionDuration: checked ? 260 : 140,
+          transitionProperty: ['transform', 'opacity'],
+          transitionTimingFunction: checked ? POP : 'ease-out',
+          width: 20,
+        }}
+      >
+        <Icon color={theme.color.success} ios="checkmark" md="check" size={11} />
+      </Animated.View>
     </View>
   );
 }
@@ -484,6 +532,8 @@ export function TickStrip({ marked, total }: { marked: number; total: number }) 
   const theme = useAppTheme();
   const shown = Math.min(total, 60);
   const filled = total > shown ? Math.round((marked / total) * shown) : marked;
+  // Everyone here: the strip turns green together, the one moment of colour change on the count.
+  const complete = total > 0 && marked >= total;
   return (
     <View
       accessibilityLabel={`${marked} of ${total} marked here`}
@@ -495,9 +545,10 @@ export function TickStrip({ marked, total }: { marked: number; total: number }) 
         <Animated.View
           key={index}
           style={{
-            backgroundColor: index < filled ? theme.color.accent : theme.color.tickOff,
+            backgroundColor: index < filled ? (complete ? theme.color.success : theme.color.accent) : theme.color.tickOff,
             borderRadius: 2,
             flex: 1,
+            transitionDelay: complete ? index * 12 : 0,
             transitionDuration: 160,
             transitionProperty: 'backgroundColor',
           }}
@@ -755,3 +806,19 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   sectionTitle: { alignItems: 'baseline', flexDirection: 'row', justifyContent: 'space-between' },
 });
+
+/**
+ * The headcount's big number. When it changes, the new value rises 6pt into place over 160 ms;
+ * opening the screen shows it still (skipEntering), so the motion only ever answers a tap.
+ */
+export function StepNumber({ value }: { value: string }) {
+  return (
+    <LayoutAnimationConfig skipEntering>
+      <Animated.View entering={STEP_IN} key={value}>
+        <Text tabular variant="answer">
+          {value}
+        </Text>
+      </Animated.View>
+    </LayoutAnimationConfig>
+  );
+}

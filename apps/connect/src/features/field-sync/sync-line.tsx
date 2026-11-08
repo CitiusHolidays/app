@@ -1,9 +1,12 @@
 import { Banner, Button, space, StatusPill, Text } from '@citius/ui';
 import { View } from 'react-native';
+import Animated, { FadeIn, LayoutAnimationConfig } from 'react-native-reanimated';
 
 import { useNow } from '@/lib/use-now';
 
 import { syncedLabel, type SyncItem, syncSummary } from './queue';
+
+const SETTLE = FadeIn.duration(200);
 
 /**
  * The office copy, in one small line: "Synced to office 07:12" or "Waiting to sync". A refusal
@@ -24,9 +27,6 @@ export function SyncLine({
   if (summary.kind === 'none') {
     return null;
   }
-  if (summary.kind === 'waiting') {
-    return <StatusPill kind="neutral" label="Waiting to sync" />;
-  }
   if (summary.kind === 'problem') {
     return (
       <Banner tone="danger">
@@ -40,15 +40,22 @@ export function SyncLine({
       </Banner>
     );
   }
+  const waiting = summary.kind === 'waiting';
   return (
     <View style={{ gap: space.xs + 2 }}>
-      <StatusPill kind="good" label={syncedLabel(summary.at, now)} />
-      {summary.newerOnServer ? (
+      {/* One wrapper for both states: opening the screen shows the pill still, and the change from
+          "Waiting to sync" to "Synced" fades the new pill in. */}
+      <LayoutAnimationConfig skipEntering>
+        <Animated.View entering={SETTLE} key={waiting ? 'waiting' : 'synced'} style={{ alignSelf: 'flex-start' }}>
+          {waiting ? <StatusPill kind="neutral" label="Waiting to sync" /> : <StatusPill kind="good" label={syncedLabel(summary.at, now)} />}
+        </Animated.View>
+      </LayoutAnimationConfig>
+      {!waiting && summary.newerOnServer ? (
         <Text tone="muted" variant="secondary">
           The office already had a later update from another phone, so it kept that one.
         </Text>
       ) : null}
-      {summary.ignored > 0 ? (
+      {!waiting && summary.ignored > 0 ? (
         <Text tone="warning" variant="secondary">
           {ignoredNote(summary.ignored)}
         </Text>

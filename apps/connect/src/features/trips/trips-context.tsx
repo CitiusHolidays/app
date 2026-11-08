@@ -1,12 +1,14 @@
 import { type JobCardRow, type PaginationOpts, staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { useWindowDimensions } from 'react-native';
 
 import { useStaffSession } from '@/features/gate/session';
 import { deletePack, loadPack, prunePacksNotIn, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
 import { buildTripPack, type TripPack } from '@/features/trip-pack/trip-pack';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
+import { prefetchCover } from '@/features/trips/prefetch-cover';
 import { useNow } from '@/lib/use-now';
 
 import { collectPages, pickDefaultTrip, sortTrips } from './trips';
@@ -90,6 +92,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     pack: null,
   });
   const [packProblem, setPackProblem] = useState<string | null>(null);
+  // The trip card's photo is saved with the pack at the width the card will ask for.
+  const { width: windowWidth } = useWindowDimensions();
 
   const now = useNow();
   const trips = sortTrips(cache?.trips ?? [], now);
@@ -155,6 +159,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         travellers: travellers.rows,
       });
       await savePack(store, pack);
+      prefetchCover(pack.cover, windowWidth);
       if (!current()) {
         // The wipe ran while the pack was being written; remove what landed after it.
         await deletePack(store, jobCardId);
@@ -175,7 +180,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       logEvent('pack.refresh-failed', error);
       setPackProblem('Could not update the trip pack. Showing the saved copy.');
     }
-  }, [canReachServer, convex, live, refreshTrips, selectedTripId, store]);
+  }, [canReachServer, convex, live, refreshTrips, selectedTripId, store, windowWidth]);
 
   useEffect(() => {
     let active = true;

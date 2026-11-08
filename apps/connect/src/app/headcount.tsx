@@ -2,7 +2,7 @@ import { Banner, Button, face, PressableScale, space, StatusPill, Surface, Text,
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Avatar, Chip, ChipRow, Icon, ListCard, QuietState, Screen, Segmented, TextField, TickStrip } from '@/components/kit';
+import { Avatar, Chip, ChipRow, Icon, ListCard, QuietState, Screen, Segmented, StepNumber, TextField, TickStrip } from '@/components/kit';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { headcountStopPush } from '@/features/field-sync/pushes';
 import { syncKey } from '@/features/field-sync/queue';
@@ -11,7 +11,7 @@ import { type HeadcountState, type HeadcountSummary, headcountAnswer, PARTIAL_RO
 import { useHeadcount } from '@/features/headcount/use-headcount';
 import type { RosterEntry } from '@/features/trip-pack/trip-pack';
 import { useTrips } from '@/features/trips/trips-context';
-import { haptic } from '@/lib/haptics';
+import { haptic, tick } from '@/lib/haptics';
 import { useAnnounce } from '@/lib/use-announce';
 import { useProgressiveCount } from '@/lib/use-progressive-count';
 
@@ -39,9 +39,7 @@ function HeadcountHero({ answer, summary }: { answer: string; summary: Headcount
       </View>
       <View accessibilityLabel={answer} accessibilityLiveRegion="polite" accessible style={{ gap: space.md }}>
         <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
-          <Text tabular variant="answer">
-            {everyone ? 'All' : summary.present}
-          </Text>
+          <StepNumber value={everyone ? 'All' : String(summary.present)} />
           <Text style={face(theme, 'medium')} tabular tone="muted" variant="section">
             {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
           </Text>
@@ -164,6 +162,7 @@ export default function Headcount() {
           const wasLast = !present.has(entry.id) && summary.missing.length === 1 && summary.missing[0]?.id === entry.id;
           send(toggle(entry.id));
           if (wasLast) haptic('success');
+          else tick();
         }}
         people={people}
         present={present}

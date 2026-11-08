@@ -18,6 +18,7 @@ import { TripsProvider } from '@/features/trips/trips-context';
 import { AppStoreProvider } from '@/lib/app-store';
 import { clients } from '@/lib/clients';
 import { publicConfig } from '@/lib/env';
+import { ToastProvider } from '@/lib/toast';
 
 // A known React Native dev-only warning from native scroll animations; it has no effect in release.
 LogBox.ignoreLogs(['Sending `onAnimatedValueUpdate` with no listeners registered']);
@@ -68,7 +69,9 @@ function StaffData({ children, enabled }: { children: ReactNode; enabled: boolea
   return (
     <TripsProvider>
       <OutboxProvider>
-        <FieldSyncProvider>{children}</FieldSyncProvider>
+        <FieldSyncProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </FieldSyncProvider>
       </OutboxProvider>
     </TripsProvider>
   );

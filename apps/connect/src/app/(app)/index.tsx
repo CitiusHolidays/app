@@ -1,10 +1,11 @@
 import { Banner, Button, face, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
+import { DestinationCover } from '@/components/destination-cover';
 import { FreshnessStamp } from '@/components/freshness';
 import {
-  ActionTray,
   Avatar,
   Icon,
   ListCard,
@@ -13,11 +14,16 @@ import {
   Row,
   Screen,
   SectionTitle,
-  Tag,
+  StepNumber,
   TickStrip,
 } from '@/components/kit';
 import { headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
+import { useOutbox } from '@/features/expenses/outbox-context';
+import { useFieldSync } from '@/features/field-sync/field-sync-context';
+import { waitingLabel, waitingWork } from '@/features/field-sync/waiting';
+import { useStaffSession } from '@/features/gate/session';
 import { useHeadcount } from '@/features/headcount/use-headcount';
+import { freshnessLabel } from '@/features/trip-pack/trip-pack';
 import { useInbox } from '@/features/inbox/use-inbox';
 import { dayOfTrip, tripPhase } from '@/features/trips/trips';
 import { type TripSummary, useTrips } from '@/features/trips/trips-context';
@@ -69,9 +75,7 @@ function HeadcountCard() {
       </View>
       <View accessible accessibilityLabel={`${answer} at ${summary.stopLabel}`} style={{ gap: space.md }}>
         <View style={{ alignItems: 'baseline', flexDirection: 'row', gap: 6 }}>
-          <Text tabular variant="answer">
-            {everyone ? 'All' : summary.present}
-          </Text>
+          <StepNumber value={everyone ? 'All' : String(summary.present)} />
           <Text tabular tone="muted" variant="section" style={face(theme, 'medium')}>
             {everyone ? `${summary.expected} here` : `/ ${summary.expected} here`}
           </Text>
@@ -181,49 +185,109 @@ function InboxPreview() {
   );
 }
 
-/** The opening: date and trip day over the trip's name, its code, batches and how fresh it is. */
-function TodayHeader({ now }: { now: number }) {
-  const theme = useAppTheme();
-  const { pack, packProblem, selected, tripsProblem, tripsSavedAt } = useTrips();
-  const phase = selected ? phaseLabel(selected, now) : null;
-  const problem = packProblem ?? tripsProblem;
-  const savedAt = pack?.savedAt ?? tripsSavedAt;
+/** A fact on the photo: white on a dark glass pill, so it reads on any picture. */
+function HeroTag({ icon, label, tone = 'plain' }: { icon?: ReactNode; label: string; tone?: 'plain' | 'live' | 'waiting' }) {
   return (
-    <View style={{ gap: space.md }}>
-      <View accessible accessibilityRole="header" style={{ gap: space.xs + 2 }}>
-        <Text tone="muted" variant="mono">
-          {[dateKicker(now), phase].filter(Boolean).join(' · ')}
-        </Text>
-        <Text variant="display">{selected ? selected.clientName || selected.jobCode : 'Today'}</Text>
-        {selected ? (
-          <Text tone="muted" variant="secondary">
-            {selected.destination || 'Destination not set'} · {formatDateRange(selected.travelStartDate, selected.travelEndDate)}
-          </Text>
-        ) : null}
-      </View>
-      {selected ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          <Tag label={selected.jobCode} />
-          {pack && pack.batches.length > 0 ? (
-            <Tag
-              icon={<Icon color={theme.color.muted} ios="bus" md="directions_bus" size={13} />}
-              label={`${pack.batches.length} ${pack.batches.length === 1 ? 'batch' : 'batches'}`}
-            />
-          ) : null}
-          <FreshnessStamp part="pill" problem={problem} savedAt={savedAt} />
-        </View>
-      ) : null}
-      <FreshnessStamp part={selected ? 'notice' : undefined} problem={problem} savedAt={savedAt} />
+    <View
+      style={{
+        alignItems: 'center',
+        backgroundColor: 'rgba(12,17,36,0.5)',
+        borderColor: 'rgba(255,255,255,0.18)',
+        borderRadius: 999,
+        borderStyle: tone === 'waiting' ? 'dashed' : 'solid',
+        borderWidth: 1,
+        flexDirection: 'row',
+        gap: 6,
+        minHeight: 30,
+        paddingHorizontal: 12,
+      }}
+    >
+      {tone === 'live' ? <View style={{ backgroundColor: '#86efac', borderRadius: 4, height: 7, width: 7 }} /> : icon}
+      <Text numberOfLines={1} style={{ color: '#ffffff' }} tabular variant="label">
+        {label}
+      </Text>
     </View>
   );
 }
 
-const TODAY_ACTIONS = [
-  { icon: { ios: 'person.text.rectangle', md: 'badge' }, label: 'Roster', onPress: () => router.push({ params: { view: 'roster' }, pathname: '/trip' }) },
-  { icon: { ios: 'phone', md: 'call' }, label: 'Contacts', onPress: () => router.push({ params: { view: 'contacts' }, pathname: '/trip' }) },
-  { icon: { ios: 'creditcard', md: 'receipt_long' }, label: 'Expense', onPress: () => router.push('/expense-new') },
-  { icon: { ios: 'megaphone', md: 'campaign' }, label: 'Announce', onPress: () => router.push('/announce') },
-];
+/** Work saved on this phone that the office does not have yet, so offline work is never invisible. */
+function useWaitingLabel() {
+  const sync = useFieldSync();
+  const outbox = useOutbox();
+  return waitingLabel(waitingWork(sync.items, outbox.items));
+}
+
+/** The trip's facts as pills on the photo: code, batches, work waiting to send, and freshness. */
+function HeroFacts({ jobCode, now }: { jobCode: string; now: number }) {
+  const { gate, online } = useStaffSession();
+  const { pack, packProblem, tripsProblem, tripsSavedAt } = useTrips();
+  const waiting = useWaitingLabel();
+  const savedAt = pack?.savedAt ?? tripsSavedAt;
+  const fresh = online && !(gate.kind === 'staff' && gate.offline) && !(packProblem ?? tripsProblem) && savedAt;
+  const batches = pack?.batches.length ?? 0;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs + 2 }}>
+      <HeroTag label={jobCode} />
+      {batches > 0 ? (
+        <HeroTag icon={<Icon color="#ffffff" ios="bus" md="directions_bus" size={13} />} label={`${batches} ${batches === 1 ? 'batch' : 'batches'}`} />
+      ) : null}
+      {waiting ? <HeroTag label={waiting} tone="waiting" /> : null}
+      {fresh ? <HeroTag label={freshnessLabel(fresh, now).replace('Saved, updated', 'Updated')} tone="live" /> : null}
+    </View>
+  );
+}
+
+/**
+ * The opening: the trip on a photo of its destination (cached, so it opens offline), with the date
+ * and trip day, the client, the place and dates, and its facts as pills. Offline or failing, the
+ * notice under the card says so in words.
+ */
+function TripHero({ now }: { now: number }) {
+  const theme = useAppTheme();
+  const { pack, packProblem, selected, tripsProblem, tripsSavedAt } = useTrips();
+  if (!selected) {
+    return (
+      <View accessible accessibilityRole="header" style={{ gap: space.xs + 2 }}>
+        <Text tone="muted" variant="mono">
+          {dateKicker(now)}
+        </Text>
+        <Text variant="display">Today</Text>
+      </View>
+    );
+  }
+  const kicker = [dateKicker(now), phaseLabel(selected, now)].join(' · ');
+  const title = selected.clientName || selected.jobCode;
+  const where = `${selected.destination || 'Destination not set'} · ${formatDateRange(selected.travelStartDate, selected.travelEndDate)}`;
+  return (
+    <View style={{ gap: space.md }}>
+      <View
+        accessibilityLabel={[title, kicker, where].join('. ')}
+        accessibilityRole="header"
+        accessible
+        style={{ borderRadius: theme.radius.hero, minHeight: 300, overflow: 'hidden' }}
+      >
+        <DestinationCover photo={pack?.cover ?? null} />
+        <View style={{ flex: 1, justifyContent: 'space-between', padding: space.lg + 2 }}>
+          <Text style={{ color: 'rgba(255,255,255,0.86)' }} variant="mono">
+            {kicker}
+          </Text>
+          <View style={{ gap: space.sm + 2 }}>
+            <View style={{ gap: space.xs }}>
+              <Text numberOfLines={3} style={{ color: '#ffffff' }} variant="display">
+                {title}
+              </Text>
+              <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.82)' }} variant="secondary">
+                {where}
+              </Text>
+            </View>
+            <HeroFacts jobCode={selected.jobCode} now={now} />
+          </View>
+        </View>
+      </View>
+      <FreshnessStamp part="notice" problem={packProblem ?? tripsProblem} savedAt={pack?.savedAt ?? tripsSavedAt} />
+    </View>
+  );
+}
 
 /** Whether the trip list could be loaded: still loading, empty, or only partly loaded. */
 function TripsStatus() {
@@ -278,11 +342,11 @@ function YourTrips({ now }: { now: number }) {
 
 /** "Is everyone here, and what's next?" for the trip on tour, then the tour manager's trips. */
 export default function Today() {
-  const { pack, refreshPack, refreshTrips, refreshing, selected } = useTrips();
+  const { pack, refreshPack, refreshTrips, refreshing } = useTrips();
   const now = useNow();
   return (
     <Screen
-      header={<TodayHeader now={now} />}
+      header={<TripHero now={now} />}
       onRefresh={() => {
         void refreshTrips();
         void refreshPack();
@@ -290,7 +354,6 @@ export default function Today() {
       refreshing={refreshing}
     >
       <HeadcountCard />
-      {selected ? <ActionTray actions={TODAY_ACTIONS} /> : null}
       {pack?.schedule.itineraryText ? (
         <ProgrammeCard onOpen={() => router.push({ params: { view: 'schedule' }, pathname: '/trip' })} text={pack.schedule.itineraryText} />
       ) : null}
