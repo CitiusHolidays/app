@@ -2,11 +2,15 @@ import { customerApi, PARENTAL_CONSENT_TEXT_VERSION } from '@citius/backend/cust
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { useMutation, useQuery } from 'convex/react';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DestinationCover } from '@/components/destination-cover';
+import { AddedMoment } from '@/components/invite-added';
+import { MOTION } from '@/components/motion';
+import { Pop } from '@/components/motion-views';
 import { Icon, MessageScreen, TopTint } from '@/components/kit';
 import { InviteSkeleton } from '@/components/skeletons';
 import { PENDING_INVITE_KEY, useCustomerSession } from '@/features/session/session';
@@ -30,7 +34,8 @@ function Checkbox({ checked, label, onToggle }: { checked: boolean; label: strin
       onPress={onToggle}
       style={{ alignItems: 'flex-start', flexDirection: 'row', gap: space.md, minHeight: theme.minTarget, paddingVertical: space.sm }}
     >
-      <View
+      {/* The box fills (150ms), then the tick pops in; unticking just clears (transitions.dev check). */}
+      <Animated.View
         style={{
           alignItems: 'center',
           backgroundColor: checked ? theme.color.primary : theme.color.surface,
@@ -40,11 +45,17 @@ function Checkbox({ checked, label, onToggle }: { checked: boolean; label: strin
           height: 26,
           justifyContent: 'center',
           marginTop: 1,
+          transitionDuration: MOTION.quick,
+          transitionProperty: ['backgroundColor', 'borderColor'],
           width: 26,
         }}
       >
-        {checked ? <Icon color={theme.color.onPrimary} ios="checkmark" md="check" size={15} /> : null}
-      </View>
+        {checked ? (
+          <Pop>
+            <Icon color={theme.color.onPrimary} ios="checkmark" md="check" size={15} />
+          </Pop>
+        ) : null}
+      </Animated.View>
       <Text style={{ flex: 1 }}>{label}</Text>
     </PressableScale>
   );
@@ -80,12 +91,17 @@ function InviteForAccount({ token }: { token: string }) {
   const [consents, setConsents] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<MessageKey | null>(null);
+  const attempt = useRef(0);
+  const [added, setAdded] = useState<{ destination: string | null; tripId: string | null } | null>(null);
 
   useEffect(() => {
     // The invite is in hand now; a later sign-in should not reopen it.
     void setPending(null);
   }, [setPending]);
 
+  if (added) {
+    return <AddedMoment destination={added.destination} tripId={added.tripId} />;
+  }
   if (preview === undefined) {
     return (
       <View style={{ backgroundColor: theme.color.ground, flex: 1, padding: theme.frame, paddingTop: insets.top + space.xxl }}>
@@ -103,6 +119,8 @@ function InviteForAccount({ token }: { token: string }) {
   }
 
   const accept = async () => {
+    attempt.current += 1;
+    const mine = attempt.current;
     setBusy(true);
     setProblem(null);
     try {
@@ -115,14 +133,14 @@ function InviteForAccount({ token }: { token: string }) {
           }),
         () => setBusy(false)
       );
-      haptic('success');
-      if (preview.trip) {
-        router.replace({ params: { id: result.tripId }, pathname: '/trip/[id]' });
-      } else {
-        router.replace('/');
-      }
+      // The success haptic fires with the badge's first frame, below. A newer attempt owns the
+      // screen if one started meanwhile; this answer is then stale.
+      setAdded((current) =>
+        attempt.current === mine ? { destination: preview.trip?.destination ?? null, tripId: preview.trip ? result.tripId : null } : current
+      );
     } catch (error) {
       logEvent('invite.claim-failed', error);
+      if (attempt.current !== mine) return;
       haptic('error');
       setProblem(inviteErrorMessage(error));
     }

@@ -1,25 +1,35 @@
 import { space, useAppTheme } from '@citius/ui';
 import type { ReactNode } from 'react';
 import { type DimensionValue, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { usePulse } from '@/components/motion';
 
 /**
  * Loading states drawn as the screen they stand in for: each value is a flat bar at its real
- * size, so nothing moves when the data lands (no shimmer: app-screens §11). Bars on the night
- * ground are faint white; on paper they are the neutral tick grey.
+ * size, so nothing moves when the data lands (no shimmer sweep: app-screens §11). While they wait
+ * the bars breathe slowly (opacity only, 2s a cycle; still under reduced motion), so a slow 3G
+ * answer reads as on its way rather than stuck. Bars on the night ground are faint white; on
+ * paper they are the neutral tick grey.
  */
 function Bar({ dark, height, radius = 6, width }: { dark?: boolean; height: number; radius?: number; width: DimensionValue }) {
   const theme = useAppTheme();
+  const pulse = usePulse();
   return (
-    <View
-      style={{
-        backgroundColor: dark ? 'rgba(255,255,255,0.14)' : theme.color.tickOff,
-        borderRadius: radius,
-        height,
-        opacity: dark ? 1 : 0.55,
-        width,
-      }}
-    />
+    <View style={{ opacity: dark ? 1 : 0.55, width }}>
+      <Animated.View
+        style={[
+          {
+            backgroundColor: dark ? 'rgba(255,255,255,0.14)' : theme.color.tickOff,
+            borderRadius: radius,
+            height,
+            width: '100%',
+          },
+          pulse,
+        ]}
+      />
+    </View>
   );
 }
 

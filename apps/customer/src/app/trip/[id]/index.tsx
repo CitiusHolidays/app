@@ -3,14 +3,17 @@ import { Banner, Button, PressableScale, space, StatusPill, Surface, Text, useAp
 import { tripSchedule } from '@citius/core/src/schedule';
 import { useMutation } from 'convex/react';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import Animated, {
+  Extrapolation,
+  interpolate,
   type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,12 +30,15 @@ import { dayNumber, tripTiming } from '@/features/trips/model';
 import { useTrip } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
+import { EASE_OUT } from '@/components/motion';
+import { Rise } from '@/components/motion-views';
 import { haptic } from '@/lib/haptic';
 import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
 
-function BackButton() {
+function BackButton({ onPaper }: { onPaper?: boolean }) {
+  const theme = useAppTheme();
   const { t } = useI18n();
   return (
     <PressableScale
@@ -42,8 +48,8 @@ function BackButton() {
       onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
       style={{
         alignItems: 'center',
-        backgroundColor: 'rgba(11,16,38,0.45)',
-        borderColor: 'rgba(255,255,255,0.35)',
+        backgroundColor: onPaper ? theme.color.card : 'rgba(11,16,38,0.45)',
+        borderColor: onPaper ? theme.color.border : 'rgba(255,255,255,0.35)',
         borderRadius: 24,
         borderWidth: 1,
         height: 48,
@@ -51,7 +57,7 @@ function BackButton() {
         width: 48,
       }}
     >
-      <Icon color="#ffffff" ios="chevron.left" md="arrow_back" size={18} />
+      <Icon color={onPaper ? theme.color.ink : '#ffffff'} ios="chevron.left" md="arrow_back" size={18} />
     </PressableScale>
   );
 }
@@ -64,11 +70,18 @@ function TripHeader({ detail, now, scrollY }: { detail: TripDetail; now: number;
   const heroHeight = insets.top + 470;
   // The photo stays pinned and stretches when pulled down (iOS), and drifts at half speed as the
   // page scrolls up, so the sheet slides over it. Transform only, on the UI thread.
+  // Continuity from the Journeys card: the same photo arrives a touch closer, as the card was, and
+  // settles back while the push lands (500ms ease-out, once).
+  const settle = useSharedValue(reduced ? 0 : 1);
+  useEffect(() => {
+    settle.set(withTiming(0, { duration: 500, easing: EASE_OUT }));
+  }, [settle]);
   const photoStyle = useAnimatedStyle(() => {
     if (reduced) return { transform: [] };
     const y = scrollY.get();
-    if (y < 0) return { transform: [{ translateY: y / 2 }, { scale: 1 - y / heroHeight }] };
-    return { transform: [{ translateY: Math.min(y, heroHeight) * 0.45 }] };
+    const arrive = 1 + settle.get() * 0.06;
+    if (y < 0) return { transform: [{ translateY: y / 2 }, { scale: (1 - y / heroHeight) * arrive }] };
+    return { transform: [{ translateY: Math.min(y, heroHeight) * 0.45 }, { scale: arrive }] };
   });
   const i18n = useI18n();
   const { trip } = detail;
@@ -86,6 +99,7 @@ function TripHeader({ detail, now, scrollY }: { detail: TripDetail; now: number;
       <View style={{ flex: 1, justifyContent: 'space-between', paddingBottom: space.xxl + space.xl, paddingHorizontal: theme.frame, paddingTop: insets.top + space.sm }}>
         <BackButton />
         <View style={{ gap: space.sm }}>
+          <Rise delay={120} index={0}>
           <View
             style={{
               alignItems: 'center',
@@ -103,6 +117,8 @@ function TripHeader({ detail, now, scrollY }: { detail: TripDetail; now: number;
               {trip.phase === 'past' ? i18n.t('phase.past') : timingText(i18n, timing)}
             </Text>
           </View>
+          </Rise>
+          <Rise delay={120} index={1}>
           <View accessible accessibilityRole="header" style={{ gap: space.xs }}>
             <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.78)' }} variant="secondary">
               {trip.groupName}
@@ -112,8 +128,9 @@ function TripHeader({ detail, now, scrollY }: { detail: TripDetail; now: number;
             </Text>
             <Text style={{ color: 'rgba(255,255,255,0.85)' }}>{datesAndNights(i18n, trip)}</Text>
           </View>
+          </Rise>
           {yourLine.length ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, paddingTop: space.xs }}>
+            <Rise delay={120} index={2} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, paddingTop: space.xs }}>
               {yourLine.map((item) => (
                 <View
                   key={item}
@@ -131,7 +148,7 @@ function TripHeader({ detail, now, scrollY }: { detail: TripDetail; now: number;
                   </Text>
                 </View>
               ))}
-            </View>
+            </Rise>
           ) : null}
         </View>
       </View>
@@ -293,6 +310,60 @@ function FamilyCard({ detail, tripId }: { detail: TripDetail; tripId: string }) 
 }
 
 /** One trip: today, who to call, updates, the plan, documents and the traveller's children. */
+/**
+ * Wayfinding once the photo has scrolled away: a paper bar with the destination and a way back
+ * fades in as the sheet reaches the top (scroll-linked on the UI thread, so it tracks the finger
+ * and reverses with it). Reduced motion keeps the fade and drops the 6pt drop-in.
+ */
+function CompactBar({
+  onSheet,
+  scrollY,
+  sheetTop,
+  title,
+}: {
+  onSheet: boolean;
+  scrollY: SharedValue<number>;
+  sheetTop: SharedValue<number>;
+  title: string;
+}) {
+  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  const barStyle = useAnimatedStyle(() => {
+    const top = sheetTop.get();
+    const shown = top > 0 ? interpolate(scrollY.get(), [top - 48, top], [0, 1], Extrapolation.CLAMP) : 0;
+    return { opacity: shown, transform: [{ translateY: reduced ? 0 : (1 - shown) * -6 }] };
+  });
+  return (
+    <Animated.View
+      pointerEvents={onSheet ? 'box-none' : 'none'}
+      style={[
+        {
+          alignItems: 'center',
+          backgroundColor: theme.color.ground,
+          borderBottomColor: theme.color.rule,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          flexDirection: 'row',
+          gap: space.md,
+          left: 0,
+          paddingBottom: space.sm,
+          paddingHorizontal: theme.frame,
+          paddingTop: insets.top + space.xs,
+          position: 'absolute',
+          right: 0,
+          top: 0,
+        },
+        barStyle,
+      ]}
+    >
+      <BackButton onPaper />
+      <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }} variant="bodyStrong">
+        {title}
+      </Text>
+    </Animated.View>
+  );
+}
+
 export default function TripScreen() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -341,6 +412,7 @@ export default function TripScreen() {
   const offline = gate.kind === 'signedIn' && gate.offline;
   const latest = detail.announcements.slice(0, 2);
   return (
+    <View style={{ backgroundColor: theme.color.ground, flex: 1 }}>
     <Animated.ScrollView
       contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}
       contentInsetAdjustmentBehavior="never"
@@ -356,7 +428,9 @@ export default function TripScreen() {
       >
         <TripHeader detail={detail} now={now} scrollY={scrollY} />
       </View>
-      <View
+      {/* The sheet rises over the photo as the trip opens, once. */}
+      <Rise
+        delay={60}
         style={{
           backgroundColor: theme.color.ground,
           borderTopLeftRadius: theme.radius.hero,
@@ -422,7 +496,9 @@ export default function TripScreen() {
         <PlanPreview detail={detail} now={now} tripId={id ?? ''} />
         {detail.documents.length ? <DocumentsCard documents={detail.documents} /> : null}
         {detail.minors.length ? <FamilyCard detail={detail} tripId={id ?? ''} /> : null}
-      </View>
+      </Rise>
     </Animated.ScrollView>
+    <CompactBar onSheet={onSheet} scrollY={scrollY} sheetTop={sheetTop} title={detail.trip.destination} />
+    </View>
   );
 }

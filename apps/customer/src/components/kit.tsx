@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Pop, Rise } from '@/components/motion-views';
 import { initials } from '@/lib/initials';
 
 /** Room under the content for the floating tab bar. */
@@ -152,7 +153,9 @@ export function MessageScreen({
         contentInsetAdjustmentBehavior="never"
       >
         <View style={{ alignItems: 'center', gap: space.lg }}>
-          <View
+          {/* Occasional screens (a refusal, an error, a finished deletion): the mark pops, then the
+              words and the way out rise in, so the change of screen reads as one beat. */}
+          <Pop
             style={{
               alignItems: 'center',
               backgroundColor: theme.color.card,
@@ -165,7 +168,8 @@ export function MessageScreen({
             }}
           >
             <Icon ios={icon.ios} md={icon.md} size={24} />
-          </View>
+          </Pop>
+          <Rise index={1}>
           <View accessible accessibilityRole="header" style={{ alignItems: 'center', gap: space.xs + 2 }}>
             {kicker ? (
               <Text tone="muted" variant="mono">
@@ -176,14 +180,19 @@ export function MessageScreen({
               {title}
             </Text>
           </View>
+          </Rise>
+          <Rise index={2}>
           <Text style={{ maxWidth: 340, textAlign: 'center' }}>{text}</Text>
+          </Rise>
           {detail ? (
             <Text style={{ maxWidth: 340, textAlign: 'center' }} tone="muted" variant="secondary">
               {detail}
             </Text>
           ) : null}
         </View>
-        <View style={{ gap: space.sm }}>{actions}</View>
+        <Rise index={3} style={{ gap: space.sm }}>
+          {actions}
+        </Rise>
       </ScrollView>
     </View>
   );
@@ -657,7 +666,7 @@ export function QuietState({ good, text }: { good?: boolean; text: string }) {
   const theme = useAppTheme();
   return (
     <View accessible accessibilityLabel={text} style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
-      <View
+      <Pop
         style={{
           alignItems: 'center',
           backgroundColor: good ? theme.color.successSoft : theme.color.inset,
@@ -668,7 +677,7 @@ export function QuietState({ good, text }: { good?: boolean; text: string }) {
         }}
       >
         <Icon color={good ? theme.color.success : theme.color.muted} ios={good ? 'checkmark' : 'minus'} md={good ? 'check' : 'remove'} size={15} />
-      </View>
+      </Pop>
       <Text style={{ maxWidth: 280, textAlign: 'center' }} tone="muted" variant="secondary">
         {text}
       </Text>

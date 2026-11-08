@@ -1,9 +1,11 @@
 import type { TripSummary } from '@citius/backend/customer';
 import { PressableScale, space, Text, useAppTheme } from '@citius/ui';
 import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { DestinationCover } from '@/components/destination-cover';
 import { Icon } from '@/components/kit';
+import { TEXT_SWAP_IN } from '@/components/motion';
 import { datesAndNights, timingText } from '@/features/trips/labels';
 import { tripTiming } from '@/features/trips/model';
 import { useI18n } from '@/i18n/i18n';
@@ -110,14 +112,20 @@ export function Freshness({ offline, savedAt }: { offline: boolean; savedAt: num
   const { t, time } = useI18n();
   const theme = useAppTheme();
   if (!offline && savedAt === null) return null;
+  // Going offline, or saved data arriving, swaps the line in place (a 4pt rise over 150ms).
   return (
-    <View accessible style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
+    <Animated.View
+      accessible
+      entering={TEXT_SWAP_IN}
+      key={offline ? 'offline' : 'saved'}
+      style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}
+    >
       <Icon color={offline ? theme.color.warning : theme.color.muted} ios={offline ? 'wifi.slash' : 'checkmark.icloud'} md={offline ? 'wifi_off' : 'cloud_done'} size={14} />
       <Text style={{ flex: 1 }} tone={offline ? 'warning' : 'muted'} variant="label">
         {offline ? t('common.offline') : ''}
         {offline && savedAt ? ' ' : ''}
         {savedAt ? t('common.updatedAt', { time: time(savedAt) }) : ''}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
