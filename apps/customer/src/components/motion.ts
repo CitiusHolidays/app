@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
-import { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
 /** Strong ease-out for anything arriving or leaving. */
 export const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const RISE_PT = 12;
 const ENTER_MS = 420;
-const ENTER_DELAY_MS = 120;
 
 /**
  * A screen's content arriving once: it fades in and rises a few points the first time it is ready
@@ -17,7 +16,7 @@ export function useEntrance(ready: boolean) {
   const progress = useSharedValue(0);
   useEffect(() => {
     if (!ready || progress.get() > 0) return;
-    progress.set(withDelay(ENTER_DELAY_MS, withTiming(1, { duration: ENTER_MS, easing: EASE_OUT })));
+    progress.set(withTiming(1, { duration: ENTER_MS, easing: EASE_OUT }));
   }, [progress, ready]);
   return useAnimatedStyle(() => ({
     opacity: progress.get(),

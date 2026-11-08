@@ -271,7 +271,13 @@ function Curtain({ ready }: { ready: boolean }) {
       style={StyleSheet.absoluteFill}
     >
       <LightStatusBar>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.curtain, groundStyle]}>
+        {/* The ground never changes shape, so it is cached as one layer; frames only move the planes. */}
+        <Animated.View
+          pointerEvents="none"
+          renderToHardwareTextureAndroid
+          shouldRasterizeIOS
+          style={[StyleSheet.absoluteFill, styles.curtain, groundStyle]}
+        >
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, textureStyle]}>
             <Doodles onReady={onTextureReady} />
           </Animated.View>
