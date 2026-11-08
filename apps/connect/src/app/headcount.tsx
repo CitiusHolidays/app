@@ -84,22 +84,26 @@ function TravellerRow({ entry, here, last, onPress }: { entry: RosterEntry; here
 /** Names a fresh stop and starts counting again from nobody. */
 function NextStop({ onStart }: { onStart: (name: string) => void }) {
   const [stopName, setStopName] = useState('');
+  const start = () => {
+    onStart(stopName);
+    setStopName('');
+  };
   return (
     <Surface style={{ gap: space.md }}>
       <TextField
         hint="Starts a fresh count. Earlier stops stay in today's record."
         label="Next stop"
         onChangeText={setStopName}
+        // The keyboard's own Go key starts the stop, so the button under the keyboard is optional.
+        onSubmitEditing={start}
         placeholder="For example: Temple car park"
+        returnKeyType="go"
         value={stopName}
       />
       <Button
         icon={<Icon ios="arrow.right" md="arrow_forward" size={15} />}
         label="Start new stop"
-        onPress={() => {
-          onStart(stopName);
-          setStopName('');
-        }}
+        onPress={start}
         variant="secondary"
       />
     </Surface>

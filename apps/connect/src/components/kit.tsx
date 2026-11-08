@@ -1,7 +1,7 @@
 import { face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import { type ComponentProps, type ReactNode, useState } from 'react';
+import { type ComponentProps, type ComponentRef, type ReactNode, type Ref, useState } from 'react';
 import {
   Linking,
   Platform,
@@ -13,6 +13,7 @@ import {
   type TextInputProps,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, { cubicBezier, Easing, LayoutAnimationConfig, useReducedMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,11 @@ const POP = cubicBezier(0.34, 1.56, 0.64, 1);
 const EASE_IN_OUT = cubicBezier(0.77, 0, 0.175, 1);
 const SEAL_IN = ZoomIn.duration(320).easing(Easing.bezier(0.34, 1.56, 0.64, 1)).withInitialValues({ transform: [{ scale: 0.6 }] });
 
+/**
+ * Room kept between a focused field and the keyboard: a line of helper text and the form's button
+ * under it (headcount's "Start new stop", an expense's "Save expense"), so the next tap is in view.
+ */
+const KEYBOARD_CLEARANCE = 152;
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
 /**
@@ -70,10 +76,15 @@ export function Screen({
   // iOS tab screens let the system inset the content for the status bar ('automatic');
   // Android tab screens and header-less stack screens make room for it themselves.
   const top = !tabBar && opens ? insets.top + space.lg : tabBar && Platform.OS !== 'ios' ? insets.top + space.md : space.sm;
+  // Keyboard-aware: a focused field (headcount's next stop, an expense's description) scrolls clear
+  // of the keyboard with room for the row under it, in step with the keyboard itself.
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
+      bottomOffset={KEYBOARD_CLEARANCE}
       contentContainerStyle={{ paddingHorizontal: theme.frame }}
       contentInsetAdjustmentBehavior={tabBar ? 'automatic' : 'never'}
+      // Dragging the page pulls the keyboard down with the finger (iOS); Android closes it on drag.
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       keyboardShouldPersistTaps="handled"
       refreshControl={
         onRefresh ? (
@@ -100,7 +111,7 @@ export function Screen({
         </View>
       </LayoutAnimationConfig>
       <Spacer height={insets.bottom + (tabBar ? TAB_BAR_CLEARANCE : space.xxl)} />
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -454,9 +465,16 @@ export function TextField({
   onBlur,
   onFocus,
   style,
+  ref,
   trailing,
   ...rest
-}: TextInputProps & { hint?: string; icon?: { ios: string; md: string }; label: string; trailing?: ReactNode }) {
+}: TextInputProps & {
+  hint?: string;
+  icon?: { ios: string; md: string };
+  label: string;
+  ref?: Ref<ComponentRef<typeof TextInput>>;
+  trailing?: ReactNode;
+}) {
   const theme = useAppTheme();
   const [focused, setFocused] = useState(false);
   return (
@@ -479,6 +497,7 @@ export function TextField({
       >
         {icon ? <Icon color={focused ? theme.color.accent : theme.color.muted} ios={icon.ios} md={icon.md} size={18} /> : null}
         <TextInput
+          ref={ref}
           accessibilityHint={hint}
           accessibilityLabel={label}
           onBlur={(event) => {

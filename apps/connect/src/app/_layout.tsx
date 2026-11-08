@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { type ReactNode, useEffect } from 'react';
 import { ActivityIndicator, LogBox, Platform, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AppErrorBoundary } from '@/components/error-boundary';
 import { OutboxProvider } from '@/features/expenses/outbox-context';
@@ -150,13 +151,16 @@ export default function RootLayout() {
   return (
     <ThemeProvider theme={staffTheme}>
       <StatusBar style="dark" />
-      <ConvexBetterAuthProvider authClient={clients.auth} client={clients.convex}>
-        <AppStoreProvider fallback={<Waiting />}>
-          <StaffSessionProvider>
-            <GuardedShell />
-          </StaffSessionProvider>
-        </AppStoreProvider>
-      </ConvexBetterAuthProvider>
+      {/* The keyboard's real position, frame by frame, for every form (sign-in, expenses, headcount). */}
+      <KeyboardProvider>
+        <ConvexBetterAuthProvider authClient={clients.auth} client={clients.convex}>
+          <AppStoreProvider fallback={<Waiting />}>
+            <StaffSessionProvider>
+              <GuardedShell />
+            </StaffSessionProvider>
+          </AppStoreProvider>
+        </ConvexBetterAuthProvider>
+      </KeyboardProvider>
     </ThemeProvider>
   );
 }
