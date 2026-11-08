@@ -1,5 +1,7 @@
 import type { CommandCenter, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
 
+import type { DestinationPhoto } from '@/features/trips/cover';
+
 /**
  * Version 2 added `complete`; version 3 keeps only the tour manager's own group (the server
  * narrows the roster; batches follow it). Older packs are ignored and fetched again.
@@ -37,6 +39,11 @@ export interface TripPack {
   /** False when a batch, traveller or contact list hit the page budget: the roster may be short. */
   complete: boolean;
   contacts: TripContact[];
+  /**
+   * The destination's photo on the website, or null when Citius has none. Optional: packs saved
+   * before covers existed have no field and show the navy poster until the next refresh.
+   */
+  cover?: DestinationPhoto | null;
   destination: string;
   expiresAt: number;
   jobCardId: string;
@@ -178,6 +185,7 @@ export function buildTripPack(source: TripPackSource): TripPack {
   return {
     batches,
     clientName: jobCard.clientName,
+    cover: source.commandCenter.destinationCover ?? null,
     complete: source.complete,
     contacts: [...tourManagerContacts, ...officeContacts],
     destination: jobCard.destination,

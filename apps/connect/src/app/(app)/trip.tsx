@@ -5,13 +5,13 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { FreshnessStamp } from '@/components/freshness';
+import { TripBand } from '@/components/trip-band';
 import {
   ActionPill,
   Avatar,
   CallButton,
   Icon,
   ListCard,
-  PageTitle,
   Placeholder,
   QuietState,
   Row,
@@ -346,7 +346,7 @@ export default function TripPackScreen() {
   const destination = [selected.destination || 'Destination not set', formatDateRange(selected.travelStartDate, selected.travelEndDate)].join(' · ');
   return (
     <Screen
-      header={<PageTitle kicker={selected.jobCode} meta={destination} title={selected.clientName || selected.jobCode} />}
+      header={<TripBand cover={pack?.cover ?? null} kicker={selected.jobCode} meta={destination} title={selected.clientName || selected.jobCode} />}
       onRefresh={refresh}
       refreshing={refreshing}
     >

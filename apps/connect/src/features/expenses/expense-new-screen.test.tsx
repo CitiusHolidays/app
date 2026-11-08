@@ -10,7 +10,10 @@ const mockEnqueue = jest.fn();
 
 jest.mock('@/features/trips/trips-context', () => ({ useTrips: () => mockTrips }));
 jest.mock('@/features/expenses/outbox-context', () => ({ useOutbox: () => ({ enqueue: mockEnqueue }) }));
-jest.mock('@/features/gate/session', () => ({ useStaff: () => ({ name: 'Test Tour Manager', roles: ['Tour Manager'], staffId: 'staff_1' }) }));
+jest.mock('@/features/gate/session', () => ({
+  useStaff: () => ({ name: 'Test Tour Manager', roles: ['Tour Manager'], staffId: 'staff_1' }),
+  useStaffSession: () => ({ gate: { kind: 'staff', offline: false }, online: true }),
+}));
 jest.mock('@/features/expenses/receipt-files', () => ({
   keepReceipt: async () => ({ fileName: 'receipt.jpg', mimeType: 'image/jpeg', size: 10, uri: 'file:///cache/receipts/r.jpg' }),
 }));

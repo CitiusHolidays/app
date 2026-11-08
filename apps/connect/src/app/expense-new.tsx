@@ -12,12 +12,13 @@ import { createOutboxItem, type ReceiptFile } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
 import { keepReceipt } from '@/features/expenses/receipt-files';
 import { localDay } from '@/features/headcount/headcount';
-import { useStaff } from '@/features/gate/session';
+import { useStaff, useStaffSession } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 import { haptic } from '@/lib/haptics';
+import { useToast } from '@/lib/toast';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -27,6 +28,9 @@ export default function NewExpense() {
   const staff = useStaff();
   const { chosen, trips } = useTrips();
   const { enqueue } = useOutbox();
+  const { gate, online } = useStaffSession();
+  const canSend = online && gate.kind === 'staff' && !gate.offline;
+  const toast = useToast();
   const [itemId] = useState(() => localId('exp'));
   // Only a trip the tour manager picked, never a default guess. It must be in their trip list.
   // The trip picked on Today, or the only trip assigned; with several and none picked, ask.
@@ -108,6 +112,7 @@ export default function NewExpense() {
       })
     );
     haptic('success');
+    toast(canSend ? 'Expense saved. Sending it for approval.' : 'Saved on this phone. It sends when you have signal.', canSend ? 'done' : 'saved');
     router.back();
   };
 

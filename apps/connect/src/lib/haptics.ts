@@ -8,3 +8,9 @@ export function haptic(kind: 'success' | 'error') {
     kind === 'success' ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error
   ).catch(() => undefined);
 }
+
+/** The lightest tick, for marking one traveller: one per tap, always alongside the visual change. */
+export function tick() {
+  if (Platform.OS === 'web') return;
+  void Haptics.selectionAsync().catch(() => undefined);
+}

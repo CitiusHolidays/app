@@ -8,6 +8,12 @@ function build(complete = true) {
 }
 
 describe('buildTripPack', () => {
+  it('keeps the destination photo so the trip card opens on it offline, and null when there is none', () => {
+    const bali = { path: '/images/event-photo-booth/bali.webp', placeholder: 'UjHoE?t6V@oKL4NHn~fP?dRlaxj@x^ayaya#' };
+    expect(buildTripPack({ batches, commandCenter: { ...commandCenter, destinationCover: bali }, complete: true, savedAt: SAVED_AT, tourManagers, travellers }).cover).toEqual(bali);
+    expect(build().cover).toBeNull();
+  });
+
   it('keeps only roster fields: name, batch, guest type, calling status, phone and status words', () => {
     const pack = build();
     const asha = pack.roster.find((entry) => entry.id === 't_2');

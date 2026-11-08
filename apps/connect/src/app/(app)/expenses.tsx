@@ -42,7 +42,7 @@ const segment = (index: number) => SEGMENTS[index] ?? SEGMENTS[SEGMENTS.length -
 function outboxStatus(item: OutboxItem): { kind: StatusKind; label: string } {
   if (item.status === 'done') return { kind: 'good', label: 'Sent' };
   if (item.status === 'needsAttention') return { kind: 'attention', label: 'Needs attention' };
-  return { kind: 'neutral', label: item.stage === 'queued' ? 'Queued' : 'Sending' };
+  return { kind: 'neutral', label: item.stage === 'queued' ? 'Saved on phone' : 'Sending' };
 }
 
 function approvalPill(row: ExpenseRow): { kind: StatusKind; label: string } {

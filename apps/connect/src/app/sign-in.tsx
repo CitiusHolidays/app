@@ -1,17 +1,47 @@
-import { Banner, Button, space, Text, useAppTheme } from '@citius/ui';
+import { Banner, PressableScale, space, Text, useAppTheme } from '@citius/ui';
+import { Image } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import Animated, { Easing, FadeIn, FadeInUp, Keyframe } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PageTitle, Screen, TextField, TopTint } from '@/components/kit';
+import { Icon, TextField } from '@/components/kit';
 import { clients } from '@/lib/clients';
+import { haptic } from '@/lib/haptics';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
+
+/** The website's sign-in artwork (Udaipur), bundled so the screen opens complete with no network. */
+const artwork = require('@/assets/images/sign-in-udaipur.webp');
+const mark = require('@/assets/images/icon.png');
+
+const NIGHT = '#0c1124';
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+
+/**
+ * One entrance as the screen opens, never again: the photo settles from slightly close, then the
+ * mark and the form rise 28pt into place. Layout animations follow the phone's reduced-motion
+ * setting, which shows everything in place without moving.
+ */
+const PHOTO_SETTLE = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 1.06 }] },
+  100: { easing: EASE_OUT, opacity: 1, transform: [{ scale: 1 }] },
+}).duration(1400);
+const rise = (delay: number) => FadeInUp.duration(520).delay(delay).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 28 }] });
+const MARK_IN = rise(180);
+const SHEET_IN = rise(320);
+const PROBLEM_IN = FadeIn.duration(200);
 
 /** Staff sign in with their existing email and password. There is no sign-up in this app. */
 export default function SignIn() {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   useAnnounce(problem);
@@ -20,6 +50,7 @@ export default function SignIn() {
     if (!clients || busy) return;
     if (!email.trim() || !password) {
       setProblem('Enter your work email and password.');
+      haptic('error');
       return;
     }
     setBusy(true);
@@ -28,71 +59,161 @@ export default function SignIn() {
       const { error } = await clients.auth.signIn.email({ email: email.trim(), password });
       if (error) {
         logEvent('auth.sign-in-refused');
+        haptic('error');
         setProblem(
           error.status === 429
             ? 'Too many attempts. Wait a minute, then try again.'
             : 'That email and password do not match a Citius account.'
         );
+      } else {
+        haptic('success');
       }
     } catch (error) {
       logEvent('auth.sign-in-failed', error);
+      haptic('error');
       setProblem('Could not reach Citius. Check your connection and try again.');
     }
     setBusy(false);
   };
 
+  const photoHeight = Math.round(height * 0.56);
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ backgroundColor: theme.color.ground, flex: 1 }}>
-      <TopTint height={420} />
-      <Screen
-        header={
-          <View style={{ gap: space.md, paddingTop: space.xxl * 2 }}>
-            <PageTitle kicker="Staff" title="Citius Connect" />
-            <Text tone="muted" variant="secondary">
-              Sign in with your Citius staff account.
-            </Text>
-          </View>
-        }
-        style={{ backgroundColor: 'transparent' }}
-        tabBar={false}
+    <View style={{ backgroundColor: NIGHT, flex: 1 }}>
+      {/* White status bar over the photo. Mounting pushes it and leaving pops it, so the app's dark
+          bar comes back on the next screen. */}
+      <StatusBar style="light" />
+      <Animated.View
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+        entering={PHOTO_SETTLE}
+        style={{ height: photoHeight, left: 0, position: 'absolute', right: 0, top: 0 }}
       >
-        <View style={{ gap: space.md, paddingTop: space.sm }}>
-          <TextField
-            autoCapitalize="none"
-            autoComplete="email"
-            autoCorrect={false}
-            inputMode="email"
-            keyboardType="email-address"
-            label="Work email"
-            onChangeText={setEmail}
-            returnKeyType="next"
-            textContentType="username"
-            value={email}
-          />
-          <TextField
-            autoCapitalize="none"
-            autoComplete="current-password"
-            label="Password"
-            onChangeText={setPassword}
-            onSubmitEditing={() => void submit()}
-            returnKeyType="go"
-            secureTextEntry
-            textContentType="password"
-            value={password}
-          />
-        </View>
-        {problem ? (
-          <Banner tone="danger">
-            <Text accessibilityLiveRegion="polite" variant="secondary">
-              {problem}
+        <Image contentFit="cover" source={artwork} style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={['rgba(12,17,36,0.45)', 'rgba(12,17,36,0)', 'rgba(12,17,36,0.55)', NIGHT]}
+          locations={[0, 0.3, 0.72, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+          contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ minHeight: photoHeight - 64, justifyContent: 'flex-end', paddingBottom: space.xl, paddingHorizontal: theme.frame + space.xs, paddingTop: insets.top + space.xl }}>
+            <Animated.View accessibilityRole="header" accessible entering={MARK_IN} style={{ gap: space.md }}>
+              <Image accessibilityIgnoresInvertColors source={mark} style={{ borderRadius: 14, height: 56, width: 56 }} />
+              <View style={{ gap: space.xs }}>
+                <Text style={{ color: '#ffffff', fontSize: 40, lineHeight: 44 }} variant="display">
+                  Citius Connect
+                </Text>
+                <Text style={{ color: theme.color.onDarkMuted }} variant="secondary">
+                  For Citius Holidays tour managers, on the road with a group.
+                </Text>
+              </View>
+            </Animated.View>
+          </View>
+          <Animated.View
+            entering={SHEET_IN}
+            style={{
+              backgroundColor: theme.color.ground,
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              gap: space.lg,
+              paddingBottom: insets.bottom + space.xl,
+              paddingHorizontal: theme.frame + space.xs,
+              paddingTop: space.xl,
+            }}
+          >
+            <View style={{ gap: space.xs }}>
+              <Text variant="display">Welcome back</Text>
+              <Text tone="muted" variant="secondary">
+                Sign in with your Citius staff account.
+              </Text>
+            </View>
+            <View style={{ gap: space.md }}>
+              <TextField
+                autoCapitalize="none"
+                autoComplete="email"
+                autoCorrect={false}
+                icon={{ ios: 'envelope', md: 'mail' }}
+                inputMode="email"
+                keyboardType="email-address"
+                label="Work email"
+                onChangeText={setEmail}
+                placeholder="name@citiusholidays.com"
+                returnKeyType="next"
+                textContentType="username"
+                value={email}
+              />
+              <TextField
+                autoCapitalize="none"
+                autoComplete="current-password"
+                icon={{ ios: 'lock', md: 'lock' }}
+                label="Password"
+                onChangeText={setPassword}
+                onSubmitEditing={() => void submit()}
+                returnKeyType="go"
+                secureTextEntry={!reveal}
+                textContentType="password"
+                trailing={
+                  <PressableScale
+                    accessibilityLabel={reveal ? 'Hide password' : 'Show password'}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => setReveal((value) => !value)}
+                    style={{ alignItems: 'center', height: 44, justifyContent: 'center', width: 44 }}
+                  >
+                    <Icon color={theme.color.muted} ios={reveal ? 'eye.slash' : 'eye'} md={reveal ? 'visibility_off' : 'visibility'} size={19} />
+                  </PressableScale>
+                }
+                value={password}
+              />
+            </View>
+            {problem ? (
+              <Animated.View entering={PROBLEM_IN}>
+                <Banner tone="danger">
+                  <Text accessibilityLiveRegion="polite" variant="secondary">
+                    {problem}
+                  </Text>
+                </Banner>
+              </Animated.View>
+            ) : null}
+            <PressableScale
+              accessibilityLabel="Sign in"
+              accessibilityRole="button"
+              accessibilityState={{ busy, disabled: busy }}
+              disabled={busy}
+              onPress={() => void submit()}
+              style={{
+                alignItems: 'center',
+                backgroundColor: theme.color.primary,
+                borderRadius: theme.radius.chip,
+                flexDirection: 'row',
+                gap: space.sm,
+                justifyContent: 'center',
+                minHeight: 54,
+              }}
+            >
+              {busy ? (
+                <ActivityIndicator color={theme.color.onPrimary} />
+              ) : (
+                <>
+                  <Text tone="onPrimary" variant="bodyStrong">
+                    Sign in
+                  </Text>
+                  <Icon color={theme.color.onPrimary} ios="arrow.right" md="arrow_forward" size={17} />
+                </>
+              )}
+            </PressableScale>
+            <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
+              Citius Holidays sets up staff accounts. If you cannot sign in, contact HR or your manager.
             </Text>
-          </Banner>
-        ) : null}
-        <Button busy={busy} label="Sign in" onPress={() => void submit()} />
-        <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
-          Staff accounts are set up by Citius. If you cannot sign in, contact HR or your manager.
-        </Text>
-      </Screen>
-    </KeyboardAvoidingView>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
