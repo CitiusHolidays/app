@@ -36,11 +36,11 @@ describe('resolveGate', () => {
     });
   });
 
-  it('waits for the server after a fresh sign-in, even with saved data on the phone', () => {
+  it('waits for the server after a fresh sign-in, even with saved data on the phone, and says so once it stalls', () => {
     expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm, needsServerCheck: true }).kind).toBe('loading');
     expect(
       gate({ hasCachedSession: true, isAuthenticated: true, lastVerified: verifiedTm, needsServerCheck: true, stalled: true }).kind
-    ).toBe('loading');
+    ).toBe('stalled');
   });
 
   it('opens the saved trip pack when the server has not answered in time (a hanging connection)', () => {
@@ -55,14 +55,16 @@ describe('resolveGate', () => {
     ).toMatchObject({ kind: 'staff', offline: true });
   });
 
-  it('keeps waiting on a stall when the phone has nothing it may show', () => {
-    expect(gate({ authLoading: true, stalled: true }).kind).toBe('loading');
-    expect(gate({ authLoading: true, hasCachedSession: true, stalled: true }).kind).toBe('loading');
+  it('says the server is not answering, instead of spinning, when a stall leaves nothing the phone may show', () => {
+    expect(gate({ authLoading: true, stalled: true }).kind).toBe('stalled');
+    expect(gate({ authLoading: true, hasCachedSession: true, stalled: true }).kind).toBe('stalled');
     const old = { ...verifiedTm, verifiedAt: NOW - 30 * 86_400_000 };
-    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: old, stalled: true }).kind).toBe('loading');
+    expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: old, stalled: true }).kind).toBe('stalled');
     expect(gate({ authLoading: true, hasCachedSession: true, lastVerified: verifiedTm, stalled: true, sessionRejected: true }).kind).toBe(
-      'loading'
+      'stalled'
     );
+    // Not a server wait: the device is holding a new tour manager back until the old data is wiped.
+    expect(gate({ access: staffAccess, isAuthenticated: true, stalled: true }).kind).toBe('loading');
   });
 
   it('sends a signed-out user to sign-in', () => {

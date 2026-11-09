@@ -1,6 +1,6 @@
 import { type PortalAccess, staffApi } from '@citius/backend';
 import { useConvexAuth, useQuery } from 'convex/react';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useReducer, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { useAppStore, useStoredValue } from '@/lib/app-store';
@@ -12,6 +12,7 @@ import { useNow } from '@/lib/use-now';
 import { deleteAllReceipts } from '@/features/expenses/receipt-files';
 import { deleteAllPassportPdfs } from '@/features/passports/passport-pdf-file';
 
+import { gateMachine, initialGateMachine, SERVER_STALL_MS } from './gate-machine';
 import {
   type AuthSessionState,
   type Gate,
@@ -29,6 +30,8 @@ const SERVER_CHECK_KEY = 'session:needsServerCheck';
 interface StaffSession {
   gate: Gate;
   online: boolean;
+  /** After a stall: wait for the server again and ask it for the session once more. */
+  retry: () => void;
   /** Access was withdrawn: deletes the cached verification and everything saved on this phone. */
   revoke: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -44,42 +47,19 @@ const noSession = () => NO_SESSION;
 /** Better Auth's session state; `clients` is fixed at start-up, so the hook choice never changes. */
 const useAuthSession: () => AuthSessionState = clients ? clients.auth.useSession : noSession;
 
-function useHasCachedSession(isAuthenticated: boolean, epoch: number) {
-  const [cached, setCached] = useState<{ for: string; value: boolean } | null>(null);
-  const checkFor = `${isAuthenticated}:${epoch}`;
-  useEffect(() => {
-    let active = true;
-    // Only the Expo plugin stores a session cookie on the device; the web preview has none.
-    const auth = Platform.OS === 'web' ? undefined : (clients?.auth as { getCookie?: () => Promise<string> } | undefined);
-    (auth?.getCookie?.() ?? Promise.resolve(''))
-      .then((cookie) => {
-        if (active) setCached({ for: checkFor, value: Boolean(cookie) });
-      })
-      .catch(() => {
-        if (active) setCached({ for: checkFor, value: false });
-      });
-    return () => {
-      active = false;
-    };
-  }, [checkFor]);
-  return cached?.for === checkFor ? cached.value : null;
+/** Only the Expo plugin stores a session cookie on the device; the web preview has none. */
+async function holdsSavedSession() {
+  const auth = Platform.OS === 'web' ? undefined : (clients?.auth as { getCookie?: () => Promise<string> } | undefined);
+  try {
+    return Boolean(await auth?.getCookie?.());
+  } catch {
+    return false;
+  }
 }
 
-/** How long the gate waits for the server before treating the connection as gone. */
-export const SERVER_STALL_MS = 8_000;
-
-/** True once `waiting` has stayed true for SERVER_STALL_MS; resets as soon as it clears. */
-function useStalled(waiting: boolean) {
-  const [stalledFor, setStalledFor] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = setTimeout(() => setStalledFor(true), SERVER_STALL_MS);
-    return () => {
-      clearTimeout(timer);
-      setStalledFor(null);
-    };
-  }, [waiting]);
-  return waiting && stalledFor === true;
+/** Asks Better Auth to fetch the session again; Convex then asks for a new token. */
+function refetchSession() {
+  (clients?.auth as { $store?: { notify: (signal: '$sessionSignal') => void } } | undefined)?.$store?.notify('$sessionSignal');
 }
 
 export function StaffSessionProvider({ children }: { children: ReactNode }) {
@@ -89,10 +69,8 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const online = useOnline();
   const access = useQuery(staffApi.getMyPortalAccess.ref, isAuthenticated ? {} : 'skip');
   const [storedVerified, , verifiedLoaded] = useStoredValue<VerifiedStaff | null>(VERIFIED_KEY, null);
-  const [needsServerCheck, , checkLoaded] = useStoredValue<boolean>(SERVER_CHECK_KEY, false);
-  const [authEpoch, setAuthEpoch] = useState(0);
-  const hasCachedSession = useHasCachedSession(isAuthenticated, authEpoch);
-  const [signingOut, setSigningOut] = useState(false);
+  const [storedServerCheck, , checkLoaded] = useStoredValue<boolean>(SERVER_CHECK_KEY, false);
+  const [machine, dispatch] = useReducer(gateMachine, isAuthenticated, initialGateMachine);
   const now = useNow();
   // Wipes and verification writes run one at a time, in order.
   const queue = useRef<Promise<void>>(SETTLED);
@@ -133,7 +111,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
           await wipeLocalData();
         }
         await live.set(VERIFIED_KEY, step.record);
-        await live.set(SERVER_CHECK_KEY, false);
+        dispatch({ type: 'verified' });
       }
     },
     [live, wipeLocalData]
@@ -159,7 +137,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = async () => {
-    setSigningOut(true);
+    dispatch({ type: 'signOutStarted' });
     await serially(() =>
       signOutDevice({
         clearSession: clearLocalAuthSession,
@@ -168,38 +146,78 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
         },
         wipeData: wipeLocalData,
       })
-    ).finally(() => {
-      setAuthEpoch((value) => value + 1);
-      setSigningOut(false);
-    });
+    ).finally(() => dispatch({ type: 'signOutFinished' }));
   };
 
-  // A hanging connection never errors, so after a while stop waiting and use the offline rules.
-  const waiting = isLoading || (isAuthenticated && access === undefined);
-  const stalled = useStalled(waiting);
+  const retry = () => {
+    dispatch({ type: 'retry' });
+    refetchSession();
+  };
 
-  const gate: Gate = signingOut
-    ? { kind: 'loading' }
-    : resolveGate({
-        access: access ?? undefined,
-        authLoading: isLoading || !verifiedLoaded || !checkLoaded || hasCachedSession === null,
-        hasCachedSession: Boolean(hasCachedSession),
-        isAuthenticated,
-        lastVerified: storedVerified,
-        needsServerCheck,
-        now,
-        sessionRejected: sessionRejectedByServer(authSession),
-        stalled,
-      });
+  // The saved session cookie is read again after every sign-in change and every sign-out.
+  useEffect(() => {
+    dispatch({ isAuthenticated, type: 'authChanged' });
+  }, [isAuthenticated]);
+  const { read: cookieRead, status: cookieStatus } = machine.cookie;
+  useEffect(() => {
+    if (cookieStatus !== 'checking') return;
+    let active = true;
+    void holdsSavedSession().then((held) => {
+      if (active) dispatch({ held, read: cookieRead, type: 'cookieRead' });
+    });
+    return () => {
+      active = false;
+    };
+  }, [cookieRead, cookieStatus]);
+  // Until the effect above has run, a read for the previous sign-in state counts as unread.
+  const cookie = machine.cookie.forAuth === isAuthenticated ? cookieStatus : 'checking';
+
+  // The stored server-check flag is read once; after that the machine owns it and the store mirrors it.
+  useEffect(() => {
+    if (checkLoaded) dispatch({ required: storedServerCheck, type: 'serverCheckLoaded' });
+  }, [checkLoaded, storedServerCheck]);
+  const { serverCheck } = machine;
+  useEffect(() => {
+    // A wipe clears the stored flag too; writing it back keeps the next sign-in checked.
+    if (serverCheck !== 'unread' && checkLoaded && storedServerCheck !== (serverCheck === 'required')) {
+      void serially(() => live.set(SERVER_CHECK_KEY, serverCheck === 'required'));
+    }
+  }, [checkLoaded, live, serially, serverCheck, storedServerCheck]);
+
+  // A hanging connection never errors, so after a while stop waiting: open the saved data offline,
+  // or say that the server is not answering.
+  const waiting = isLoading || (isAuthenticated && access === undefined);
+  useEffect(() => {
+    dispatch({ type: 'serverWaiting', waiting });
+  }, [machine.kind, waiting]);
+  const wait = machine.kind === 'active' ? machine.wait : 'idle';
+  useEffect(() => {
+    if (wait !== 'waiting') return;
+    const timer = setTimeout(() => dispatch({ type: 'stallTimerFired' }), SERVER_STALL_MS);
+    return () => clearTimeout(timer);
+  }, [wait]);
+
+  const gate: Gate =
+    machine.kind === 'signingOut'
+      ? { kind: 'loading' }
+      : resolveGate({
+          access: access ?? undefined,
+          authLoading: isLoading || !verifiedLoaded || serverCheck === 'unread' || cookie === 'checking',
+          hasCachedSession: cookie === 'held',
+          isAuthenticated,
+          lastVerified: storedVerified,
+          needsServerCheck: serverCheck === 'required',
+          now,
+          sessionRejected: sessionRejectedByServer(authSession),
+          stalled: wait === 'stalled',
+        });
 
   // Whoever signs in next is confirmed by the server before any saved data opens.
   useEffect(() => {
-    if (gate.kind === 'signedOut' && checkLoaded && !needsServerCheck) {
-      void serially(() => live.set(SERVER_CHECK_KEY, true));
-    }
-  }, [checkLoaded, gate.kind, live, needsServerCheck, serially]);
+    if (gate.kind === 'signedOut') dispatch({ type: 'signInShown' });
+  }, [gate.kind]);
 
-  return <SessionContext.Provider value={{ gate, online, revoke, signOut }}>{children}</SessionContext.Provider>;
+  return <SessionContext.Provider value={{ gate, online, retry, revoke, signOut }}>{children}</SessionContext.Provider>;
 }
 
 export function useStaffSession() {
