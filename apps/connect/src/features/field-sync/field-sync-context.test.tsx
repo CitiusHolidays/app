@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { getFunctionName } from 'convex/server';
+import { ConvexError } from 'convex/values';
 import { useEffect } from 'react';
 import { Text } from 'react-native';
 
@@ -99,8 +100,35 @@ describe('field sync provider', () => {
     await renderApp();
     await screen.findByText('items:none');
     await act(async () => handles.sync?.enqueue(stop(['t_1'], 10)));
-    await waitFor(async () => expect((await mockStore.getJSON<SyncItem[]>(fieldOutboxKey))?.[0]?.attempts).toBe(1));
+    await waitFor(async () => expect((await mockStore.getJSON<SyncItem[]>(fieldOutboxKey))?.[0]).toMatchObject({ attempts: 1 }));
     expect(screen.getByText('items:pending')).toBeOnTheScreen();
+  });
+
+  it('stops sending a refused push when the tour manager discards it, and keeps it gone after a restart', async () => {
+    mockMutation.mockRejectedValue(new ConvexError('FORBIDDEN'));
+    const first = await renderApp();
+    await screen.findByText('items:none');
+    await act(async () => handles.sync?.enqueue(stop(['t_1'], 10)));
+    expect(await screen.findByText('items:needsAttention')).toBeOnTheScreen();
+    const key = handles.sync?.items[0]?.key ?? '';
+    await act(async () => handles.sync?.discard([key]));
+    expect(await screen.findByText('items:none')).toBeOnTheScreen();
+    await first.unmount();
+
+    await renderApp();
+    expect(await screen.findByText('items:none')).toBeOnTheScreen();
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a push an earlier version queued, after reading its old flags', async () => {
+    const [item] = enqueuePush([], stop(['t_1'], 10), 'staff_1', 0);
+    if (!item) throw new Error('no item');
+    // As earlier versions saved it: the state spread over side-by-side flags.
+    await mockStore.setJSON(fieldOutboxKey, [{ ...item, ignoredTravellerIds: 0, newerOnServer: false, landed: undefined }]);
+    await renderApp();
+    expect(await screen.findByText('items:synced')).toBeOnTheScreen();
+    expect(mockMutation.mock.calls[0]?.[1]).toEqual(item.args);
+    expect((await mockStore.getJSON<SyncItem[]>(fieldOutboxKey))?.[0]).not.toHaveProperty('newerOnServer');
   });
 
   it("neither shows nor sends another staff member's queued pushes", async () => {
