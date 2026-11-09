@@ -1,11 +1,14 @@
 import { ConvexError } from 'convex/values';
 
+import { pushOnly, syncedAt as landedAt } from './fixtures';
 import {
+  discardRefused,
   drainSyncQueue,
   dueSyncItems,
   enqueuePush,
   type FieldPush,
   type PushOutcome,
+  readSyncItems,
   retrySyncNow,
   sendItem,
   settleItem,
@@ -48,6 +51,12 @@ function deps(answer: SyncDeps['push']): SyncDeps & { sent: FieldPush[] } {
 
 const applied = async () => ({ applied: true, id: 'srv_1', ignoredTravellerIds: 0 });
 
+/** Narrows to a pending item, failing the test if it is in another state. */
+function pendingOnly(item: SyncItem) {
+  if (item.status !== 'pending') throw new Error(`expected pending, got ${item.status}`);
+  return item;
+}
+
 describe('field sync queue', () => {
   it('keeps one item per stop, holding only the latest state', () => {
     let items: SyncItem[] = [];
@@ -89,7 +98,11 @@ describe('field sync queue', () => {
     const [item] = enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW);
     if (!item) throw new Error('no item');
     const outcome = await sendItem(item, deps(async () => ({ applied: true, id: 'srv_1', ignoredTravellerIds: 2 })));
-    expect(settleItem(item, item, outcome)).toMatchObject({ ignoredTravellerIds: 2, newerOnServer: false, status: 'synced', syncedAt: NOW + 10 });
+    const settled = settleItem(item, item, outcome);
+    expect(settled).toMatchObject({ landed: { at: NOW + 10, ignoredTravellerIds: 2, newerOnServer: false }, status: 'synced' });
+    // A synced item carries no retry schedule.
+    expect(settled).not.toHaveProperty('attempts');
+    expect(settled).not.toHaveProperty('nextAttemptAt');
   });
 
   it('treats applied: false as synced: the office already holds a newer copy, so it stops sending', async () => {
@@ -97,7 +110,7 @@ describe('field sync queue', () => {
     if (!item) throw new Error('no item');
     const outcome = await sendItem(item, deps(async () => ({ applied: false, id: 'srv_1', ignoredTravellerIds: 0 })));
     const settled = settleItem(item, item, outcome);
-    expect(settled).toMatchObject({ newerOnServer: true, status: 'synced' });
+    expect(settled).toMatchObject({ landed: { newerOnServer: true }, status: 'synced' });
     expect(dueSyncItems([settled], NOW + 10 ** 9, 'staff_1')).toEqual([]);
   });
 
@@ -107,12 +120,12 @@ describe('field sync queue', () => {
     const offline = deps(async () => {
       throw new TypeError('Network request failed');
     });
-    const first = settleItem(item, item, await sendItem(item, offline));
-    expect(first).toMatchObject({ attempts: 1, status: 'pending' });
+    const first = pendingOnly(settleItem(item, item, await sendItem(item, offline)));
+    expect(first.attempts).toBe(1);
     expect(first.nextAttemptAt).toBeGreaterThan(NOW + 10);
     expect(dueSyncItems([first], NOW + 10, 'staff_1')).toEqual([]);
 
-    const second = settleItem(first, first, await sendItem(first, { ...offline, now: () => first.nextAttemptAt }));
+    const second = pendingOnly(settleItem(first, first, await sendItem(first, { ...offline, now: () => first.nextAttemptAt })));
     expect(second.attempts).toBe(2);
     expect(second.nextAttemptAt - first.nextAttemptAt).toBeGreaterThan(first.nextAttemptAt - (NOW + 10));
     expect(second.args).toEqual(item.args);
@@ -122,10 +135,42 @@ describe('field sync queue', () => {
     const [item] = enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW);
     if (!item) throw new Error('no item');
     const refused = settleItem(item, item, await sendItem(item, deps(async () => Promise.reject(new ConvexError('FORBIDDEN')))));
-    expect(refused).toMatchObject({ status: 'needsAttention' });
-    expect(refused.problem).toMatch(/no longer be assigned/);
+    expect(refused).toMatchObject({ problem: expect.stringMatching(/no longer be assigned/), status: 'needsAttention' });
+    expect(refused).not.toHaveProperty('nextAttemptAt');
     expect(dueSyncItems([refused], NOW + 10 ** 9, 'staff_1')).toEqual([]);
-    expect(dueSyncItems([retrySyncNow(refused, NOW)], NOW, 'staff_1')).toHaveLength(1);
+    const retried = retrySyncNow(refused, NOW);
+    expect(dueSyncItems([retried], NOW, 'staff_1')).toHaveLength(1);
+    // A retried item is pending again: the refusal's words go with the refusal.
+    expect(retried).not.toHaveProperty('problem');
+  });
+
+  it('lets the tour manager stop sending a refused item, and only a refused one', async () => {
+    const [item] = enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW);
+    if (!item) throw new Error('no item');
+    const refused = settleItem(item, item, await sendItem(item, deps(async () => Promise.reject(new ConvexError('FORBIDDEN')))));
+    const other = enqueuePush([], { ...stop(['t_2'], NOW), args: { ...stop(['t_2'], NOW).args, clientStopId: 'stop-2' } }, 'staff_1', NOW);
+    const queued = [refused, ...other];
+    expect(discardRefused(queued, [refused.key], 'staff_2')).toEqual(queued);
+    expect(discardRefused(queued, [refused.key], 'staff_1')).toEqual(other);
+    // A pending item is still on its way: discarding it is not offered, and not done.
+    expect(discardRefused(other, other.map((entry) => entry.key), 'staff_1')).toEqual(other);
+  });
+
+  it('reads items saved before the explicit states, with their flags turned into one state', () => {
+    const [item] = enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW);
+    if (!item) throw new Error('no item');
+    const legacy = { args: item.args, attempts: 0, ignoredTravellerIds: 1, key: item.key, kind: item.kind, newerOnServer: false, nextAttemptAt: NOW, staffId: 'staff_1', updatedAt: NOW };
+    const [synced, refused, waiting] = readSyncItems([
+      { ...legacy, status: 'synced', syncedAt: NOW + 5 },
+      { ...legacy, problem: 'No', status: 'needsAttention' },
+      { ...legacy, attempts: 2, status: 'pending' },
+    ]);
+    expect(synced).toEqual({ args: item.args, key: item.key, kind: item.kind, landed: { at: NOW + 5, ignoredTravellerIds: 1, newerOnServer: false }, staffId: 'staff_1', status: 'synced', updatedAt: NOW });
+    expect(refused).toMatchObject({ problem: 'No', status: 'needsAttention' });
+    expect(refused?.landed).toBeUndefined();
+    expect(waiting).toMatchObject({ attempts: 2, nextAttemptAt: NOW, status: 'pending' });
+    expect(readSyncItems([item])).toEqual([item]);
+    expect(readSyncItems(null)).toEqual([]);
   });
 
   it('keeps a change made while a push was in flight queued, instead of marking it synced', async () => {
@@ -135,14 +180,14 @@ describe('field sync queue', () => {
     const [changed] = enqueuePush([sent], stop(['t_1', 't_2'], NOW + 3), 'staff_1', NOW + 3);
     if (!changed) throw new Error('no item');
     const settled = settleItem(changed, sent, outcome);
-    expect(settled).toMatchObject({ status: 'pending', syncedAt: NOW + 10 });
+    expect(settled).toMatchObject({ landed: { at: NOW + 10 }, status: 'pending' });
     expect(settled.args).toMatchObject({ presentTravellerIds: ['t_1', 't_2'] });
   });
 
   it('drops synced items after a few days so the queue stays small', () => {
     const [item] = enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW);
     if (!item) throw new Error('no item');
-    const old: SyncItem = { ...item, status: 'synced', syncedAt: NOW, updatedAt: NOW };
+    const old = landedAt(item, NOW);
     const later = NOW + 4 * 24 * 60 * 60 * 1000;
     const other: FieldPush = { ...stop([], later), args: { ...stop([], later).args, clientStopId: 'stop-9' } };
     expect(enqueuePush([old], other, 'staff_1', later).map((entry) => entry.args)).toEqual([other.args]);
@@ -153,9 +198,9 @@ describe('field sync queue', () => {
     if (!item) throw new Error('no item');
     expect(syncSummary([])).toEqual({ kind: 'none' });
     expect(syncSummary([item])).toEqual({ kind: 'waiting' });
-    const synced: SyncItem = { ...item, ignoredTravellerIds: 1, status: 'synced', syncedAt: NOW + 5 };
+    const synced = landedAt(item, NOW + 5, 1);
     expect(syncSummary([synced])).toEqual({ at: NOW + 5, ignored: 1, kind: 'synced', newerOnServer: false });
-    expect(syncSummary([synced, { ...item, key: 'other', problem: 'No', status: 'needsAttention' }])).toEqual({
+    expect(syncSummary([synced, { ...pushOnly(item), key: 'other', problem: 'No', staffId: 'staff_1', status: 'needsAttention', updatedAt: NOW }])).toEqual({
       keys: ['other'],
       kind: 'problem',
       problem: 'No',

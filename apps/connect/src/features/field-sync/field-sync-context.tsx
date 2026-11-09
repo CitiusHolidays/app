@@ -8,17 +8,22 @@ import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
 
 import {
+  discardRefused,
   drainSyncQueue,
   enqueuePush,
   type FieldPush,
   fieldOutboxKey,
+  readSyncItems,
   retrySyncNow,
   settleItem,
+  type StoredSyncItem,
   type SyncDeps,
   type SyncItem,
 } from './queue';
 
 interface FieldSyncValue {
+  /** Stops sending refused items: the record stays on the phone, and a later change queues it again. */
+  discard: (keys: string[]) => void;
   /** Queues the latest state of a stop or announcement for the office; sends when it can. */
   enqueue: (push: FieldPush) => void;
   /** The signed-in staff member's queued and synced pushes. */
@@ -39,7 +44,13 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
   const { live } = useAppStore();
   const canSend = online && gate.kind === 'staff' && !gate.offline;
   const staffId = gate.kind === 'staff' ? gate.staff.staffId : null;
-  const [items, setItems, loaded] = useStoredValue<SyncItem[]>(fieldOutboxKey, []);
+  const [stored, setStored, loaded] = useStoredValue<StoredSyncItem[]>(fieldOutboxKey, []);
+  const items = readSyncItems(stored);
+  /** Every change reads through `readSyncItems`, so items saved by an earlier version are converted. */
+  const update = useCallback(
+    (change: (previous: SyncItem[]) => SyncItem[]) => setStored((previous) => change(readSyncItems(previous))),
+    [setStored]
+  );
   const running = useRef(false);
   const again = useRef(false);
 
@@ -63,14 +74,14 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
           : convex.mutation(staffApi.recordAnnouncement.ref, push.args),
     };
     // Read straight from the live store: it already holds every change made during this run.
-    const queued = () => (live.snapshot(fieldOutboxKey)?.value as SyncItem[] | null | undefined) ?? [];
+    const queued = () => readSyncItems(live.snapshot(fieldOutboxKey)?.value as StoredSyncItem[] | null | undefined);
     await drainSyncQueue({
       again,
       deps,
       isCurrent: current,
       queued,
       settle: async (sent, outcome) => {
-        await setItems((previous) =>
+        await update((previous) =>
           previous.map((candidate) =>
             candidate.key === sent.key && candidate.staffId === sent.staffId ? settleItem(candidate, sent, outcome) : candidate
           )
@@ -81,7 +92,7 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
       staffId,
     }).catch((error: unknown) => logEvent('field-sync.run-failed', error));
     running.current = false;
-  }, [canSend, convex, live, loaded, setItems, staffId]);
+  }, [canSend, convex, live, loaded, staffId, update]);
 
   useEffect(() => {
     if (!canSend) {
@@ -99,16 +110,21 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
   }, [canSend, run]);
 
   const value: FieldSyncValue = {
+    discard: (keys) => {
+      if (!staffId) return;
+      void update((previous) => discardRefused(previous, keys, staffId));
+      logEvent('field-sync.discarded');
+    },
     enqueue: (push) => {
       if (!staffId) return;
-      void setItems((previous) => enqueuePush(previous, push, staffId, Date.now()));
+      void update((previous) => enqueuePush(previous, push, staffId, Date.now()));
       void Promise.resolve().then(run);
     },
     items: items.filter((item) => item.staffId === staffId),
     retry: (keys) => {
       const now = Date.now();
       const retried = new Set(keys);
-      void setItems((previous) =>
+      void update((previous) =>
         previous.map((item) => (item.staffId === staffId && retried.has(item.key) ? retrySyncNow(item, now) : item))
       );
       void Promise.resolve().then(run);

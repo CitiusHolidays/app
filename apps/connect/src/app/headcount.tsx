@@ -1,24 +1,33 @@
-import { Banner, Button, face, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
+import { Banner, face, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 
-import { Avatar, Chip, ChipRow, EveryoneSeal, Icon, ListCard, QuietState, Screen, Segmented, StepNumber, TextField, TickStrip } from '@/components/kit';
+import { Avatar, Chip, ChipRow, EveryoneSeal, Icon, ListCard, QuietState, Screen, Segmented, StepNumber, TickStrip } from '@/components/kit';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { headcountStopPush } from '@/features/field-sync/pushes';
 import { syncKey } from '@/features/field-sync/queue';
 import { SyncLine } from '@/features/field-sync/sync-line';
-import { type HeadcountState, type HeadcountSummary, headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
+import {
+  earlierStops,
+  type HeadcountState,
+  type HeadcountSummary,
+  headcountAnswer,
+  nobodyTravelling,
+  PARTIAL_ROSTER_NOTICE,
+  summarize,
+} from '@/features/headcount/headcount';
+import { EVERYONE, type HeadcountFilter, type HeadcountView, type Show, viewRoster } from '@/features/headcount/headcount-filter';
+import { HeroSkeleton, RowsSkeleton } from '@/features/headcount/headcount-skeleton';
+import { EarlierStops, NextStop } from '@/features/headcount/next-stop';
 import { useHeadcount } from '@/features/headcount/use-headcount';
-import type { RosterEntry } from '@/features/trip-pack/trip-pack';
+import type { RosterEntry, TripPack } from '@/features/trip-pack/trip-pack';
 import { useTrips } from '@/features/trips/trips-context';
 import { haptic, tick } from '@/lib/haptics';
 import { useAnnounce } from '@/lib/use-announce';
 import { useLingering } from '@/lib/use-lingering';
 import { useProgressiveCount } from '@/lib/use-progressive-count';
 import { CLOSE_UP, ROW_OUT } from '@/lib/motion';
-
-type Show = 'all' | 'missing';
 
 const SHOW_OPTIONS: { label: string; value: Show }[] = [
   { label: 'All', value: 'all' },
@@ -81,133 +90,160 @@ function TravellerRow({ entry, here, last, onPress }: { entry: RosterEntry; here
   );
 }
 
-/** Names a fresh stop and starts counting again from nobody. */
-function NextStop({ onStart }: { onStart: (name: string) => void }) {
-  const [stopName, setStopName] = useState('');
-  const start = () => {
-    onStart(stopName);
-    setStopName('');
-  };
-  return (
-    <Surface style={{ gap: space.md }}>
-      <TextField
-        hint="Starts a fresh count. Earlier stops stay in today's record."
-        label="Next stop"
-        onChangeText={setStopName}
-        // The keyboard's own Go key starts the stop, so the button under the keyboard is optional.
-        onSubmitEditing={start}
-        placeholder="For example: Temple car park"
-        returnKeyType="go"
-        value={stopName}
-      />
-      <Button
-        icon={<Icon ios="arrow.right" md="arrow_forward" size={15} />}
-        label="Start new stop"
-        onPress={start}
-        variant="secondary"
-      />
-    </Surface>
-  );
-}
-
 /**
  * Tap each traveller who is here. Works offline: marks stay on this phone for today, and each
  * stop is sent to the office whenever there is a connection.
  */
 export default function Headcount() {
   const { pack, selected } = useTrips();
-  const { newStop, state, toggle } = useHeadcount(selected?.id ?? null);
+  const headcount = useHeadcount(selected?.id ?? null);
+  const { state } = headcount;
+  if (!pack || !state) {
+    return <NothingToCount text="Save the trip pack first (Trip tab), then take a headcount." />;
+  }
+  if (nobodyTravelling(pack.roster)) {
+    return (
+      <NothingToCount
+        partial={!pack.complete}
+        text="Nobody on this trip is travelling, so there is no one to count. Refresh the trip pack (Trip tab) once Operations adds travellers."
+      />
+    );
+  }
+  return <Count headcount={headcount} pack={pack} state={state} />;
+}
+
+/** Why there is no list to mark yet, and what to do about it. */
+function NothingToCount({ partial = false, text }: { partial?: boolean; text: string }) {
+  return (
+    <Screen tabBar={false}>
+      <Surface>
+        <QuietState text={text} />
+      </Surface>
+      {partial ? <PartialNotice /> : null}
+    </Screen>
+  );
+}
+
+function PartialNotice() {
+  return (
+    <Banner tone="attention">
+      <Text variant="secondary">{PARTIAL_ROSTER_NOTICE}</Text>
+    </Banner>
+  );
+}
+
+/** The count for a trip with travellers: the answer, the filters, and the list to mark. */
+function Count({
+  headcount: { loaded, newStop, toggle },
+  pack,
+  state: current,
+}: {
+  headcount: ReturnType<typeof useHeadcount>;
+  pack: TripPack;
+  state: HeadcountState;
+}) {
   const sync = useFieldSync();
   /** Queues the stop that just changed (always the current one) for the office. */
   const send = (next: HeadcountState | null) => {
     const stop = next?.stops.at(-1);
     if (next && stop) sync.enqueue(headcountStopPush(next, stop));
   };
-  const [batchId, setBatchId] = useState<string | undefined>(undefined);
-  const [show, setShow] = useState<Show>('all');
+  const [filter, setFilter] = useState<HeadcountFilter>(EVERYONE);
   // In "Not marked", a row someone just marked stays put for a moment showing "Here", then leaves.
   const { hold, held } = useLingering();
-  const summary = pack && state ? summarize(state, pack.roster, batchId) : null;
-  const answer = summary && pack ? headcountAnswer(summary, pack) : null;
+  const present = new Set(current.stops.at(-1)?.present ?? []);
+  const view = viewRoster(pack, filter, present, held);
+  const summary = summarize(current, pack.roster, view.batch?.id);
+  const answer = loaded ? headcountAnswer(summary, pack) : null;
   useAnnounce(answer);
   // A large group draws its first screens at once and fills in over the next few frames.
-  const shown = useProgressiveCount(pack?.roster.length ?? 0);
+  const shown = useProgressiveCount(pack.roster.length);
+  const todaysKeys = new Set(current.stops.map((stop) => syncKey(headcountStopPush(current, stop))));
+  const whole = summarize(current, pack.roster);
 
-  if (!pack || !state || !summary || !answer) {
-    return (
-      <Screen tabBar={false}>
-        <Surface>
-          <QuietState text="Save the trip pack first (Trip tab), then take a headcount." />
-        </Surface>
-      </Screen>
-    );
-  }
-  const present = new Set(state.stops.at(-1)?.present ?? []);
-  const todaysKeys = new Set(state.stops.map((stop) => syncKey(headcountStopPush(state, stop))));
-  const syncItems = sync.items.filter((item) => todaysKeys.has(item.key));
-  const people = pack.roster.filter(
-    (entry) => entry.travelling && (!batchId || entry.batchId === batchId) && (show === 'all' || !present.has(entry.id) || held.has(entry.id))
-  );
+  const mark = (entry: RosterEntry) => {
+    const wasLast = !present.has(entry.id) && summary.missing.length === 1 && summary.missing[0]?.id === entry.id;
+    send(toggle(entry.id));
+    if (filter.show === 'missing') hold(entry.id);
+    if (wasLast) haptic('success');
+    else tick();
+  };
 
   return (
     <Screen tabBar={false}>
-      <HeadcountHero answer={answer} summary={summary} />
-      <SyncLine ignoredNote={ignoredNote} items={syncItems} onRetry={sync.retry} />
-      {pack.complete ? null : (
-        <Banner tone="attention">
-          <Text variant="secondary">{PARTIAL_ROSTER_NOTICE}</Text>
-        </Banner>
-      )}
-      {pack.batches.length > 0 ? (
-        <ChipRow label="Travel batch">
-          <Chip label="Everyone" onPress={() => setBatchId(undefined)} selected={!batchId} />
-          {pack.batches.map((batch) => (
-            <Chip key={batch.id} label={batch.label} onPress={() => setBatchId(batch.id)} selected={batchId === batch.id} />
-          ))}
-        </ChipRow>
+      {answer ? <HeadcountHero answer={answer} summary={summary} /> : <HeroSkeleton />}
+      {loaded ? (
+        <SyncLine
+          ignoredNote={ignoredNote}
+          items={sync.items.filter((item) => todaysKeys.has(item.key))}
+          onDiscard={sync.discard}
+          onRetry={sync.retry}
+        />
       ) : null}
-      <Segmented label="Show" onChange={setShow} options={SHOW_OPTIONS} value={show} />
-      <TravellerList
-        onToggle={(entry) => {
-          const wasLast = !present.has(entry.id) && summary.missing.length === 1 && summary.missing[0]?.id === entry.id;
-          send(toggle(entry.id));
-          if (show === 'missing') hold(entry.id);
-          if (wasLast) haptic('success');
-          else tick();
-        }}
-        people={people}
-        present={present}
-        show={show}
-        shown={shown}
+      {pack.complete ? null : <PartialNotice />}
+      <BatchChips
+        batches={pack.batches}
+        chosen={view.batch?.id ?? null}
+        onChoose={(batchId) => setFilter((previous) => ({ ...previous, batchId }))}
       />
-      <NextStop onStart={(name) => send(newStop(name))} />
+      <Segmented label="Show" onChange={(show) => setFilter((previous) => ({ ...previous, show }))} options={SHOW_OPTIONS} value={filter.show} />
+      {loaded ? (
+        <>
+          <TravellerList onToggle={mark} present={present} show={filter.show} shown={shown} view={view} />
+          <NextStop current={{ answer: headcountAnswer(whole, pack), label: whole.stopLabel }} onStart={(name) => send(newStop(name))} />
+          <EarlierStops stops={earlierStops(current, pack.roster, pack.complete)} />
+        </>
+      ) : (
+        <RowsSkeleton rows={view.people.length} />
+      )}
     </Screen>
+  );
+}
+
+/** Narrows the count to one travel batch. Hidden when the trip has no batches. */
+function BatchChips({
+  batches,
+  chosen,
+  onChoose,
+}: {
+  batches: readonly { id: string; label: string }[];
+  chosen: string | null;
+  onChoose: (batchId: string | null) => void;
+}) {
+  if (batches.length === 0) return null;
+  return (
+    <ChipRow label="Travel batch">
+      <Chip label="Everyone" onPress={() => onChoose(null)} selected={chosen === null} />
+      {batches.map((batch) => (
+        <Chip key={batch.id} label={batch.label} onPress={() => onChoose(batch.id)} selected={chosen === batch.id} />
+      ))}
+    </ChipRow>
   );
 }
 
 /** The travellers to mark (the first `shown` of them while a large group draws), or why there are none. */
 function TravellerList({
   onToggle,
-  people,
   present,
   show,
   shown,
+  view,
 }: {
   onToggle: (entry: RosterEntry) => void;
-  people: RosterEntry[];
   present: ReadonlySet<string>;
   show: Show;
   shown: number;
+  view: HeadcountView;
 }) {
   const reduced = useReducedMotion();
-  if (people.length === 0) {
+  if (view.empty) {
     return (
       <Surface>
-        <QuietState good={show === 'missing'} text={show === 'missing' ? 'Everyone here is marked.' : 'Nobody in this batch is travelling.'} />
+        <QuietState good={view.empty.good} text={view.empty.text} />
       </Surface>
     );
   }
-  const rows = people.slice(0, shown);
+  const rows = view.people.slice(0, shown);
   // Only "Not marked" removes rows; there, a leaving row fades and the rows below close the gap.
   // The full list never animates its rows: it is read, not changed. Reduced motion: no movement.
   const animated = show === 'missing' && !reduced;

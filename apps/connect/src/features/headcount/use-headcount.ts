@@ -12,16 +12,22 @@ export function useHeadcount(jobCardId: string | null) {
   const day = localDay(now);
   const key = jobCardId ? headcountKey(jobCardId, day) : null;
   const [stored, setStored, loaded] = useStoredValue<HeadcountState | null>(key, null);
+  // Until today's record is read, `state` is a fresh start for display only.
   const state = stored ?? (jobCardId ? startHeadcount(jobCardId, now) : null);
-  /** Saves the next state and returns it, so the caller can send the changed stop to the office. */
-  const save = (next: HeadcountState | null) => {
-    if (next) void setStored(next);
+  /**
+   * Saves the change and returns the new state, so the caller can send the changed stop to the
+   * office. Before today's record is read nothing is saved: a fresh start would overwrite it.
+   */
+  const save = (change: (current: HeadcountState) => HeadcountState) => {
+    if (!loaded || !state) return null;
+    const next = change(state);
+    void setStored(next);
     return next;
   };
   return {
     loaded,
-    newStop: (label: string) => save(state && newStop(state, label, Date.now())),
+    newStop: (label: string) => save((current) => newStop(current, label, Date.now())),
     state,
-    toggle: (travellerId: string) => save(state && togglePresent(state, travellerId, Date.now())),
+    toggle: (travellerId: string) => save((current) => togglePresent(current, travellerId, Date.now())),
   };
 }

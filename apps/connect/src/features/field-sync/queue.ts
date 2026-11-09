@@ -13,25 +13,56 @@ export type FieldPush =
   | { args: HeadcountStopArgs; kind: 'headcountStop' }
   | { args: AnnouncementArgs; kind: 'announcement' };
 
-export type SyncStatus = 'pending' | 'synced' | 'needsAttention';
-
-export type SyncItem = FieldPush & {
-  attempts: number;
-  /** From the last push that landed: traveller ids the server left out of its record. */
+/** What the office said about the last push of this key that landed. */
+export interface OfficeCopy {
+  at: number;
+  /** Traveller ids the server left out of its record. */
   ignoredTravellerIds: number;
-  key: string;
-  /** The last push landed with `applied: false`: the office already had a newer copy. */
+  /** The push landed with `applied: false`: the office already had a newer copy. */
   newerOnServer: boolean;
-  nextAttemptAt: number;
-  /** Plain words for the tour manager, set when the server refused the push. */
-  problem?: string;
+}
+
+/**
+ * Where one queued item stands. Only a pending item has a retry schedule, only a refused one has a
+ * problem, and a synced one always knows when it landed. A pending or refused item may still
+ * remember an earlier landing: the stop changed after the office had it.
+ */
+export type SyncState =
+  | { attempts: number; landed?: OfficeCopy; nextAttemptAt: number; status: 'pending' }
+  | { landed: OfficeCopy; status: 'synced' }
+  | {
+      landed?: OfficeCopy;
+      /** Plain words for the tour manager: why the office refused it. */
+      problem: string;
+      status: 'needsAttention';
+    };
+
+export type SyncStatus = SyncState['status'];
+
+interface SyncIdentity {
+  key: string;
   /** The staff member who queued it; only they may send it. */
   staffId: string;
-  status: SyncStatus;
-  /** When the office last confirmed a push for this key. */
-  syncedAt?: number;
   updatedAt: number;
-};
+}
+
+export type SyncItem = FieldPush & SyncState & SyncIdentity;
+
+/** An item as earlier versions saved it, with the state spread over side-by-side flags. */
+interface LegacySyncItem extends SyncIdentity {
+  args: FieldPush['args'];
+  attempts: number;
+  ignoredTravellerIds: number;
+  kind: FieldPush['kind'];
+  newerOnServer: boolean;
+  nextAttemptAt: number;
+  problem?: string;
+  status: SyncStatus;
+  syncedAt?: number;
+}
+
+/** What the store may hold under `fieldOutboxKey`. */
+export type StoredSyncItem = SyncItem | LegacySyncItem;
 
 export type PushOutcome =
   | { at: number; ignored: number; kind: 'applied' | 'stale' }
@@ -53,6 +84,7 @@ export const fieldOutboxKey = 'outbox:field';
 const BASE_DELAY_MS = 30_000;
 const MAX_DELAY_MS = 30 * 60_000;
 const KEEP_SYNCED_MS = 3 * 24 * 60 * 60 * 1000;
+const UNKNOWN_REFUSAL = 'The office did not accept this update. Refresh the trip, then try again.';
 
 export function syncKey(push: FieldPush) {
   return push.kind === 'headcountStop'
@@ -62,6 +94,18 @@ export function syncKey(push: FieldPush) {
 
 const version = (push: FieldPush) => push.args.clientUpdatedAt ?? 0;
 const sameState = (left: FieldPush, right: FieldPush) => JSON.stringify(left.args) === JSON.stringify(right.args);
+
+/** The push itself, without its queue state. */
+function pushOf(item: FieldPush): FieldPush {
+  return item.kind === 'headcountStop' ? { args: item.args, kind: item.kind } : { args: item.args, kind: item.kind };
+}
+
+const identity = (item: SyncIdentity, now: number): SyncIdentity => ({ key: item.key, staffId: item.staffId, updatedAt: now });
+
+/** Due now, from the first attempt. */
+function pending(push: FieldPush, id: SyncIdentity, landed: OfficeCopy | undefined): SyncItem {
+  return { ...pushOf(push), ...id, attempts: 0, landed, nextAttemptAt: id.updatedAt, status: 'pending' };
+}
 
 /**
  * Queues the state to send, replacing anything queued for the same key by the same staff member.
@@ -75,19 +119,7 @@ export function enqueuePush(items: SyncItem[], push: FieldPush, staffId: string,
     return items;
   }
   const kept = items.filter((item) => !mine(item) && !(item.status === 'synced' && now - item.updatedAt > KEEP_SYNCED_MS));
-  const next = {
-    ...push,
-    attempts: 0,
-    ignoredTravellerIds: existing?.ignoredTravellerIds ?? 0,
-    key,
-    newerOnServer: false,
-    nextAttemptAt: now,
-    staffId,
-    status: 'pending',
-    updatedAt: now,
-    ...(existing?.syncedAt === undefined ? {} : { syncedAt: existing.syncedAt }),
-  } as SyncItem;
-  return [...kept, next];
+  return [...kept, pending(push, { key, staffId, updatedAt: now }, existing?.landed)];
 }
 
 /** Pending items whose time has come, queued by this staff member. */
@@ -96,8 +128,16 @@ export function dueSyncItems(items: SyncItem[], now: number, staffId: string) {
 }
 
 export function retrySyncNow(item: SyncItem, now: number): SyncItem {
-  const { problem: _problem, ...rest } = item;
-  return { ...rest, attempts: 0, nextAttemptAt: now, status: 'pending', updatedAt: now } as SyncItem;
+  return pending(item, identity(item, now), item.landed);
+}
+
+/**
+ * Drops the refused items with these keys: the tour manager chose to stop sending them. The record
+ * stays on the phone, and a later change to it queues it again. Items still on their way are kept.
+ */
+export function discardRefused(items: SyncItem[], keys: readonly string[], staffId: string): SyncItem[] {
+  const discarded = new Set(keys);
+  return items.filter((item) => !(item.staffId === staffId && item.status === 'needsAttention' && discarded.has(item.key)));
 }
 
 /** Known server refusals, in words a tour manager can act on. Server text is never shown raw. */
@@ -112,7 +152,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
 
 function refusalMessage(error: unknown) {
   const text = typeof (error as { data?: unknown })?.data === 'string' ? (error as { data: string }).data : '';
-  return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? 'The office did not accept this update. Refresh the trip, then try again.';
+  return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? UNKNOWN_REFUSAL;
 }
 
 function backoff(attempts: number) {
@@ -122,7 +162,7 @@ function backoff(attempts: number) {
 /** Sends one item. Never throws: a server answer, a refusal or a retry. */
 export async function sendItem(item: SyncItem, deps: SyncDeps): Promise<PushOutcome> {
   try {
-    const result = await deps.push(item);
+    const result = await deps.push(pushOf(item));
     return { at: deps.now(), ignored: result.ignoredTravellerIds, kind: result.applied ? 'applied' : 'stale' };
   } catch (error) {
     const at = deps.now();
@@ -161,16 +201,20 @@ export async function drainSyncQueue(run: {
  */
 export function settleItem(current: SyncItem, sent: SyncItem, outcome: PushOutcome): SyncItem {
   if (outcome.kind === 'retry') {
+    if (current.status !== 'pending') return current;
     const attempts = current.attempts + 1;
     return { ...current, attempts, nextAttemptAt: outcome.at + backoff(attempts), updatedAt: outcome.at };
   }
   const changedSince = !sameState(current, sent);
   if (outcome.kind === 'refused') {
     // A newer state may well be accepted (a shorter message, say); let it try.
-    return changedSince ? current : { ...current, problem: outcome.problem, status: 'needsAttention', updatedAt: outcome.at };
+    if (changedSince) return current;
+    return { ...pushOf(current), ...identity(current, outcome.at), landed: current.landed, problem: outcome.problem, status: 'needsAttention' };
   }
-  const landed = { ...current, ignoredTravellerIds: outcome.ignored, newerOnServer: outcome.kind === 'stale', syncedAt: outcome.at };
-  return changedSince ? landed : { ...landed, attempts: 0, status: 'synced', updatedAt: outcome.at };
+  const landed: OfficeCopy = { at: outcome.at, ignoredTravellerIds: outcome.ignored, newerOnServer: outcome.kind === 'stale' };
+  // A newer state stays queued, and remembers what the office now holds.
+  if (changedSince) return { ...current, landed };
+  return { ...pushOf(current), ...identity(current, outcome.at), landed, status: 'synced' };
 }
 
 /** One state for a group of items (today's stops, say): a problem first, then waiting, then synced. */
@@ -180,18 +224,36 @@ export function syncSummary(items: SyncItem[]): SyncSummary {
   }
   const stuck = items.filter((item) => item.status === 'needsAttention');
   if (stuck.length > 0) {
-    return { keys: stuck.map((item) => item.key), kind: 'problem', problem: stuck[0]?.problem ?? '' };
+    return { keys: stuck.map((item) => item.key), kind: 'problem', problem: stuck[0]?.problem ?? UNKNOWN_REFUSAL };
   }
-  if (items.some((item) => item.status === 'pending')) {
+  const landed = items.flatMap((item) => (item.status === 'synced' ? [item.landed] : []));
+  const latest = landed.reduce<OfficeCopy | null>((newest, copy) => (newest && newest.at >= copy.at ? newest : copy), null);
+  if (!latest || landed.length < items.length) {
     return { kind: 'waiting' };
   }
-  const latest = [...items].sort((left, right) => (right.syncedAt ?? 0) - (left.syncedAt ?? 0))[0];
-  return {
-    at: latest?.syncedAt ?? 0,
-    ignored: latest?.ignoredTravellerIds ?? 0,
-    kind: 'synced',
-    newerOnServer: items.some((item) => item.newerOnServer),
-  };
+  return { at: latest.at, ignored: latest.ignoredTravellerIds, kind: 'synced', newerOnServer: landed.some((copy) => copy.newerOnServer) };
+}
+
+/**
+ * Reads the queue as stored. Items saved before the explicit states are converted here, at the
+ * storage boundary, so nothing past it sees side-by-side flags.
+ */
+export function readSyncItems(stored: readonly StoredSyncItem[] | null | undefined): SyncItem[] {
+  return (stored ?? []).map((item) => ('newerOnServer' in item ? fromLegacy(item) : item));
+}
+
+function fromLegacy(item: LegacySyncItem): SyncItem {
+  const id: SyncIdentity = { key: item.key, staffId: item.staffId, updatedAt: item.updatedAt };
+  const push = pushOf({ args: item.args, kind: item.kind } as FieldPush);
+  const office = (at: number): OfficeCopy => ({ at, ignoredTravellerIds: item.ignoredTravellerIds, newerOnServer: item.newerOnServer });
+  const landed = item.syncedAt === undefined ? undefined : office(item.syncedAt);
+  if (item.status === 'synced') {
+    return { ...push, ...id, landed: landed ?? office(item.updatedAt), status: 'synced' };
+  }
+  if (item.status === 'needsAttention') {
+    return { ...push, ...id, landed, problem: item.problem ?? UNKNOWN_REFUSAL, status: 'needsAttention' };
+  }
+  return { ...push, ...id, attempts: item.attempts, landed, nextAttemptAt: item.nextAttemptAt, status: 'pending' };
 }
 
 function sameLocalDay(left: number, right: number, timeZone?: string) {

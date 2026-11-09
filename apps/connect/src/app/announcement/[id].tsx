@@ -3,14 +3,13 @@ import { useLocalSearchParams } from 'expo-router';
 import { Share, StyleSheet, View } from 'react-native';
 
 import { Avatar, EveryoneSeal, Icon, ListCard, PageTitle, QuietState, Screen, SectionTitle, StepNumber, TickStrip } from '@/components/kit';
-import { ackSummary, composeShareText } from '@/features/announcements/announcements';
-import { useAnnouncements } from '@/features/announcements/use-announcements';
+import { type Announcement, ackSummary, composeShareText } from '@/features/announcements/announcements';
+import { useAnnouncementDetail } from '@/features/announcements/use-announcement-detail';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { announcementPush } from '@/features/field-sync/pushes';
 import { syncKey } from '@/features/field-sync/queue';
 import { SyncLine } from '@/features/field-sync/sync-line';
 import { useStaff } from '@/features/gate/session';
-import { useTrips } from '@/features/trips/trips-context';
 import { haptic, tick } from '@/lib/haptics';
 import { logEvent } from '@/lib/safe-log';
 
@@ -23,13 +22,16 @@ const SHARED_AT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-di
 /** The acknowledgement checklist the tour manager keeps for one announcement, shared with the office. */
 export default function AnnouncementDetail() {
   const theme = useAppTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `trip` names the trip the announcement was shared on; older links carry only the id.
+  const { id, trip } = useLocalSearchParams<{ id: string; trip?: string }>();
   const staff = useStaff();
-  const { pack, selected } = useTrips();
-  const { log, toggleAck } = useAnnouncements(selected?.id ?? null);
+  const detail = useAnnouncementDetail(id, trip ?? null);
   const sync = useFieldSync();
-  const announcement = log.find((item) => item.id === id);
-  if (!announcement) {
+  if (detail.kind === 'loading') {
+    // Reading the phone's own log takes a moment; nothing is drawn rather than a wrong answer.
+    return <Screen tabBar={false}>{null}</Screen>;
+  }
+  if (detail.kind === 'missing') {
     return (
       <Screen tabBar={false}>
         <Surface>
@@ -38,9 +40,8 @@ export default function AnnouncementDetail() {
       </Screen>
     );
   }
+  const { announcement, nameOf, toggleAck, tripLabel } = detail;
   const acks = ackSummary(announcement);
-  const names = new Map((pack?.roster ?? []).map((entry) => [entry.id, entry.name]));
-  const acknowledged = new Set(announcement.acknowledgedIds);
   const sharedAt = SHARED_AT.format(announcement.sharedAt);
   const answer = `${acks.acknowledged} of ${acks.total} have seen it`;
   const officeKey = syncKey(announcementPush(announcement));
@@ -59,12 +60,7 @@ export default function AnnouncementDetail() {
           label="Share again"
           onPress={() =>
             void Share.share({
-              message: composeShareText({
-                audienceLabel: announcement.audienceLabel,
-                body: announcement.body,
-                sender: staff.name,
-                tripLabel: `${selected?.jobCode ?? ''} ${selected?.destination ?? ''}`.trim(),
-              }),
+              message: composeShareText({ audienceLabel: announcement.audienceLabel, body: announcement.body, sender: staff.name, tripLabel }),
             }).catch((error: unknown) => logEvent('announce.reshare-failed', error))
           }
           variant="secondary"
@@ -81,53 +77,76 @@ export default function AnnouncementDetail() {
           </View>
           <TickStrip marked={acks.acknowledged} total={acks.total} />
         </View>
-        <SyncLine ignoredNote={ignoredNote} items={syncItems} onRetry={sync.retry} />
+        <SyncLine ignoredNote={ignoredNote} items={syncItems} onDiscard={sync.discard} onRetry={sync.retry} />
       </Surface>
       <View style={{ gap: space.md }}>
         <SectionTitle>Who has seen it</SectionTitle>
-        <Text tone="muted" variant="secondary">
-          Tick each traveller once they confirm, in person, by reply or by phone.
-        </Text>
-        {announcement.recipientIds.length > 0 ? (
-          <ListCard>
-            {announcement.recipientIds.map((travellerId, index) => {
-              const seen = acknowledged.has(travellerId);
-              const name = names.get(travellerId) ?? 'Traveller no longer on the roster';
-              return (
-                <PressableScale
-                  accessibilityLabel={name}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: seen }}
-                  key={travellerId}
-                  onPress={() => {
-                    // One buzz per tick; the last one to confirm gets the success buzz with the seal.
-                    if (!seen && acks.acknowledged === acks.total - 1) haptic('success');
-                    else tick();
-                    toggleAck(announcement.id, travellerId);
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.row,
-                      {
-                        borderBottomColor: theme.color.rule,
-                        borderBottomWidth: index === announcement.recipientIds.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                      },
-                    ]}
-                  >
-                    <Avatar checked={seen} name={name} />
-                    <Text numberOfLines={2} style={{ flex: 1 }} variant="rowTitle">
-                      {name}
-                    </Text>
-                    <StatusPill kind={seen ? 'good' : 'neutral'} label={seen ? 'Seen' : 'Not yet'} />
-                  </View>
-                </PressableScale>
-              );
-            })}
-          </ListCard>
-        ) : null}
+        <SeenBy announcement={announcement} nameOf={nameOf} onToggle={toggleAck} />
       </View>
     </Screen>
+  );
+}
+
+/** The checklist: tap each traveller once they confirm. An audience of nobody says so. */
+function SeenBy({
+  announcement,
+  nameOf,
+  onToggle,
+}: {
+  announcement: Announcement;
+  nameOf: (travellerId: string) => string;
+  onToggle: (travellerId: string) => void;
+}) {
+  const theme = useAppTheme();
+  const { recipientIds } = announcement;
+  if (recipientIds.length === 0) {
+    return (
+      <Surface>
+        <QuietState text="No travellers in this audience, so there is nobody to tick." />
+      </Surface>
+    );
+  }
+  const acks = ackSummary(announcement);
+  const acknowledged = new Set(announcement.acknowledgedIds);
+  return (
+    <>
+      <Text tone="muted" variant="secondary">
+        Tick each traveller once they confirm, in person, by reply or by phone.
+      </Text>
+      <ListCard>
+        {recipientIds.map((travellerId, index) => {
+          const seen = acknowledged.has(travellerId);
+          const name = nameOf(travellerId);
+          return (
+            <PressableScale
+              accessibilityLabel={name}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: seen }}
+              key={travellerId}
+              onPress={() => {
+                // One buzz per tick; the last one to confirm gets the success buzz with the seal.
+                if (!seen && acks.acknowledged === acks.total - 1) haptic('success');
+                else tick();
+                onToggle(travellerId);
+              }}
+            >
+              <View
+                style={[
+                  styles.row,
+                  { borderBottomColor: theme.color.rule, borderBottomWidth: index === recipientIds.length - 1 ? 0 : StyleSheet.hairlineWidth },
+                ]}
+              >
+                <Avatar checked={seen} name={name} />
+                <Text numberOfLines={2} style={{ flex: 1 }} variant="rowTitle">
+                  {name}
+                </Text>
+                <StatusPill kind={seen ? 'good' : 'neutral'} label={seen ? 'Seen' : 'Not yet'} />
+              </View>
+            </PressableScale>
+          );
+        })}
+      </ListCard>
+    </>
   );
 }
 

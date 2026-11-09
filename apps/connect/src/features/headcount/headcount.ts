@@ -63,8 +63,7 @@ export function newStop(state: HeadcountState, label: string, now: number): Head
   return { ...state, stops: [...state.stops, { id: `stop-${now}`, label: trimmed, present: [], startedAt: now, updatedAt: now }] };
 }
 
-export function summarize(state: HeadcountState, roster: RosterEntry[], batchId?: string): HeadcountSummary {
-  const stop = currentStop(state);
+function summarizeStop(stop: HeadcountStop, roster: RosterEntry[], batchId?: string): HeadcountSummary {
   const present = new Set(stop.present);
   const counted = roster.filter((entry) => entry.travelling && (!batchId || entry.batchId === batchId));
   const missing = counted.filter((entry) => !present.has(entry.id));
@@ -75,6 +74,33 @@ export function summarize(state: HeadcountState, roster: RosterEntry[], batchId?
     stopLabel: stop.label,
   };
 }
+
+export function summarize(state: HeadcountState, roster: RosterEntry[], batchId?: string): HeadcountSummary {
+  return summarizeStop(currentStop(state), roster, batchId);
+}
+
+export interface EarlierStop {
+  answer: string;
+  id: string;
+  label: string;
+  startedAt: number;
+}
+
+/** Today's stops before the current one, newest first, each with its count of the whole group. */
+export function earlierStops(state: HeadcountState, roster: RosterEntry[], complete = true): EarlierStop[] {
+  return state.stops
+    .slice(0, -1)
+    .reverse()
+    .map((stop) => ({
+      answer: headcountAnswer(summarizeStop(stop, roster), { complete }),
+      id: stop.id,
+      label: stop.label,
+      startedAt: stop.startedAt,
+    }));
+}
+
+/** True when nobody on the roster is travelling: there is no one to count. */
+export const nobodyTravelling = (roster: readonly RosterEntry[]) => !roster.some((entry) => entry.travelling);
 
 /**
  * The Today answer: "38 of 41 here", or "All 41 here". Over a roster that did not fully load,
