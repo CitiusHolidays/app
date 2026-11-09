@@ -18,7 +18,17 @@ jest.mock('@/lib/storage/device-store', () => ({
 jest.mock('@/features/field-sync/field-sync-context', () => ({ useFieldSync: () => ({ enqueue: mockEnqueue }) }));
 jest.mock('@/features/trips/trips-context', () => ({ useTrips: () => ({ pack: mockPack, selected: mockJobCard }) }));
 jest.mock('@/features/gate/session', () => ({ useStaff: () => ({ name: 'Test Tour Manager', roles: ['Tour Manager'], staffId: 'staff_1' }) }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: (...args: unknown[]) => mockReplace(...args) } }));
+const mockAllowLeave = jest.fn();
+/** What the screen last asked of usePreventRemove: whether to guard, and what to do when it does. */
+const mockGuard: { onBlocked?: (event: { repeat: () => void }) => void; prevent: boolean } = { prevent: false };
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn(), replace: (...args: unknown[]) => mockReplace(...args) },
+  usePreventRemove: (prevent: boolean, onBlocked: (event: { repeat: () => void }) => void) => {
+    mockGuard.prevent = prevent;
+    mockGuard.onBlocked = onBlocked;
+    return mockAllowLeave;
+  },
+}));
 
 async function writeAndShare() {
   await renderWithTheme(
@@ -44,6 +54,8 @@ describe('announcement composer', () => {
   beforeEach(() => {
     mockEnqueue.mockReset();
     mockReplace.mockReset();
+    mockAllowLeave.mockReset();
+    mockGuard.prevent = false;
     alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     // Android's share sheet reports "shared" whether or not the message went out.
     share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
@@ -95,5 +107,31 @@ describe('announcement composer', () => {
     const options = alert.mock.calls.at(-1)?.[3] as { onDismiss?: () => void };
     await act(async () => options.onDismiss?.());
     expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it('asks before closing once a message is written, and closes on Discard', async () => {
+    await renderWithTheme(
+      <AppStoreProvider fallback={null}>
+        <Announce />
+      </AppStoreProvider>
+    );
+    const field = await screen.findByLabelText('Message');
+    expect(mockGuard.prevent).toBe(false);
+    await fireEvent.changeText(field, 'Bus at 8:15');
+    expect(mockGuard.prevent).toBe(true);
+    const repeat = jest.fn();
+    await act(async () => mockGuard.onBlocked?.({ repeat }));
+    expect(alert).toHaveBeenCalledWith('Discard this message?', expect.any(String), expect.any(Array));
+    await answerAlert(alert, 'Keep editing');
+    expect(repeat).not.toHaveBeenCalled();
+    await answerAlert(alert, 'Discard');
+    expect(repeat).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the checklist after a share without the discard question', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    await writeAndShare();
+    expect(mockAllowLeave).toHaveBeenCalledTimes(1);
+    expect(mockAllowLeave.mock.invocationCallOrder[0]).toBeLessThan(mockReplace.mock.invocationCallOrder[0] ?? 0);
   });
 });
