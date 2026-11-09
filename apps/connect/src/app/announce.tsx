@@ -1,9 +1,9 @@
-import { Banner, Button, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Share, View } from 'react-native';
 
-import { Chip, ChipRow, Icon, ListCard, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
+import { Chip, ChipRow, Icon, ListCard, ProblemBanner, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
 import {
   ackSummary,
   announcementHref,
@@ -111,11 +111,7 @@ export default function Announce() {
         </Surface>
       ) : null}
       {problem ? (
-        <Banner tone="danger">
-          <Text accessibilityLiveRegion="polite" variant="secondary">
-            {problem}
-          </Text>
-        </Banner>
+        <ProblemBanner text={problem} />
       ) : null}
       <View style={{ gap: space.md }}>
         <Button

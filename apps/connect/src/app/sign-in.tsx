@@ -1,4 +1,4 @@
-import { Banner, PressableScale, space, Text, useAppTheme } from '@citius/ui';
+import { PressableScale, space, Text, useAppTheme } from '@citius/ui';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, TextField } from '@/components/kit';
+import { Icon, ProblemBanner, TextField } from '@/components/kit';
 import { canSignIn, signInWithEmail } from '@/features/gate/sign-in';
 import { OPEN_TIMEOUT_MS, type SignInState } from '@/features/gate/sign-in-state';
 import { haptic } from '@/lib/haptics';
@@ -203,11 +203,7 @@ export default function SignIn() {
           </Animated.View>
           {problem ? (
             <Animated.View entering={PROBLEM_IN}>
-              <Banner tone="danger">
-                <Text accessibilityLiveRegion="polite" variant="secondary">
-                  {problem}
-                </Text>
-              </Banner>
+              <ProblemBanner text={problem} />
             </Animated.View>
           ) : null}
           <PressableScale

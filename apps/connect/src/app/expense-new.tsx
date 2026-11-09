@@ -1,12 +1,12 @@
 import { EXPENSE_CATEGORIES, EXPENSE_CURRENCIES, type ExpenseCategory, type ExpenseCurrency } from '@citius/backend';
-import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Image } from 'expo-image';
 import { router, usePreventRemove } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import Animated, { Keyframe } from 'react-native-reanimated';
 
-import { Chip, ChipRow, Icon, QuietState, Screen, TextField } from '@/components/kit';
+import { Chip, ChipRow, Icon, ProblemBanner, QuietState, Screen, TextField } from '@/components/kit';
 import { parseAmount } from '@/features/expenses/format';
 import { createOutboxItem } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
@@ -205,11 +205,7 @@ export default function NewExpense() {
       <TextField autoCorrect={false} label="Date" onChangeText={setExpenseDate} placeholder="YYYY-MM-DD" value={expenseDate} />
       <TextField label="What it was for" onChangeText={setParticulars} placeholder="For example: Airport taxi for Bus 2" value={particulars} />
       {problem ? (
-        <Banner tone="danger">
-          <Text accessibilityLiveRegion="polite" variant="secondary">
-            {problem}
-          </Text>
-        </Banner>
+        <ProblemBanner text={problem} />
       ) : null}
       <View style={{ gap: space.md }}>
         <Button busy={leaving} label="Save expense" onPress={save} />
