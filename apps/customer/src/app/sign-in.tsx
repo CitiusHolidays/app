@@ -1,6 +1,6 @@
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,14 +9,13 @@ import { Icon, type IconPair, TextField } from '@/components/kit';
 import { EASE_OUT } from '@/components/motion';
 import { SignInHero } from '@/components/sign-in-hero';
 import { SHEET_OVERLAP } from '@/features/auth/sign-in-artwork';
-import { isEmail, requestEmailLink, SIGN_IN_METHODS, type SignInMethodId, verifyEmailLink } from '@/features/auth/methods';
-import { afterSignIn, currentReturnTo, type LinkState } from '@/features/session/after-sign-in';
+import { isEmail, requestEmailLink, type RequestResult, SIGN_IN_METHODS, type SignInMethodId, verifyEmailLink } from '@/features/auth/methods';
+import { initialSignIn, type SendProblem, signInBody, signInReducer } from '@/features/auth/sign-in-flow';
+import { afterSignIn, currentReturnTo } from '@/features/session/after-sign-in';
 import { PENDING_INVITE_KEY, RETURN_TO_KEY, SERVER_STALL_MS, useCustomerSession } from '@/features/session/session';
 import { useI18n } from '@/i18n/i18n';
-import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
 import { haptic } from '@/lib/haptic';
-import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 import { useRevealEndOnKeyboard } from '@/lib/use-reveal-end-on-keyboard';
@@ -120,16 +119,31 @@ function LinkFailed({ onNewLink, onRetry, reason }: { onNewLink: () => void; onR
   );
 }
 
+/** Why the last request for a link did not go out. */
+function SendProblemBanner({ problem }: { problem: SendProblem | null }) {
+  const { t } = useI18n();
+  if (!problem) return null;
+  return (
+    <Banner tone="danger">
+      <Text accessibilityLiveRegion="polite" variant="secondary">
+        {t(problem)}
+      </Text>
+    </Banner>
+  );
+}
+
 function LinkSent({
   busy,
   onResend,
   onUseOther,
+  problem,
   sentTo,
   waitMs,
 }: {
   busy: boolean;
   onResend: () => void;
   onUseOther: () => void;
+  problem: SendProblem | null;
   sentTo: string;
   waitMs: number;
 }) {
@@ -146,6 +160,7 @@ function LinkSent({
           {t('signIn.sentBody', { email: sentTo })}
         </Text>
       </View>
+      <SendProblemBanner problem={problem} />
       <Button
         disabled={waitMs > 0 || busy}
         busy={busy}
@@ -173,7 +188,7 @@ function EmailForm({
   onChangeEmail: (value: string) => void;
   onMethod: (method: SignInMethodId) => void;
   onSend: () => void;
-  problem: MessageKey | null;
+  problem: SendProblem | null;
 }) {
   const { t } = useI18n();
   return (
@@ -226,13 +241,7 @@ function EmailForm({
         textContentType="emailAddress"
         value={email}
       />
-      {problem ? (
-        <Banner tone="danger">
-          <Text accessibilityLiveRegion="polite" variant="secondary">
-            {t(problem)}
-          </Text>
-        </Banner>
-      ) : null}
+      <SendProblemBanner problem={problem} />
       <Button busy={busy} label={t('signIn.send')} onPress={onSend} />
       <Text style={{ textAlign: 'center' }} tone="muted" variant="label">
         {t('signIn.help')}
@@ -256,28 +265,26 @@ export default function SignIn() {
   const [storedReturnTo] = useStoredValue<unknown>(RETURN_TO_KEY, null);
   const [method, setMethod] = useState<SignInMethodId>('email');
   const [email, setEmail] = useState('');
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [sentAt, setSentAt] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<MessageKey | null>(null);
-  const [link, setLink] = useState<LinkState>(token ? { kind: 'opening' } : { kind: 'none' });
+  // The link being opened and the request for one, as one state (sign-in-flow.ts).
+  const [state, dispatch] = useReducer(signInReducer, Boolean(token), initialSignIn);
+  const { link, send: request } = state;
   const now = useNow(1_000);
   const verifiedToken = useRef<string | null>(null);
   /** The link arrived while the traveller was already in the app, on top of another screen. */
   const openedSignedIn = useRef(false);
   const { props: reveal } = useRevealEndOnKeyboard();
-  useAnnounce(problem ? t(problem) : null);
+  useAnnounce(request.problem ? t(request.problem) : null);
 
   const signedIn = gate.kind === 'signedIn';
   const returnTo = currentReturnTo(storedReturnTo, now);
 
   const open = useCallback((value: string, alreadySignedIn: boolean) => {
     openedSignedIn.current = alreadySignedIn;
-    setLink({ kind: 'opening' });
+    dispatch({ link: { kind: 'opening' }, type: 'link' });
     void verifyEmailLink(value, { signedIn: alreadySignedIn }).then((result) => {
-      if (result.ok) return setLink({ kind: 'opened' });
+      if (result.ok) return dispatch({ link: { kind: 'opened' }, type: 'link' });
       logEvent(result.reason === 'network' ? 'auth.link-unreachable' : 'auth.link-refused');
-      setLink({ kind: 'failed', reason: result.reason === 'network' ? 'network' : 'refused' });
+      dispatch({ link: { kind: 'failed', reason: result.reason === 'network' ? 'network' : 'refused' }, type: 'link' });
     });
   }, []);
 
@@ -297,7 +304,7 @@ export default function SignIn() {
   }, [link, pendingInvite, returnTo, signedIn]);
 
   const startAgain = () => {
-    setLink({ kind: 'none' });
+    dispatch({ link: { kind: 'none' }, type: 'link' });
     router.setParams({ token: undefined });
   };
 
@@ -306,62 +313,56 @@ export default function SignIn() {
   }
 
   const send = async () => {
-    if (busy) return;
-    if (!email.trim()) return setProblem('signIn.emailRequired');
-    if (!isEmail(email)) return setProblem('signIn.emailInvalid');
-    setBusy(true);
-    setProblem(null);
-    const result = await runThen(
-      () => requestEmailLink(email, pendingInvite),
-      () => setBusy(false)
-    );
+    if (request.sending) return;
+    // "Send it again" goes to the address the link went to; the form sends what is typed.
+    const address = request.kind === 'sent' ? request.to : email;
+    if (!address.trim()) return dispatch({ problem: 'signIn.emailRequired', type: 'refused-input' });
+    if (!isEmail(address)) return dispatch({ problem: 'signIn.emailInvalid', type: 'refused-input' });
+    dispatch({ type: 'sending' });
+    // It answers failures itself; a throw is treated as a dropped connection so the screen never sticks on sending.
+    const result = await requestEmailLink(address, pendingInvite).catch((): RequestResult => ({ ok: false, reason: 'network' }));
     if (result.ok) {
       haptic('success');
-      setSentTo(email.trim().toLowerCase());
-      setSentAt(Date.now());
+      dispatch({ at: Date.now(), to: address.trim().toLowerCase(), type: 'sent' });
     } else {
       haptic('error');
-      setProblem(result.reason === 'rate-limited' ? 'signIn.tooMany' : 'signIn.network');
+      dispatch({ problem: result.reason === 'rate-limited' ? 'signIn.tooMany' : 'signIn.network', type: 'send-failed' });
     }
   };
 
-  const waitMs = sentAt + RESEND_AFTER_MS - now;
+  const bodyKey = signInBody(state, signedIn);
   let body;
-  let bodyKey: string;
-  if (link.kind === 'opening' || (link.kind === 'opened' && !signedIn)) {
-    bodyKey = 'verifying';
+  if (bodyKey === 'verifying') {
     body = <VerifyingLink onStartAgain={startAgain} />;
   } else if (link.kind === 'failed') {
-    bodyKey = `failed-${link.reason}`;
     body = <LinkFailed onNewLink={startAgain} onRetry={() => token && open(token, signedIn)} reason={link.reason} />;
-  } else if (sentTo) {
-    bodyKey = 'sent';
+  } else if (request.kind === 'sent') {
     body = (
       <LinkSent
-        busy={busy}
+        busy={request.sending}
         onResend={() => void send()}
         onUseOther={() => {
-          setSentTo(null);
+          dispatch({ type: 'use-other' });
           setEmail('');
         }}
-        sentTo={sentTo}
-        waitMs={waitMs}
+        problem={request.problem}
+        sentTo={request.to}
+        waitMs={request.at + RESEND_AFTER_MS - now}
       />
     );
   } else {
-    bodyKey = 'form';
     body = (
       <EmailForm
-        busy={busy}
+        busy={request.sending}
         email={email}
         method={method}
         onChangeEmail={(value) => {
           setEmail(value);
-          setProblem(null);
+          dispatch({ type: 'edited' });
         }}
         onMethod={setMethod}
         onSend={() => void send()}
-        problem={problem}
+        problem={request.problem}
       />
     );
   }
