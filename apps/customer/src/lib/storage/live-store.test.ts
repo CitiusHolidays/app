@@ -36,6 +36,20 @@ describe('LiveStore', () => {
     expect(await store.getJSON('k')).toEqual({ n: 3 });
   });
 
+  it('keeps the named keys through a wipe, loaded or not', async () => {
+    const store = createMemoryStore();
+    await store.setJSON('invite', 'tok');
+    const live = new LiveStore(store);
+    await live.set('language', 'hi');
+    await live.set('trips', ['a']);
+    await live.wipe(['language', 'invite', 'missing']);
+    expect(live.snapshot('language')).toEqual({ value: 'hi' });
+    expect(live.snapshot('invite')).toEqual({ value: 'tok' });
+    expect(live.snapshot('trips')).toEqual({ value: null });
+    expect(await store.getJSON('invite')).toBe('tok');
+    expect(await store.getJSON('missing')).toBeNull();
+  });
+
   it('does not let a read that started before a wipe bring old data back', async () => {
     const store = createMemoryStore();
     await store.setJSON('k', 'user A');

@@ -61,12 +61,28 @@ export class LiveStore {
     return () => epoch === this.epoch;
   }
 
-  /** Deletes everything on disk; every key then reads as empty, and stays loaded. */
-  async wipe() {
+  /**
+   * Deletes everything on disk; every key then reads as empty, and stays loaded. Keys in `keep`
+   * (read from disk if no screen has loaded them) are written back afterwards.
+   */
+  async wipe(keep: readonly string[] = []) {
+    const kept = await Promise.all(
+      keep.map(async (key) => [key, this.entries.has(key) ? this.entries.get(key)?.value : await this.readKept(key)] as const)
+    );
     this.epoch += 1;
     this.clearEntries();
     await this.store.clear();
     this.clearEntries();
+    await Promise.all(kept.map(([key, value]) => (value === null || value === undefined ? undefined : this.set(key, value))));
+  }
+
+  private async readKept(key: string) {
+    try {
+      return await this.store.getJSON(key);
+    } catch (error) {
+      logEvent('store.read-failed', error);
+      return null;
+    }
   }
 
   private clearEntries() {

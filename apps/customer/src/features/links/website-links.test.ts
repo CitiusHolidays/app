@@ -15,10 +15,10 @@ describe('website links that open the app directly', () => {
     expect(appPathForSystemLink(`https://www.citiusholidays.com/app/invite#token=${INVITE}`)).toBe(`/invite?token=${INVITE}`);
   });
 
-  it('opens the sign-in or the paste-a-link screen when the token is missing or malformed', () => {
+  it('opens sign-in, or the invite screen that says the link is broken, when the token is missing or malformed', () => {
     expect(appPathForSystemLink('https://www.citiusholidays.com/app/sign-in')).toBe('/sign-in');
     expect(appPathForSystemLink('https://www.citiusholidays.com/app/sign-in#token=a%20b')).toBe('/sign-in');
-    expect(appPathForSystemLink('https://www.citiusholidays.com/app/invite#token=short')).toBe('/invite-entry');
+    expect(appPathForSystemLink('https://www.citiusholidays.com/app/invite#token=short')).toBe('/invite');
   });
 
   it('answers the configured website too (staging)', () => {

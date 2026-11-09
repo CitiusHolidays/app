@@ -7,6 +7,7 @@ const base: GateInput = {
   online: true,
   sessionRejected: false,
   stalled: false,
+  wasSignedIn: false,
 };
 
 describe('customer gate', () => {
@@ -29,6 +30,22 @@ describe('customer gate', () => {
 
   it('waits for the server while it may still answer', () => {
     expect(resolveGate({ ...base, isLoading: false })).toEqual({ kind: 'loading' });
+  });
+
+  it('says offline when the connection drops, even with a live session', () => {
+    expect(resolveGate({ ...base, isAuthenticated: true, isLoading: false, online: false })).toEqual({ kind: 'signedIn', offline: true });
+  });
+
+  it('stays signed in while a new session swaps the token', () => {
+    const swapping = { ...base, isLoading: false, wasSignedIn: true };
+    expect(resolveGate(swapping)).toEqual({ kind: 'signedIn', offline: false });
+    expect(resolveGate({ ...swapping, hasCachedSession: null })).toEqual({ kind: 'signedIn', offline: false });
+    expect(resolveGate({ ...swapping, isLoading: true })).toEqual({ kind: 'signedIn', offline: false });
+  });
+
+  it('still signs out a signed-in traveller the server rejects, or whose session is gone from the phone', () => {
+    expect(resolveGate({ ...base, isLoading: false, sessionRejected: true, wasSignedIn: true })).toEqual({ kind: 'signedOut' });
+    expect(resolveGate({ ...base, hasCachedSession: false, isLoading: false, wasSignedIn: true })).toEqual({ kind: 'signedOut' });
   });
 
   it('signs out only when the server rejects the session', () => {

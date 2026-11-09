@@ -16,8 +16,10 @@ import { signOutDevice } from './sign-out';
 
 /** An invite link that arrived before sign-in; accepted right after. */
 export const PENDING_INVITE_KEY = 'session:pendingInvite';
-/** Where to return after an email link signs the traveller in again (account deletion). */
+/** A screen waiting for the traveller to come back from an email link (`ReturnTo`, after-sign-in.ts). */
 export const RETURN_TO_KEY = 'session:returnTo';
+/** Kept through a wipe: the language, and an invite meant for whoever signs in next. */
+const KEPT_THROUGH_WIPE = [LANGUAGE_KEY, PENDING_INVITE_KEY];
 
 interface CustomerSession {
   gate: Gate;
@@ -92,11 +94,7 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
     });
   }, [ensureProfile, isAuthenticated]);
 
-  const wipeLocalData = useCallback(async () => {
-    const language = live.snapshot(LANGUAGE_KEY)?.value ?? null;
-    await live.wipe();
-    if (language) await live.set(LANGUAGE_KEY, language);
-  }, [live]);
+  const wipeLocalData = useCallback(() => live.wipe(KEPT_THROUGH_WIPE), [live]);
 
   const end = useCallback(
     async (revoke: boolean) => {
@@ -122,6 +120,7 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
 
   const waiting = isLoading || (Boolean(hasCachedSession) && !isAuthenticated);
   const stalled = useStalled(waiting);
+  const [wasSignedIn, setWasSignedIn] = useState(false);
   const gate: Gate = signingOut
     ? { kind: 'loading' }
     : resolveGate({
@@ -131,7 +130,26 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
         online,
         sessionRejected: sessionRejectedByServer(authSession),
         stalled,
+        wasSignedIn,
       });
+  // Remembered from the last render (React's "previous value" pattern), not from an effect.
+  if (wasSignedIn !== (gate.kind === 'signedIn')) setWasSignedIn(gate.kind === 'signedIn');
+
+  // The server says this phone's session is gone (expired, revoked on the website, account
+  // deleted): its saved trips must not greet whoever signs in next.
+  const rejectedWithData = gate.kind === 'signedOut' && hasCachedSession === true;
+  useEffect(() => {
+    if (!rejectedWithData) return;
+    logEvent('session.rejected');
+    // Already signed out on screen, so no "signing out" state: just clear the phone, then re-read.
+    void runThen(
+      () => signOutDevice({ clearSession: clearLocalAuthSession, revoke: () => Promise.resolve(), wipeData: wipeLocalData }),
+      () => {
+        profileLinked.current = false;
+        setEpoch((value) => value + 1);
+      }
+    );
+  }, [rejectedWithData, wipeLocalData]);
 
   return (
     <SessionContext.Provider value={{ forget: () => end(false), gate, online, signOut: () => end(true) }}>
