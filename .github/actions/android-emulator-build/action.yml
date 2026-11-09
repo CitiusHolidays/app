@@ -1,0 +1,69 @@
+name: Android emulator build
+description: >
+  Generates the native Android project for one Expo app (continuous native generation), builds the
+  debug APK and uploads it as an artifact.
+  Adapted from the testing-react-native-apps github-actions skill (callstackincubator/android).
+
+inputs:
+  working-directory:
+    description: The Expo app folder, for example apps/connect
+    required: true
+  variant:
+    description: Gradle build variant, Gradle-cased (Debug, Release)
+    required: false
+    default: Debug
+  artifact-name:
+    description: Name of the uploaded artifact
+    required: true
+  artifact-retention-days:
+    description: Days GitHub keeps the artifact
+    required: false
+    default: "7"
+
+outputs:
+  artifact-name:
+    description: Uploaded artifact name
+    value: ${{ inputs.artifact-name }}
+  artifact-id:
+    description: Uploaded artifact id
+    value: ${{ steps.upload.outputs.artifact-id }}
+  artifact-url:
+    description: Uploaded artifact URL (needs a signed-in GitHub session)
+    value: ${{ steps.upload.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    # Neither app commits android/.
+    - name: Generate the native project
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bunx expo prebuild --platform android --no-install
+
+    - name: Build the APK
+      id: build
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}/android
+      run: |
+        set -euo pipefail
+        VARIANT="${{ inputs.variant }}"
+        VARIANT_LOWER="$(echo "$VARIANT" | tr '[:upper:]' '[:lower:]')"
+        chmod +x gradlew
+        ./gradlew ":app:assemble${VARIANT}" --no-daemon
+
+        OUTPUT_ROOT="app/build/outputs/apk/$VARIANT_LOWER"
+        APK_PATH="$(find "$OUTPUT_ROOT" -type f -name '*.apk' ! -name '*androidTest*' | sort | head -n1 || true)"
+        if [[ -z "$APK_PATH" ]]; then
+          echo "No APK in $OUTPUT_ROOT"
+          exit 1
+        fi
+        echo "apk_path=$(pwd)/$APK_PATH" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the artifact
+      id: upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.build.outputs.apk_path }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.artifact-retention-days }}

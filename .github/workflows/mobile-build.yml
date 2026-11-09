@@ -1,0 +1,141 @@
+name: Mobile builds
+
+# Installable development builds of both apps: the iOS app for the Simulator and the Android debug
+# APK for an emulator. How to download and install one: .claude/skills/verify-citius-apps/SKILL.md.
+#
+# Pull requests and pushes run this only when something that changes the native build changes, so
+# a JS-only pull request never waits on a macOS runner. Run it by hand for any branch with
+# `gh workflow run mobile-build.yml --ref <branch> -f app=connect`.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app to build
+        type: choice
+        options: [both, connect, customer]
+        default: both
+  pull_request:
+    paths: &native-paths
+      - "apps/*/app.json"
+      - "apps/*/app.config.*"
+      - "apps/*/package.json"
+      - "apps/*/plugins/**"
+      - "bun.lock"
+      - ".github/workflows/mobile-build.yml"
+      - ".github/actions/ios-simulator-build/**"
+      - ".github/actions/android-emulator-build/**"
+  push:
+    branches: [main]
+    paths: *native-paths
+
+concurrency:
+  group: mobile-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+# No secrets and no .env.local. The apps read EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_CONVEX_SITE_URL
+# at run time and show a setup screen when they are missing, and Debug builds do not bundle JS (the
+# app loads it from Metro), so the build needs neither value. Point the installed app at a backend
+# through Metro with your local apps/<app>/.env.local.
+
+jobs:
+  build:
+    name: ${{ matrix.app }} ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.platform == 'ios' && 60 || 45 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.app != 'both' && format('["{0}"]', inputs.app) || '["connect","customer"]') }}
+        platform: [ios, android]
+        include:
+          - platform: ios
+            runner: macos-26
+            artifact-suffix: ios-simulator
+          - platform: android
+            runner: ubuntu-latest
+            artifact-suffix: android-emulator
+    outputs:
+      # Matrix jobs share one set of outputs; the build-summary job lists every artifact id.
+      artifact-id: ${{ steps.ios.outputs.artifact-id || steps.android.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Set up Java
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Caches ~/.gradle (wrapper, dependencies, build cache) keyed on the generated Gradle files.
+      - name: Set up Gradle
+        if: matrix.platform == 'android'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build for the iOS Simulator
+        id: ios
+        if: matrix.platform == 'ios'
+        uses: ./.github/actions/ios-simulator-build
+        with:
+          working-directory: apps/${{ matrix.app }}
+          artifact-name: ${{ matrix.app }}-${{ matrix.artifact-suffix }}
+          artifact-retention-days: "7"
+
+      - name: Build for an Android emulator
+        id: android
+        if: matrix.platform == 'android'
+        uses: ./.github/actions/android-emulator-build
+        with:
+          working-directory: apps/${{ matrix.app }}
+          artifact-name: ${{ matrix.app }}-${{ matrix.artifact-suffix }}
+          artifact-retention-days: "7"
+
+      - name: Artifact
+        run: |
+          id="${{ steps.ios.outputs.artifact-id || steps.android.outputs.artifact-id }}"
+          url="${{ steps.ios.outputs.artifact-url || steps.android.outputs.artifact-url }}"
+          echo "${{ matrix.app }}-${{ matrix.artifact-suffix }}: id $id, $url"
+          echo "- \`${{ matrix.app }}-${{ matrix.artifact-suffix }}\`: id $id ([download]($url))" >> "$GITHUB_STEP_SUMMARY"
+
+  summary:
+    name: Artifacts
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: List this run's artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Mobile build artifacts"
+            echo ""
+            echo "| Artifact | Id | Size |"
+            echo "| --- | --- | --- |"
+            gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+              --jq '.artifacts[] | "| `\(.name)` | \(.id) | \(.size_in_bytes / 1048576 | floor) MB |"'
+            echo ""
+            echo "Download: \`gh run download ${{ github.run_id }} -R ${{ github.repository }} -n <artifact> -D ./artifacts\`"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

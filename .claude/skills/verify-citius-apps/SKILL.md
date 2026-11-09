@@ -17,10 +17,33 @@ checkout it lives in.
 
 | Need | How |
 | --- | --- |
-| A simulator with the dev build | `cd apps/<app> && bunx expo run:ios --device <UDID> --no-bundler` (10+ min first time). Then `export CITIUS_IOS_SIM=<UDID>`. Give Connect and the customer app different simulators, and always pass the UDID: `simctl … booted` hits whichever simulator happens to be booted, which may be another session's. |
+| A simulator with the dev build | `cd apps/<app> && bunx expo run:ios --device <UDID> --no-bundler` (10+ min first time), or install the CI build (next row). Then `export CITIUS_IOS_SIM=<UDID>`. Give Connect and the customer app different simulators, and always pass the UDID: `simctl … booted` hits whichever simulator happens to be booted, which may be another session's. |
+| The dev build without building it locally | The `Mobile builds` workflow publishes `<app>-ios-simulator` (a Debug `.app.tar.gz`) and `<app>-android-emulator` (the debug APK), `<app>` being `connect` or `customer`, kept 7 days. See "CI builds" below. |
 | A backend | `apps/<app>/.env.local` (gitignored) with `EXPO_PUBLIC_CONVEX_URL` and `EXPO_PUBLIC_CONVEX_SITE_URL`. Prefer a local Convex backend (`http://127.0.0.1:3210` and `:3211`) with synthetic seed data. |
 | A test login (Connect) | `export CITIUS_VERIFY_LOGIN_FILE=<local file>` holding `email=` and `password=` lines for a synthetic Tour Manager. Keep it outside the repo: this repo is public. |
 | Evidence folder (optional) | `CITIUS_VERIFY_OUT` (default `$TMPDIR/citius-verify-evidence`). |
+
+### CI builds
+
+`.github/workflows/mobile-build.yml` runs on pull requests and pushes to main that change a native
+input (`apps/*/app.json`, `apps/*/package.json`, `bun.lock`, config plugins), and by hand:
+`gh workflow run mobile-build.yml --ref <branch> -f app=connect` (`connect`, `customer` or `both`).
+The builds carry no backend URL and no JS bundle: the app loads JS from your Metro, which reads
+your `apps/<app>/.env.local`, so start Metro (`verify.sh launch` does) after installing.
+
+```bash
+RUN=$(gh run list -R CitiusHolidays/app --workflow mobile-build.yml --branch <branch> --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+OUT=$(mktemp -d)
+
+# iOS Simulator
+gh run download "$RUN" -R CitiusHolidays/app -n connect-ios-simulator -D "$OUT"
+tar -xzf "$OUT"/*.app.tar.gz -C "$OUT"
+xcrun simctl install "$CITIUS_IOS_SIM" "$OUT"/*.app
+
+# Android emulator (Connect uses emulator-5556, the customer app emulator-5554)
+gh run download "$RUN" -R CitiusHolidays/app -n connect-android-emulator -D "$OUT"
+adb -s emulator-5556 install -r "$OUT"/*.apk
+```
 
 Never point a verification run at production to create, edit or delete anything. `doctor` warns
 when the backend is not local; on a non-local backend, only read.
