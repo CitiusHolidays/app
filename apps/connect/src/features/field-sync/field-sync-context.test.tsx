@@ -131,6 +131,31 @@ describe('field sync provider', () => {
     expect((await mockStore.getJSON<SyncItem[]>(fieldOutboxKey))?.[0]).not.toHaveProperty('newerOnServer');
   });
 
+  it('sends a change made while the earlier state was in flight as soon as that push lands', async () => {
+    let land: () => void = () => undefined;
+    const firstPush = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    mockMutation.mockImplementationOnce(async () => {
+      await firstPush;
+      return { applied: true, id: 'srv_1', ignoredTravellerIds: 0 };
+    });
+    await renderApp();
+    await screen.findByText('items:none');
+    await act(async () => handles.sync?.enqueue(stop(['t_1'], 10)));
+    await waitFor(() => expect(mockMutation).toHaveBeenCalledTimes(1));
+
+    // The tour manager marks another traveller while the first push is on its way.
+    await act(async () => handles.sync?.enqueue(stop(['t_1', 't_2'], 11)));
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+    await act(async () => land());
+
+    // No waiting for the 30-second timer: the newer state goes straight after.
+    expect(await screen.findByText('items:synced')).toBeOnTheScreen();
+    expect(mockMutation).toHaveBeenCalledTimes(2);
+    expect(mockMutation.mock.calls[1]?.[1]).toEqual(stop(['t_1', 't_2'], 11).args);
+  });
+
   it("neither shows nor sends another staff member's queued pushes", async () => {
     await mockStore.setJSON(fieldOutboxKey, enqueuePush([], stop(['t_9'], 10), 'staff_2', 0));
     await renderApp();

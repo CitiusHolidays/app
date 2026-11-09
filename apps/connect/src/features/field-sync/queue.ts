@@ -165,26 +165,22 @@ export async function sendItem(item: SyncItem, deps: SyncDeps): Promise<PushOutc
 /**
  * One run over the queue: sends this staff member's due items one at a time and settles each.
  * Sequential on purpose: a stop's later state must not race its earlier one to the office, and a
- * sign-out (`isCurrent` turning false) must stop the run before its next request. `again` is set
- * by a run requested while this one was busy; the queue is read afresh before stopping.
+ * sign-out (`isCurrent` turning false) must stop the run before its next request. A change made
+ * during the run is picked up by the next run (see serialRunner).
  */
 export async function drainSyncQueue(run: {
-  again: { current: boolean };
   deps: SyncDeps;
   isCurrent: () => boolean;
   queued: () => SyncItem[];
   settle: (sent: SyncItem, outcome: PushOutcome) => Promise<void>;
   staffId: string;
 }) {
-  do {
-    run.again.current = false;
-    for (const item of dueSyncItems(run.queued(), run.deps.now(), run.staffId)) {
-      if (!run.isCurrent()) return;
-      const outcome = await sendItem(item, run.deps);
-      if (!run.isCurrent()) return;
-      await run.settle(item, outcome);
-    }
-  } while (run.again.current && run.isCurrent());
+  for (const item of dueSyncItems(run.queued(), run.deps.now(), run.staffId)) {
+    if (!run.isCurrent()) return;
+    const outcome = await sendItem(item, run.deps);
+    if (!run.isCurrent()) return;
+    await run.settle(item, outcome);
+  }
 }
 
 /**

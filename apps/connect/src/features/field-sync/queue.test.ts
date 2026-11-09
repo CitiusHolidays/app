@@ -232,25 +232,9 @@ describe('field sync queue', () => {
       const mine = enqueuePush(enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW), second(['t_2'], NOW), 'staff_1', NOW);
       const { settle, state } = queue(enqueuePush(mine, stop(['t_9'], NOW), 'staff_2', NOW));
       const fake = deps(applied);
-      await drainSyncQueue({ again: { current: false }, deps: fake, isCurrent: () => true, queued: () => state.items, settle, staffId: 'staff_1' });
+      await drainSyncQueue({ deps: fake, isCurrent: () => true, queued: () => state.items, settle, staffId: 'staff_1' });
       expect(fake.sent.map(presentIn)).toEqual([['t_1'], ['t_2']]);
       expect(state.items.map((item) => `${item.staffId}:${item.status}`)).toEqual(['staff_1:synced', 'staff_1:synced', 'staff_2:pending']);
-    });
-
-    it('looks at the queue again when a change arrives during the run', async () => {
-      const { settle, state } = queue(enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW));
-      const again = { current: false };
-      const fake = deps(async (push) => {
-        if (presentIn(push).length === 1) {
-          // The tour manager marks another traveller while the first push is in flight.
-          state.items = enqueuePush(state.items, stop(['t_1', 't_2'], NOW + 1), 'staff_1', NOW + 1);
-          again.current = true;
-        }
-        return applied();
-      });
-      await drainSyncQueue({ again, deps: fake, isCurrent: () => true, queued: () => state.items, settle, staffId: 'staff_1' });
-      expect(fake.sent.map(presentIn)).toEqual([['t_1'], ['t_1', 't_2']]);
-      expect(state.items).toMatchObject([{ status: 'synced' }]);
     });
 
     it('stops without settling anything once the store is wiped', async () => {
@@ -260,7 +244,7 @@ describe('field sync queue', () => {
         current = false;
         return applied();
       });
-      await drainSyncQueue({ again: { current: false }, deps: fake, isCurrent: () => current, queued: () => state.items, settle, staffId: 'staff_1' });
+      await drainSyncQueue({ deps: fake, isCurrent: () => current, queued: () => state.items, settle, staffId: 'staff_1' });
       expect(fake.sent).toHaveLength(1);
       expect(state.items.map((item) => item.status)).toEqual(['pending', 'pending']);
     });

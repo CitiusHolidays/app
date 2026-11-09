@@ -1,11 +1,12 @@
 import { staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
-import { createContext, type ReactNode, useCallback, useContext, useRef } from 'react';
+import { createContext, type ReactNode, useCallback, useContext } from 'react';
 
 import { canReachServer } from '@/features/gate/reach';
 import { useStaffSession } from '@/features/gate/session';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
+import { useSerialRun } from '@/lib/serial-runner';
 import { useBackgroundRun } from '@/lib/use-background-run';
 
 import {
@@ -51,19 +52,11 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
     (change: (previous: SyncItem[]) => SyncItem[]) => setStored((previous) => change(readSyncItems(previous))),
     [setStored]
   );
-  const running = useRef(false);
-  const again = useRef(false);
 
-  const run = useCallback(async () => {
+  const send = useCallback(async () => {
     if (!canSend || !loaded || !staffId) {
       return;
     }
-    if (running.current) {
-      // Something changed during this run; look again before stopping.
-      again.current = true;
-      return;
-    }
-    running.current = true;
     // Sign-out or a change of user wipes the store; this run must not write items back after it.
     const current = live.fence();
     const deps: SyncDeps = {
@@ -76,7 +69,6 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
     // Read straight from the live store: it already holds every change made during this run.
     const queued = () => readSyncItems(live.snapshot(fieldOutboxKey)?.value as StoredSyncItem[] | null | undefined);
     await drainSyncQueue({
-      again,
       deps,
       isCurrent: current,
       queued,
@@ -90,9 +82,10 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
         if (outcome.kind === 'refused') logEvent('field-sync.refused');
       },
       staffId,
-    }).catch((error: unknown) => logEvent('field-sync.run-failed', error));
-    running.current = false;
+    });
   }, [canSend, convex, live, loaded, staffId, update]);
+  // One run at a time; a change made during a run gets one more run as soon as it ends.
+  const run = useSerialRun(send, (error) => logEvent('field-sync.run-failed', error));
 
   useBackgroundRun(canSend, run);
 
