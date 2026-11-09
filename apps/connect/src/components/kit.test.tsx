@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 import { renderWithTheme } from '@/test/render';
 
@@ -27,5 +28,15 @@ describe('Row', () => {
   it('reads a plain row as one element with its own label', async () => {
     await renderWithTheme(<Row accessibilityLabel="Client A, 4 Nov – 10 Nov" title="Client A" />);
     expect(screen.getByLabelText('Client A, 4 Nov – 10 Nov')).toBeOnTheScreen();
+  });
+});
+
+describe('CallButton', () => {
+  it('dials only the digits and + of a number typed with spaces, dashes and notes', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await renderWithTheme(<CallButton name="Asha Example" phone="+91 90000-00000 (mobile)" />);
+    fireEvent.press(screen.getByRole('button', { name: 'Call Asha Example' }));
+    expect(openURL).toHaveBeenCalledWith('tel:+919000000000');
+    openURL.mockRestore();
   });
 });

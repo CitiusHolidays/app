@@ -34,6 +34,14 @@ Run lint and typecheck before declaring any task done.
 Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
 Docs: https://docs.expo.dev/eas/index.md
 
+## When to ask and when to just act
+
+Work through reversible steps without asking, and show the result afterwards: edits on a branch, local builds, tests, simulators, a PR. If running something would answer a question, run it instead of asking. Don't ask for a sign-off that would only be a rubber stamp.
+
+Stop before one-way steps: anything that changes production data or users, store submissions, secrets and credentials, and anything published outside this repo. Save questions for those and for product or taste calls only the owner can make. Ask one at a time, with your recommendation; "no" is a fine answer.
+
+Once the owner approves a one-way step, the approval covers that piece of work, including subagents you hand it to (quote the approval to them). Come back only if the step turns out different from what was approved: more at stake, a failing check, or something nobody knew about.
+
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
