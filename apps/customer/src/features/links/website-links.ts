@@ -52,7 +52,8 @@ export function appPathForSystemLink(path: string): string {
   }
   if (route === '/app/invite') {
     const token = parseInviteToken(`#token=${tokenFrom(fragment)}`);
-    return token ? `/invite?token=${token}` : '/invite-entry';
+    // A broken link opens the invite screen, which says it doesn't work, signed in or not.
+    return token ? `/invite?token=${token}` : '/invite';
   }
   return '/';
 }

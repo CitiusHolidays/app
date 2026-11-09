@@ -1,6 +1,6 @@
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,8 @@ import { Icon, TextField } from '@/components/kit';
 import { SignInHero } from '@/components/sign-in-hero';
 import { SHEET_OVERLAP } from '@/features/auth/sign-in-artwork';
 import { isEmail, requestEmailLink, SIGN_IN_METHODS, type SignInMethodId, verifyEmailLink } from '@/features/auth/methods';
-import { PENDING_INVITE_KEY, RETURN_TO_KEY, useCustomerSession } from '@/features/session/session';
+import { afterSignIn, currentReturnTo, type LinkState } from '@/features/session/after-sign-in';
+import { PENDING_INVITE_KEY, RETURN_TO_KEY, SERVER_STALL_MS, useCustomerSession } from '@/features/session/session';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
@@ -80,25 +81,41 @@ function MethodPill({
   );
 }
 
-function VerifyingLink() {
+/** Opening the link. If the session has not come through after a while, says so and offers a way back. */
+function VerifyingLink({ onStartAgain }: { onStartAgain: () => void }) {
   const theme = useAppTheme();
   const { t } = useI18n();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), SERVER_STALL_MS);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
       <ActivityIndicator color={theme.color.primary} />
       <Text>{t('signIn.verifying')}</Text>
+      {slow ? (
+        <Animated.View entering={stateEntering} style={{ alignItems: 'center', alignSelf: 'stretch', gap: space.md }}>
+          <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
+            {t('signIn.slow')}
+          </Text>
+          <Button label={t('signIn.startAgain')} onPress={onStartAgain} variant="secondary" />
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
 
-function LinkFailed({ onNewLink }: { onNewLink: () => void }) {
+/** A link that did not work: a dropped connection can be retried, a refused link cannot. */
+function LinkFailed({ onNewLink, onRetry, reason }: { onNewLink: () => void; onRetry: () => void; reason: 'network' | 'refused' }) {
   const { t } = useI18n();
   return (
     <View style={{ gap: space.lg }}>
       <Banner tone="danger">
-        <Text variant="secondary">{t('signIn.linkFailed')}</Text>
+        <Text variant="secondary">{t(reason === 'network' ? 'signIn.network' : 'signIn.linkFailed')}</Text>
       </Banner>
-      <Button label={t('signIn.newLink')} onPress={onNewLink} />
+      {reason === 'network' ? <Button label={t('common.retry')} onPress={onRetry} /> : null}
+      <Button label={t('signIn.newLink')} onPress={onNewLink} variant={reason === 'network' ? 'secondary' : 'primary'} />
     </View>
   );
 }
@@ -236,44 +253,55 @@ export default function SignIn() {
   const { gate } = useCustomerSession();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const [pendingInvite] = useStoredValue<string | null>(PENDING_INVITE_KEY, null);
-  const [returnTo, setReturnTo] = useStoredValue<string | null>(RETURN_TO_KEY, null);
+  const [storedReturnTo] = useStoredValue<unknown>(RETURN_TO_KEY, null);
   const [method, setMethod] = useState<SignInMethodId>('email');
   const [email, setEmail] = useState('');
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [sentAt, setSentAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<MessageKey | null>(null);
-  const [verifying, setVerifying] = useState<'idle' | 'running' | 'done' | 'failed'>(token ? 'running' : 'idle');
+  const [link, setLink] = useState<LinkState>(token ? { kind: 'opening' } : { kind: 'none' });
   const now = useNow(1_000);
   const verifiedToken = useRef<string | null>(null);
+  /** The link arrived while the traveller was already in the app, on top of another screen. */
+  const openedSignedIn = useRef(false);
   const { props: reveal } = useRevealEndOnKeyboard();
   useAnnounce(problem ? t(problem) : null);
 
   const signedIn = gate.kind === 'signedIn';
+  const returnTo = currentReturnTo(storedReturnTo, now);
+
+  const open = useCallback((value: string, alreadySignedIn: boolean) => {
+    openedSignedIn.current = alreadySignedIn;
+    setLink({ kind: 'opening' });
+    void verifyEmailLink(value, { signedIn: alreadySignedIn }).then((result) => {
+      if (result.ok) return setLink({ kind: 'opened' });
+      logEvent(result.reason === 'network' ? 'auth.link-unreachable' : 'auth.link-refused');
+      setLink({ kind: 'failed', reason: result.reason === 'network' ? 'network' : 'refused' });
+    });
+  }, []);
+
   useEffect(() => {
     if (!token || verifiedToken.current === token) return;
     verifiedToken.current = token;
-    setVerifying('running');
-    void verifyEmailLink(token, { signedIn }).then((result) => {
-      if (!result.ok) logEvent('auth.link-refused');
-      setVerifying(result.ok ? 'done' : 'failed');
-    });
-  }, [signedIn, token]);
+    open(token, signedIn);
+  }, [open, signedIn, token]);
 
-  // Once the session is live, go where the traveller was heading.
+  // Once the session is live, go where the traveller was heading (after-sign-in.ts).
   useEffect(() => {
-    if (!signedIn || verifying === 'running' || verifying === 'failed') return;
-    if (returnTo) {
-      void setReturnTo(null);
-      router.replace(returnTo as never);
-    } else if (pendingInvite) {
-      router.replace({ params: { token: pendingInvite }, pathname: '/invite' });
-    } else if (verifying === 'done') {
-      router.replace('/');
-    }
-  }, [pendingInvite, returnTo, setReturnTo, signedIn, verifying]);
+    const next = afterSignIn({ canGoBack: openedSignedIn.current && router.canGoBack(), link, pendingInvite, returnTo, signedIn });
+    if (next.kind === 'return') router.dismissTo(next.path);
+    else if (next.kind === 'invite') router.replace({ params: { token: next.token }, pathname: '/invite' });
+    else if (next.kind === 'back') router.back();
+    else if (next.kind === 'home' && link.kind === 'opened') router.replace('/');
+  }, [link, pendingInvite, returnTo, signedIn]);
 
-  if (signedIn && !token && !returnTo && !pendingInvite) {
+  const startAgain = () => {
+    setLink({ kind: 'none' });
+    router.setParams({ token: undefined });
+  };
+
+  if (signedIn && !token && !pendingInvite) {
     return <Redirect href="/" />;
   }
 
@@ -300,19 +328,12 @@ export default function SignIn() {
   const waitMs = sentAt + RESEND_AFTER_MS - now;
   let body;
   let bodyKey: string;
-  if (verifying === 'running' || (verifying === 'done' && !signedIn)) {
+  if (link.kind === 'opening' || (link.kind === 'opened' && !signedIn)) {
     bodyKey = 'verifying';
-    body = <VerifyingLink />;
-  } else if (verifying === 'failed') {
-    bodyKey = 'failed';
-    body = (
-      <LinkFailed
-        onNewLink={() => {
-          setVerifying('idle');
-          router.setParams({ token: undefined });
-        }}
-      />
-    );
+    body = <VerifyingLink onStartAgain={startAgain} />;
+  } else if (link.kind === 'failed') {
+    bodyKey = `failed-${link.reason}`;
+    body = <LinkFailed onNewLink={startAgain} onRetry={() => token && open(token, signedIn)} reason={link.reason} />;
   } else if (sentTo) {
     bodyKey = 'sent';
     body = (
