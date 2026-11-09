@@ -52,7 +52,7 @@ function Probe() {
     handles.live = live;
   });
   return (
-    <Text>{`trips:${value.trips.length}${value.tripsComplete ? '' : ' (partial)'} pack:${value.pack ? (value.pack.complete ? 'complete' : 'partial') : 'none'} chosen:${value.chosen?.id ?? 'none'}`}</Text>
+    <Text>{`trips:${value.trips.length}${value.tripsComplete ? '' : ' (partial)'} pack:${value.pack ? (value.pack.complete ? 'complete' : 'partial') : 'none'}`}</Text>
   );
 }
 
@@ -80,13 +80,13 @@ describe('trips provider', () => {
   it('deletes the saved pack of a trip that left the list (pilot stopped or unassigned) after a complete refresh', async () => {
     await mockStore.setJSON('pack:jc_paused', savedPack('jc_paused'));
     await renderTrips();
-    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:1 pack:complete')).toBeOnTheScreen();
     await waitFor(async () => expect(await mockStore.keys('pack:')).toEqual([`pack:${commandCenter.jobCard.id}`]));
   });
 
   it('asks the shared trip reads for the app view, so a stopped pilot is refused there', async () => {
     await renderTrips();
-    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:1 pack:complete')).toBeOnTheScreen();
     const appReads = mockQuery.mock.calls.filter(([ref]) =>
       ['crm/jobCards:getCommandCenter', 'crm/jobCards:listTravelBatches', 'crm/travellers:listPage', 'crm/ops:listTourManagers'].includes(
         getFunctionName(ref as Parameters<typeof getFunctionName>[0])
@@ -121,7 +121,7 @@ describe('trips provider', () => {
 
   it("lists only the tour manager's own assigned trips, never the general Job Card list", async () => {
     await renderTrips();
-    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:1 pack:complete')).toBeOnTheScreen();
     expect(calledNames()).toContain('crm/jobCards:listMyAssignedPage');
     expect(calledNames()).not.toContain('crm/jobCards:listPage');
     expect(await mockStore.getJSON('trips:list')).toMatchObject({ complete: true, scope: 'assigned', trips: [{ id: commandCenter.jobCard.id }] });
@@ -130,7 +130,7 @@ describe('trips provider', () => {
   it('keeps paging the assigned list and says when it stopped before the end', async () => {
     mockTripPagesDone = false;
     await renderTrips();
-    expect(await screen.findByText('trips:10 (partial) pack:complete chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:10 (partial) pack:complete')).toBeOnTheScreen();
   });
 
   it('does not show a trip list saved from the general Job Card list by an earlier version', async () => {
@@ -142,25 +142,25 @@ describe('trips provider', () => {
     });
     await mockStore.setJSON('trips:list', { complete: true, savedAt: 1, trips: [{ ...commandCenter.jobCard, id: 'jc_not_mine' }] });
     await renderTrips();
-    expect(await screen.findByText('trips:0 pack:none chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:0 pack:none')).toBeOnTheScreen();
   });
 
-  it('saves the trip list and pack, and never treats the default trip as chosen', async () => {
+  it('saves the trip list and pack, and shows the trip the tour manager picks', async () => {
     await renderTrips();
-    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:1 pack:complete')).toBeOnTheScreen();
     await act(async () => handles.trips?.selectTrip(commandCenter.jobCard.id));
-    expect(await screen.findByText(`trips:1 pack:complete chosen:${commandCenter.jobCard.id}`)).toBeOnTheScreen();
+    expect(handles.trips?.selected?.id).toBe(commandCenter.jobCard.id);
   });
 
   it('marks the pack partial when a list hit the page budget', async () => {
     mockTravellerPagesDone = false;
     await renderTrips();
-    expect(await screen.findByText('trips:1 pack:partial chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:1 pack:partial')).toBeOnTheScreen();
   });
 
   it('does not write a pack that was still loading when the store was wiped', async () => {
     await renderTrips();
-    expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+    expect(await screen.findByText('trips:1 pack:complete')).toBeOnTheScreen();
     let release: () => void = () => undefined;
     mockHold = new Promise((resolve) => {
       release = resolve;
@@ -229,7 +229,7 @@ describe('trips provider', () => {
     });
     try {
       await renderTrips();
-      expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+      expect(await screen.findByText('trips:1 pack:complete')).toBeOnTheScreen();
       const jobCardId = commandCenter.jobCard.id;
       await waitFor(async () => expect(await mockStore.getJSON(`pack:${jobCardId}`)).not.toBeNull());
       await mockStore.setJSON(`pack:${jobCardId}`, { ...savedPack(jobCardId), savedAt: Date.now() - 60 * 60 * 1000 });

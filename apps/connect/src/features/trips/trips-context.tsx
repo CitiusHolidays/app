@@ -34,11 +34,6 @@ interface TripsCache {
 interface TripsValue {
   /** False offline or while the server is not answering: refreshes would do nothing. */
   canRefresh: boolean;
-  /**
-   * The trip the tour manager picked on Today, if it is still in their list. Unlike `selected`
-   * it is never a default guess, so anything filed against a trip (an expense) uses this.
-   */
-  chosen: TripSummary | null;
   /** Derived from `packStatus`: the pack to show, if any. */
   pack: TripPack | null;
   /** Derived from `packStatus`: still reading the saved copy or downloading the first one. */
@@ -112,8 +107,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const now = useNow();
   const trips = sortTrips(cache?.trips ?? [], now);
-  const chosen = trips.find((trip) => trip.id === selectedId) ?? null;
-  const selected = chosen ?? pickDefaultTrip(trips, now);
+  // The trip the tour manager picked, while it is still in their list; otherwise the best guess.
+  const selected = trips.find((trip) => trip.id === selectedId) ?? pickDefaultTrip(trips, now);
 
   const refreshTrips = useCallback(async () => {
     if (!canReachServer) {
@@ -237,7 +232,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const packStatus = (selectedTripId === null ? undefined : packs[selectedTripId]) ?? LOADING;
   const value: TripsValue = {
     canRefresh: canReachServer,
-    chosen,
     pack: packOf(packStatus),
     packLoading: packPending(packStatus),
     packProblem: packStatus.kind === 'stale' ? STALE_PACK_PROBLEM : null,
