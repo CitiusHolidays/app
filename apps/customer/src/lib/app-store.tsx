@@ -1,16 +1,12 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { openDeviceStore } from './storage/device-store';
-import type { KeyValueStore } from './storage/kv';
 import { LiveStore } from './storage/live-store';
 import { createMemoryStore } from './storage/memory-store';
 import { logEvent } from './safe-log';
 
 interface AppStoreValue {
   live: LiveStore;
-  /** False when nothing survives a restart (no SQLCipher in this build, or the web preview). */
-  persistent: boolean;
-  store: KeyValueStore;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -21,13 +17,13 @@ export function AppStoreProvider({ children, fallback }: { children: ReactNode; 
     let active = true;
     openDeviceStore()
       .then((store) => {
-        if (active) setValue({ live: new LiveStore(store), persistent: store.encrypted, store });
+        if (active) setValue({ live: new LiveStore(store) });
       })
       .catch((error: unknown) => {
         // Fail closed: without encryption nothing is written to disk.
         logEvent('store.open-failed', error);
         const store = createMemoryStore();
-        if (active) setValue({ live: new LiveStore(store), persistent: false, store });
+        if (active) setValue({ live: new LiveStore(store) });
       });
     return () => {
       active = false;

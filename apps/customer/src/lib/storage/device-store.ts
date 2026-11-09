@@ -12,7 +12,7 @@ const KEY_OPTIONS: SecureStore.SecureStoreOptions = {
 };
 
 /** The binary has no SQLCipher, so nothing may be written: the app falls back to memory only. */
-export class EncryptionUnavailableError extends Error {
+class EncryptionUnavailableError extends Error {
   constructor() {
     super('Encrypted storage is not available in this build');
     this.name = 'EncryptionUnavailableError';
@@ -61,8 +61,8 @@ export function isWrongKeyError(error: unknown) {
 
 /**
  * Opens the encrypted store. If the database cannot be read with the stored key (for example the
- * key was removed), the cache is deleted and recreated: it only holds data the server can resend,
- * plus the expense outbox, whose receipt files live separately. Any other error (a locked file,
+ * key was removed), the cache is deleted and recreated: it only holds data the server can resend.
+ * Any other error (a locked file,
  * low disk) is passed on and the app runs from memory, so a transient failure deletes nothing.
  */
 export async function openDeviceStore(): Promise<KeyValueStore> {
@@ -80,21 +80,10 @@ export async function openDeviceStore(): Promise<KeyValueStore> {
     clear: async () => {
       await db.runAsync('DELETE FROM kv');
     },
-    delete: async (key) => {
-      await db.runAsync('DELETE FROM kv WHERE key = ?', key);
-    },
     encrypted: true,
     getJSON: async <T,>(key: string) => {
       const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM kv WHERE key = ?', key);
       return row ? (JSON.parse(row.value) as T) : null;
-    },
-    keys: async (prefix) => {
-      const rows = await db.getAllAsync<{ key: string }>(
-        "SELECT key FROM kv WHERE substr(key, 1, length(?)) = ?",
-        prefix,
-        prefix
-      );
-      return rows.map((row) => row.key);
     },
     setJSON: async (key, value) => {
       await db.runAsync(

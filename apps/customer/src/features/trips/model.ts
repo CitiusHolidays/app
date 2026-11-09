@@ -1,10 +1,12 @@
 import type { TripDetail, TripSummary } from '@citius/backend/customer';
 import type { StatusKind } from '@citius/ui';
 
+import { parseCalendarDay } from '@/lib/calendar-day';
+
 /** Local midnight of a YYYY-MM-DD calendar day, or null. */
 function dayStart(value: string | null) {
-  const match = value ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim()) : null;
-  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime() : null;
+  const day = parseCalendarDay(value);
+  return day ? new Date(day.year, day.month, day.day).getTime() : null;
 }
 
 function todayStart(now: number) {
@@ -95,12 +97,17 @@ export function statusKind(status: string | null): StatusKind {
   return 'attention';
 }
 
+/** The visa status to show: travellers who need no visa read "Not Required", whatever was stored. */
+export function shownVisaStatus(row: Pick<TripDetail['documents'][number], 'visaRequired' | 'visaStatus'>) {
+  return row.visaRequired ? row.visaStatus : 'Not Required';
+}
+
 /** The documents block summary: how many of the shown documents are done. */
 export function documentProgress(documents: TripDetail['documents']) {
   let done = 0;
   let total = 0;
   for (const row of documents) {
-    for (const status of [row.passportStatus, row.visaRequired ? row.visaStatus : 'Not Required', row.ticketStatus]) {
+    for (const status of [row.passportStatus, shownVisaStatus(row), row.ticketStatus]) {
       total += 1;
       if (statusKind(status) === 'good') done += 1;
     }

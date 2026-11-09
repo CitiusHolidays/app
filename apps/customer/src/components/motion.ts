@@ -17,10 +17,8 @@ import {
  */
 /** Strong ease-out: anything arriving or leaving. */
 export const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
-/** On-screen movement from A to B. */
-export const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1);
 /** A small overshoot, for entrances of rare moments only (a success badge). Never on a close. */
-export const EASE_POP = Easing.bezier(0.34, 1.36, 0.64, 1);
+const EASE_POP = Easing.bezier(0.34, 1.36, 0.64, 1);
 export const MOTION = {
   /** Per-item stagger; keep the total under ~300ms. */
   stagger: 40,

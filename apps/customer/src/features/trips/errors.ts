@@ -1,11 +1,19 @@
 import { CUSTOMER_ERRORS } from '@citius/backend/customer';
+import { ConvexError } from 'convex/values';
 
 import type { MessageKey } from '@/i18n/locales/en';
 
-/** The server's refusal code, from a ConvexError's string data. */
-export function serverCode(error: unknown) {
-  const data = typeof error === 'object' && error !== null ? (error as { data?: unknown }).data : undefined;
-  return typeof data === 'string' ? data : null;
+export type CustomerErrorCode = (typeof CUSTOMER_ERRORS)[keyof typeof CUSTOMER_ERRORS];
+
+const CODES: ReadonlySet<string> = new Set(Object.values(CUSTOMER_ERRORS));
+
+function isCustomerErrorCode(value: unknown): value is CustomerErrorCode {
+  return typeof value === 'string' && CODES.has(value);
+}
+
+/** The server's refusal code, from a ConvexError's data; null for any other failure. */
+export function serverCode(error: unknown): CustomerErrorCode | null {
+  return error instanceof ConvexError && isCustomerErrorCode(error.data) ? error.data : null;
 }
 
 export function inviteErrorMessage(error: unknown): MessageKey {

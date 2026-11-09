@@ -1,6 +1,6 @@
 import type { TripSummary } from '@citius/backend/customer';
 
-import { documentProgress, featuredTrip, journeyRows, parseInviteToken, splitTrips, statusKind, tripTiming } from './model';
+import { documentProgress, featuredTrip, journeyRows, parseInviteToken, splitTrips, shownVisaStatus, statusKind, tripTiming } from './model';
 
 const at = (year: number, month: number, day: number, hour = 10) => new Date(year, month - 1, day, hour).getTime();
 
@@ -133,5 +133,12 @@ describe('journeys list rows', () => {
   it('has no rows and no headings without trips', () => {
     expect(journeyRows([])).toEqual([]);
     expect(journeyRows([trip({ phase: 'past', tripId: 'p' })]).map((row) => row.key)).toEqual(['section:past', 'card:p']);
+  });
+});
+
+describe('shownVisaStatus', () => {
+  it('shows the stored status only when a visa is needed', () => {
+    expect(shownVisaStatus({ visaRequired: true, visaStatus: 'Submitted' })).toBe('Submitted');
+    expect(shownVisaStatus({ visaRequired: false, visaStatus: 'Submitted' })).toBe('Not Required');
   });
 });

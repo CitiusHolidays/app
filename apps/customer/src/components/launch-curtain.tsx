@@ -18,6 +18,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { EASE_OUT } from '@/components/motion';
+
 /**
  * The splash mark split into its two planes, each on the mark's full canvas so that, at rest, the
  * pair is pixel for pixel the native splash. iOS draws its splash colours as Display P3, so the
@@ -60,7 +62,6 @@ const HOVER_PT = 4;
 const TAKEOFF_MS = 720;
 const FOLLOW_MS = 90;
 const CURTAIN_OUT_DELAY_MS = 160;
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 /** Gathers speed and is off screen before it would slow down. */
 const EASE_TAKEOFF = Easing.bezier(0.6, 0, 0.4, 1);
 /** If the texture never reports loaded, the native splash still goes after this long. */

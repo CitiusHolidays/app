@@ -3,9 +3,12 @@
  * they are formatted as that day, never shifted by the phone's zone.
  */
 
+import { parseCalendarDay } from '@/lib/calendar-day';
+
+/** Noon UTC on the day, so formatting in UTC can never land on a neighbouring day. */
 function calendarDay(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  return match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12)) : null;
+  const day = parseCalendarDay(value);
+  return day ? new Date(Date.UTC(day.year, day.month, day.day, 12)) : null;
 }
 
 const dayFormat = (intl: string, options: Intl.DateTimeFormatOptions) =>
@@ -53,16 +56,6 @@ export function formatMoment(intl: string, value: number, now: number) {
   const sameDay = new Date(now).toDateString() === date.toDateString();
   if (sameDay) return formatTime(intl, value);
   return new Intl.DateTimeFormat(intl, { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short' }).format(date);
-}
-
-/** Month and day number for the date tile on a trip row. */
-export function dayTile(intl: string, value: string | null) {
-  const date = value ? calendarDay(value) : null;
-  if (!date) return null;
-  return {
-    day: dayFormat(intl, { day: 'numeric' }).format(date),
-    month: dayFormat(intl, { month: 'short' }).format(date),
-  };
 }
 
 const longDates = new Map<string, Intl.DateTimeFormat>();

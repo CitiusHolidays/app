@@ -3,17 +3,14 @@ import { space, Surface, Text, useAppTheme } from '@citius/ui';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useQuery } from 'convex/react';
-import { Alert, Linking, View } from 'react-native';
+import { Alert, View } from 'react-native';
 
 import { Avatar, CallButton, Icon, ListCard, PageTitle, Row, Screen, SectionTitle } from '@/components/kit';
 import { useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL, CITIUS_OFFICES, PRIVACY_URL, TERMS_URL } from '@/features/support/contacts';
 import { useTrips } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
-
-function open(url: string) {
-  void Linking.openURL(url).catch(() => undefined);
-}
+import { openUrl } from '@/lib/open-url';
 
 /** The account, language, help and legal links, sign-out and account deletion. */
 export default function Me() {
@@ -73,7 +70,7 @@ export default function Me() {
             chevron
             last
             leading={<Icon color={theme.color.primary} ios="envelope" md="mail" />}
-            onPress={() => open(`mailto:${CITIUS_EMAIL}`)}
+            onPress={() => openUrl(`mailto:${CITIUS_EMAIL}`)}
             subtitle={CITIUS_EMAIL}
             title={t('trip.officeEmail')}
           />
@@ -81,8 +78,8 @@ export default function Me() {
       </View>
 
       <ListCard>
-        <Row chevron leading={<Icon color={theme.color.muted} ios="hand.raised" md="privacy_tip" />} onPress={() => open(PRIVACY_URL)} title={t('me.privacy')} />
-        <Row chevron last leading={<Icon color={theme.color.muted} ios="doc.text" md="description" />} onPress={() => open(TERMS_URL)} title={t('me.terms')} />
+        <Row chevron leading={<Icon color={theme.color.muted} ios="hand.raised" md="privacy_tip" />} onPress={() => openUrl(PRIVACY_URL)} title={t('me.privacy')} />
+        <Row chevron last leading={<Icon color={theme.color.muted} ios="doc.text" md="description" />} onPress={() => openUrl(TERMS_URL)} title={t('me.terms')} />
       </ListCard>
 
       <ListCard>

@@ -2,10 +2,11 @@ import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } fro
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, ScrollView, View } from 'react-native';
-import Animated, { Easing, FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, TextField } from '@/components/kit';
+import { Icon, type IconPair, TextField } from '@/components/kit';
+import { EASE_OUT } from '@/components/motion';
 import { SignInHero } from '@/components/sign-in-hero';
 import { SHEET_OVERLAP } from '@/features/auth/sign-in-artwork';
 import { isEmail, requestEmailLink, SIGN_IN_METHODS, type SignInMethodId, verifyEmailLink } from '@/features/auth/methods';
@@ -23,7 +24,6 @@ import { useNow } from '@/lib/use-now';
 
 const RESEND_AFTER_MS = 30_000;
 
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 /** The sheet's content rises in once, just after the photograph's title. */
 const sheetEntering = FadeInDown.duration(380).delay(200).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 12 }] });
 /** Between the form, "check your email" and a failed link: a quick crossfade, no movement. */
@@ -40,7 +40,7 @@ function MethodPill({
   soon,
 }: {
   hint: string;
-  icon: { ios: string; md: string };
+  icon: IconPair;
   label: string;
   onPress: () => void;
   selected: boolean;

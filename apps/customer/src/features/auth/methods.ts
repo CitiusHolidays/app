@@ -2,6 +2,7 @@ import { SIGN_IN_DEVICE_HEADER } from '@citius/backend/customer';
 import * as SecureStore from 'expo-secure-store';
 
 import { clients } from '@/lib/clients';
+import { logEvent } from '@/lib/safe-log';
 
 import { sha256Hex, signInDevice } from './sign-in-device';
 
@@ -51,7 +52,8 @@ export async function requestEmailLink(email: string, inviteToken?: string | nul
       metadata: inviteTokenHash ? { deviceDigest: digest, inviteTokenHash } : { deviceDigest: digest },
     });
     return error ? failure(error.status) : { ok: true };
-  } catch {
+  } catch (error) {
+    logEvent('auth.request-link-failed', error);
     return { ok: false, reason: 'network' };
   }
 }
@@ -91,7 +93,8 @@ async function openLink(token: string, signedIn: boolean): Promise<RequestResult
     if (error) return failure(error.status);
     await rememberOpenedLink(digest);
     return { ok: true };
-  } catch {
+  } catch (error) {
+    logEvent('auth.verify-link-failed', error);
     return { ok: false, reason: 'network' };
   }
 }

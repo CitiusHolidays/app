@@ -7,8 +7,14 @@ import { LaunchCurtain, TEXTURE_LAYERS, useLaunchDone } from './launch-curtain';
 // Motion is checked on device; here timings finish at once so the hand-off logic can be tested.
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
+  // Layout animations are built at import time by the shared motion module: any chain returns itself.
+  const layoutAnimation: object = new Proxy({}, { get: () => () => layoutAnimation });
   return {
     __esModule: true,
+    FadeIn: layoutAnimation,
+    FadeInDown: layoutAnimation,
+    FadeInRight: layoutAnimation,
+    FadeOut: layoutAnimation,
     cubicBezier: () => 'ease-out',
     default: { View },
     useAnimatedStyle: () => ({}),

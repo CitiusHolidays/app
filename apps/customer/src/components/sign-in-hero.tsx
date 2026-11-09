@@ -3,10 +3,11 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, FadeInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/kit';
+import { EASE_OUT } from '@/components/motion';
 import { useI18n } from '@/i18n/i18n';
 import { type Artwork, HALLSTATT, SHEET_OVERLAP, SIGN_IN_ARTWORK } from '@/features/auth/sign-in-artwork';
 
@@ -17,7 +18,6 @@ const planes = require('../../assets/images/splash-icon.png');
 /** The photograph's slow settle: it starts this much larger and eases to rest once. */
 const DRIFT_SCALE = 1.06;
 const DRIFT_MS = 9000;
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const titleEntering = FadeInDown.duration(420).delay(120).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 14 }] });
 
 /**

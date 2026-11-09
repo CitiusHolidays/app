@@ -7,7 +7,7 @@ import { Banner, Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { useConvex, useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { BackHandler, Linking, View } from 'react-native';
+import { BackHandler, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { Icon, MessageScreen, Screen, TextField } from '@/components/kit';
@@ -23,6 +23,7 @@ import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
 import { haptic } from '@/lib/haptic';
+import { openUrl } from '@/lib/open-url';
 import { logEvent } from '@/lib/safe-log';
 import { runThen } from '@/lib/run-then';
 
@@ -73,7 +74,7 @@ function StepBody({ step, ...props }: StepProps) {
       return (
         <View style={{ gap: space.md }}>
           <Text>{t('delete.unavailable', { email: CITIUS_EMAIL })}</Text>
-          <Button label={t('delete.emailUs')} onPress={() => void Linking.openURL(`mailto:${CITIUS_EMAIL}`).catch(() => undefined)} variant="secondary" />
+          <Button label={t('delete.emailUs')} onPress={() => openUrl(`mailto:${CITIUS_EMAIL}`)} variant="secondary" />
         </View>
       );
     case 'staff':

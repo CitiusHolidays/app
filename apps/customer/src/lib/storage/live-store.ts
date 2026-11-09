@@ -53,15 +53,6 @@ export class LiveStore {
   }
 
   /**
-   * Returns a check that stays true until the next wipe. Async work (a refresh, an outbox run)
-   * takes one before it starts and drops its result if a wipe happened in between.
-   */
-  fence() {
-    const epoch = this.epoch;
-    return () => epoch === this.epoch;
-  }
-
-  /**
    * Deletes everything on disk; every key then reads as empty, and stays loaded. Keys in `keep`
    * (read from disk if no screen has loaded them) are written back afterwards.
    */

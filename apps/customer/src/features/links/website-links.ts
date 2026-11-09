@@ -9,7 +9,7 @@ import { WEBSITE_URL } from '@/lib/env';
  * `associatedDomains` and `intentFilters` in app.json and with the website's
  * apple-app-site-association and assetlinks.json files.
  */
-export const WEBSITE_LINK_HOST = 'www.citiusholidays.com';
+const WEBSITE_LINK_HOST = 'www.citiusholidays.com';
 
 const WEB_LINK = /^https?:\/\/([^/?#]+)(\/[^?#]*)?(?:\?[^#]*)?(?:#(.*))?$/i;
 const SIGN_IN_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
