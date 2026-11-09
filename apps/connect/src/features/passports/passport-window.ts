@@ -1,5 +1,8 @@
 import type { FieldPassportRow } from '@citius/backend';
 
+import { APP_LOCALE } from '@/lib/dates';
+import { isServerRefusal } from '@/lib/refusal';
+
 /** The office's zone; the server draws the trip window in it (see listFieldPassports). */
 const OFFICE_TIME_ZONE = 'Asia/Kolkata';
 
@@ -10,7 +13,7 @@ const dayFormats = new Map<string, Intl.DateTimeFormat>();
 function dayFormat(timeZone: string) {
   let format = dayFormats.get(timeZone);
   if (!format) {
-    format = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone });
+    format = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', timeZone });
     dayFormats.set(timeZone, format);
   }
   return format;
@@ -83,7 +86,7 @@ export function base64FromBytes(buffer: ArrayBuffer) {
 
 /** Server refusals in words a tour manager can act on. Server text is never shown raw. */
 export function passportProblem(error: unknown) {
-  if (!(typeof error === 'object' && error !== null && 'data' in error)) {
+  if (!isServerRefusal(error)) {
     return 'Could not load the passport. Check the connection and try again.';
   }
   const { data } = error;
