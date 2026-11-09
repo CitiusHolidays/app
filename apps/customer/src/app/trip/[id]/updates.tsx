@@ -3,7 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnnouncementSkeleton } from '@/components/skeletons';
+import { AnnouncementRows } from '@/components/skeletons';
 import { AnnouncementItem } from '@/components/trip-sections';
 import { useTrip } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
@@ -30,9 +30,7 @@ export default function TripUpdates() {
       ListEmptyComponent={
         trip.loading ? (
           <View style={[card, { borderRadius: theme.radius.surface, borderWidth: StyleSheet.hairlineWidth }]}>
-            <AnnouncementSkeleton />
-            <AnnouncementSkeleton />
-            <AnnouncementSkeleton last />
+            <AnnouncementRows count={3} label={t('common.loading')} />
           </View>
         ) : (
           <Text tone="muted">{t('trip.noUpdates')}</Text>

@@ -15,7 +15,7 @@ export function Rise({ children, delay, index = 0, style }: { children: ReactNod
 }
 
 /** A rare moment's mark (a success badge, an empty state's icon) popping into place once. */
-export function Pop({ children, delay, style }: { children: ReactNode; delay?: number; style?: StyleProp<ViewStyle> }) {
-  const pop = usePop(delay);
+export function Pop({ children, delay, duration, style }: { children: ReactNode; delay?: number; duration?: number; style?: StyleProp<ViewStyle> }) {
+  const pop = usePop(delay, duration);
   return <Animated.View style={[style, pop]}>{children}</Animated.View>;
 }

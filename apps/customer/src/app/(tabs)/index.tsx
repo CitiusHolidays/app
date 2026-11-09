@@ -1,12 +1,10 @@
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { Platform, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { FlatList, Platform, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, PageTitle, SectionTitle } from '@/components/kit';
-import { useEntrance } from '@/components/motion';
 import { Pop } from '@/components/motion-views';
 import { JourneysSkeleton } from '@/components/skeletons';
 import { Freshness, TripCard } from '@/components/trip-cards';
@@ -70,7 +68,6 @@ export default function Journeys() {
   const rows = useMemo(() => journeyRows(list), [list]);
   const offline = gate.kind === 'signedIn' && gate.offline;
   const refresh = usePullRefresh(trips.live);
-  const entrance = useEntrance(!trips.loading);
 
   // The trip most likely to be opened next: start its header photo now.
   const leadCover = featuredTrip(list)?.cover ?? null;
@@ -104,7 +101,7 @@ export default function Journeys() {
   };
 
   return (
-    <Animated.FlatList
+    <FlatList
       ListFooterComponent={
         list.length > 0 ? (
           <View style={{ paddingTop: space.lg }}>
@@ -126,7 +123,7 @@ export default function Journeys() {
       maxToRenderPerBatch={2}
       removeClippedSubviews={Platform.OS === 'android'}
       renderItem={renderItem}
-      style={[{ backgroundColor: theme.color.ground }, entrance]}
+      style={{ backgroundColor: theme.color.ground }}
       windowSize={5}
     />
   );

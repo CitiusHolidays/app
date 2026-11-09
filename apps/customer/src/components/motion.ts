@@ -1,13 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import {
   Easing,
+  FadeIn,
   FadeInDown,
   FadeInRight,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -35,32 +34,14 @@ export const MOTION = {
   rise: 8,
 } as const;
 
+/** A mark or a small surface appearing in place: opacity only. */
+export const FADE_IN = FadeIn.duration(MOTION.quick).easing(EASE_OUT);
+
 /** A line of text swapping in place (transitions.dev text swap: 4pt, 150ms). */
 export const TEXT_SWAP_IN = FadeInDown.duration(MOTION.quick).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 4 }] });
 
 /** The next step of a flow taking the place of the last (transitions.dev page slide: 8pt, 250ms). */
 export const STEP_IN = FadeInRight.duration(MOTION.fast).easing(EASE_OUT).withInitialValues({ transform: [{ translateX: MOTION.rise }] });
-
-const RISE_PT = 12;
-const ENTER_MS = 420;
-
-/**
- * A screen's content arriving once: it fades in and rises a few points the first time it is ready
- * (on launch, as the planes fly off), and never again. With reduced motion it only fades. Apply the
- * style to a list or screen container, never to recycled rows.
- */
-export function useEntrance(ready: boolean) {
-  const reduced = useReducedMotion();
-  const progress = useSharedValue(0);
-  useEffect(() => {
-    if (!ready || progress.get() > 0) return;
-    progress.set(withTiming(1, { duration: ENTER_MS, easing: EASE_OUT }));
-  }, [progress, ready]);
-  return useAnimatedStyle(() => ({
-    opacity: progress.get(),
-    transform: [{ translateY: reduced ? 0 : (1 - progress.get()) * RISE_PT }],
-  }));
-}
 
 /**
  * The layout animation for the `index`-th item of a short, non-recycled group arriving together
@@ -78,38 +59,19 @@ export function useRiseIn(index: number, delay = 0) {
   );
 }
 
-/** A loading placeholder's slow breath while it waits (transitions.dev skeleton pulse). */
-export function usePulse(active = true) {
-  const reduced = useReducedMotion();
-  const opacity = useSharedValue(1);
-  useEffect(() => {
-    if (!active || reduced) {
-      opacity.set(1);
-      return;
-    }
-    opacity.set(
-      withRepeat(
-        withSequence(withTiming(0.55, { duration: 1000, easing: Easing.inOut(Easing.ease) }), withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })),
-        -1
-      )
-    );
-  }, [active, opacity, reduced]);
-  return useAnimatedStyle(() => ({ opacity: opacity.get() }));
-}
-
 /**
  * A rare, earned moment arriving (a success badge, an empty state's mark): it pops from 85% with a
  * slight overshoot and turns upright. Reduced motion: it fades in.
  */
-export function usePop(delay = 0) {
+export function usePop(delay = 0, duration: number = MOTION.emphasis) {
   const reduced = useReducedMotion();
   const progress = useSharedValue(0);
   useEffect(() => {
     const timer = setTimeout(() => {
-      progress.set(withTiming(1, { duration: MOTION.emphasis, easing: reduced ? EASE_OUT : EASE_POP }));
+      progress.set(withTiming(1, { duration, easing: reduced ? EASE_OUT : EASE_POP }));
     }, delay);
     return () => clearTimeout(timer);
-  }, [delay, progress, reduced]);
+  }, [delay, duration, progress, reduced]);
   return useAnimatedStyle(() => {
     const p = progress.get();
     if (reduced) return { opacity: Math.min(1, p) };

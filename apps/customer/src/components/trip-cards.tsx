@@ -1,9 +1,10 @@
 import type { TripSummary } from '@citius/backend/customer';
 import { PressableScale, space, Text, useAppTheme } from '@citius/ui';
 import { View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
 
 import { DestinationCover } from '@/components/destination-cover';
+import { DESTINATION_TYPE } from '@/components/destination-type';
 import { Icon } from '@/components/kit';
 import { TEXT_SWAP_IN } from '@/components/motion';
 import { datesAndNights, timingText } from '@/features/trips/labels';
@@ -71,7 +72,7 @@ export function TripCard({ lead, now, onPress, trip }: { lead?: boolean; now: nu
           <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.78)' }} variant="secondary">
             {trip.groupName}
           </Text>
-          <Text numberOfLines={2} style={lead ? { fontSize: 44, lineHeight: 48 } : undefined} tone="onDark" variant="display">
+          <Text numberOfLines={2} style={lead ? DESTINATION_TYPE.leadCard : undefined} tone="onDark" variant="display">
             {trip.destination}
           </Text>
           <Text style={{ color: 'rgba(255,255,255,0.82)' }} variant="secondary">
@@ -112,8 +113,10 @@ export function Freshness({ offline, savedAt }: { offline: boolean; savedAt: num
   const { t, time } = useI18n();
   const theme = useAppTheme();
   if (!offline && savedAt === null) return null;
-  // Going offline, or saved data arriving, swaps the line in place (a 4pt rise over 150ms).
+  // Going offline, or saved data arriving, swaps the line in place (a 4pt rise over 150ms). Opening
+  // a screen shows the line as it is: only a real change moves it.
   return (
+    <LayoutAnimationConfig skipEntering>
     <Animated.View
       accessible
       entering={TEXT_SWAP_IN}
@@ -127,5 +130,6 @@ export function Freshness({ offline, savedAt }: { offline: boolean; savedAt: num
         {savedAt ? t('common.updatedAt', { time: time(savedAt) }) : ''}
       </Text>
     </Animated.View>
+    </LayoutAnimationConfig>
   );
 }

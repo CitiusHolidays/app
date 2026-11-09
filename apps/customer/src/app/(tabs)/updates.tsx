@@ -1,13 +1,11 @@
 import type { TripSummary } from '@citius/backend/customer';
 import { space, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
-import { Platform, RefreshControl, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { FlatList, Platform, RefreshControl, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListCard, PageTitle, QuietState, SectionTitle } from '@/components/kit';
-import { useEntrance } from '@/components/motion';
-import { AnnouncementSkeleton } from '@/components/skeletons';
+import { AnnouncementRows, UpdatesSkeleton } from '@/components/skeletons';
 import { tripDates } from '@/features/trips/labels';
 import { AnnouncementItem } from '@/components/trip-sections';
 import { splitTrips } from '@/features/trips/model';
@@ -18,16 +16,22 @@ import { usePullRefresh } from '@/lib/use-pull-refresh';
 
 /** At most this many trips feed the tab: the ones under way or coming up. */
 const MAX_TRIPS = 4;
+/** The latest messages shown per trip; "See all" opens the rest. */
+const SHOWN_PER_TRIP = 5;
 
 function TripUpdates({ now, trip }: { now: number; trip: TripSummary }) {
   const i18n = useI18n();
   const detail = useTrip(trip.tripId);
-  const items = detail.data?.announcements.slice(0, 5) ?? [];
-  if (!detail.loading && items.length === 0) return null;
+  const all = detail.data?.announcements ?? [];
+  const items = all.slice(0, SHOWN_PER_TRIP);
   return (
     <View style={{ gap: space.sm }}>
       <SectionTitle
-        action={{ label: i18n.t('common.seeAll'), onPress: () => router.push({ params: { id: trip.tripId }, pathname: '/trip/[id]/updates' }) }}
+        action={
+          all.length > items.length
+            ? { label: i18n.t('common.seeAll'), onPress: () => router.push({ params: { id: trip.tripId }, pathname: '/trip/[id]/updates' }) }
+            : undefined
+        }
       >
         {trip.destination}
       </SectionTitle>
@@ -35,7 +39,12 @@ function TripUpdates({ now, trip }: { now: number; trip: TripSummary }) {
         {tripDates(i18n, trip)}
       </Text>
       <ListCard>
-        {detail.loading ? <AnnouncementSkeleton last /> : null}
+        {detail.loading ? <AnnouncementRows count={2} label={i18n.t('common.loading')} /> : null}
+        {!detail.loading && items.length === 0 ? (
+          <Text style={{ paddingVertical: space.md }} tone="muted">
+            {i18n.t('trip.noUpdates')}
+          </Text>
+        ) : null}
         {items.map((item, index) => (
           <AnnouncementItem announcement={item} key={item.id} last={index === items.length - 1} now={now} />
         ))}
@@ -54,16 +63,12 @@ export default function Updates() {
   const { active } = splitTrips(trips.data ?? []);
   const shown = active.slice(0, MAX_TRIPS);
   const refresh = usePullRefresh(trips.live);
-  const entrance = useEntrance(!trips.loading);
   return (
-    <Animated.FlatList
+    <FlatList
       ItemSeparatorComponent={() => <View style={{ height: space.xl }} />}
       ListEmptyComponent={
         trips.loading ? (
-          <ListCard>
-            <AnnouncementSkeleton />
-            <AnnouncementSkeleton last />
-          </ListCard>
+          <UpdatesSkeleton label={t('common.loading')} />
         ) : (
           <QuietState text={t('updates.empty')} />
         )
@@ -84,7 +89,7 @@ export default function Updates() {
       initialNumToRender={2}
       keyExtractor={(trip) => trip.tripId}
       renderItem={({ item }) => <TripUpdates now={now} trip={item} />}
-      style={[{ backgroundColor: theme.color.ground }, entrance]}
+      style={{ backgroundColor: theme.color.ground }}
     />
   );
 }
