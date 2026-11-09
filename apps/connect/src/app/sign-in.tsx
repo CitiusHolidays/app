@@ -2,7 +2,7 @@ import { Banner, PressableScale, space, Text, useAppTheme } from '@citius/ui';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { type ComponentRef, useRef, useState } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, {
@@ -19,6 +19,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, TextField } from '@/components/kit';
+import { OPEN_TIMEOUT_MS, type SignInState, signInRefusal } from '@/features/gate/sign-in-state';
 import { clients } from '@/lib/clients';
 import { haptic } from '@/lib/haptics';
 import { logEvent } from '@/lib/safe-log';
@@ -33,16 +34,17 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 /**
  * One entrance as the screen opens, never again: the photo settles from slightly close, then the
- * mark and the form rise 28pt into place. Layout animations follow the phone's reduced-motion
- * setting, which shows everything in place without moving.
+ * mark and the form rise 28pt into place. The form lands by about 420ms, so the first tap is never
+ * kept waiting. Layout animations follow the phone's reduced-motion setting, which shows
+ * everything in place without moving.
  */
 const PHOTO_SETTLE = new Keyframe({
   0: { opacity: 0, transform: [{ scale: 1.06 }] },
   100: { easing: EASE_OUT, opacity: 1, transform: [{ scale: 1 }] },
 }).duration(1400);
-const rise = (delay: number) => FadeInUp.duration(520).delay(delay).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 28 }] });
-const MARK_IN = rise(180);
-const SHEET_IN = rise(320);
+const rise = (delay: number) => FadeInUp.duration(300).delay(delay).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 28 }] });
+const MARK_IN = rise(60);
+const SHEET_IN = rise(120);
 const PROBLEM_IN = FadeIn.duration(200);
 /**
  * Room kept under the focused field. Typing the email, the password field and the Sign in button
@@ -59,9 +61,18 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [reveal, setReveal] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [state, setState] = useState<SignInState>({ kind: 'idle' });
+  const busy = state.kind === 'submitting' || state.kind === 'done';
+  const problem = state.kind === 'refused' || state.kind === 'error' ? state.message : null;
   useAnnounce(problem);
+  useEffect(() => {
+    if (state.kind !== 'done') return;
+    const timer = setTimeout(
+      () => setState({ kind: 'error', message: 'Signed in, but Citius did not open. Try again.' }),
+      OPEN_TIMEOUT_MS
+    );
+    return () => clearTimeout(timer);
+  }, [state.kind]);
   const reduced = useReducedMotion();
   // A refused sign-in shakes the fields (8, 6, 4 px over 320 ms) on the same frame as the error
   // buzz, the way a password field says no. Reduced motion: no shake; the message still fades in.
@@ -77,33 +88,29 @@ export default function SignIn() {
   const submit = async () => {
     if (!clients || busy) return;
     if (!email.trim() || !password) {
-      setProblem('Enter your work email and password.');
+      setState({ kind: 'refused', message: 'Enter your work email and password.' });
       refuse();
       return;
     }
-    setBusy(true);
-    setProblem(null);
+    setState({ kind: 'submitting' });
     try {
       const { error } = await clients.auth.signIn.email({ email: email.trim(), password });
       if (error) {
         logEvent('auth.sign-in-refused');
-        if (error.status === 429) haptic('error');
-        else refuse();
-        setProblem(
-          error.status === 429
-            ? 'Too many attempts. Wait a minute, then try again.'
-            : 'That email and password do not match a Citius account.'
-        );
+        const next = signInRefusal(error.status);
+        // Only the person's own mistake shakes the fields; anything else just buzzes.
+        if (next.kind === 'refused') refuse();
+        else haptic('error');
+        setState(next);
       } else {
         haptic('success');
+        setState({ kind: 'done' });
       }
     } catch (error) {
       logEvent('auth.sign-in-failed', error);
-      // Not the person's mistake (no connection), so no shake: the buzz and the message say it.
       haptic('error');
-      setProblem('Could not reach Citius. Check your connection and try again.');
+      setState({ kind: 'error', message: 'Could not reach Citius. Check your connection and try again.' });
     }
-    setBusy(false);
   };
 
   const photoHeight = Math.round(height * 0.56);
