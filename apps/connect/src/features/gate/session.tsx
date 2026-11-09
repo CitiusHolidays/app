@@ -52,7 +52,9 @@ async function holdsSavedSession() {
   const auth = Platform.OS === 'web' ? undefined : (clients?.auth as { getCookie?: () => Promise<string> } | undefined);
   try {
     return Boolean(await auth?.getCookie?.());
-  } catch {
+  } catch (error) {
+    // SecureStore can refuse a read (the keychain before first unlock): the phone signs in again.
+    logEvent('session.cookie-read-failed', error);
     return false;
   }
 }

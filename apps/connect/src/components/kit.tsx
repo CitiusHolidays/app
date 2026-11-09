@@ -1,5 +1,4 @@
 import { type AppTheme, face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
-import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import { type ComponentProps, type ComponentRef, type ReactNode, type Ref, useState } from 'react';
 import {
@@ -20,7 +19,9 @@ import Animated, { cubicBezier, Easing, LayoutAnimationConfig, useReducedMotion,
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { pull, tick } from '@/lib/haptics';
 import { ARRIVE, ROLL_DOWN, ROLL_UP, rollsUp } from '@/lib/motion';
+import { logEvent } from '@/lib/safe-log';
 
 /** Strong ease-in-out for things that move across the screen. */
 const EASE_IN_OUT = cubicBezier(0.77, 0, 0.175, 1);
@@ -91,7 +92,7 @@ export function Screen({
           <RefreshControl
             onRefresh={() => {
               // A light tap as the pull commits, on the same frame the spinner starts.
-              if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              pull();
               onRefresh();
             }}
             refreshing={Boolean(refreshing)}
@@ -330,7 +331,7 @@ export function Chip({ label, onPress, selected }: { label: string; onPress: () 
       accessibilityState={{ checked: selected }}
       hitSlop={4}
       onPress={() => {
-        void Haptics.selectionAsync().catch(() => undefined);
+        tick();
         onPress();
       }}
     >
@@ -439,7 +440,7 @@ export function Segmented<T extends string>({
             outerStyle={{ flex: 1 }}
             onPress={() => {
               if (selected) return;
-              void Haptics.selectionAsync().catch(() => undefined);
+              tick();
               onChange(option.value);
             }}
             style={{
@@ -737,7 +738,9 @@ export function CallButton({ name, phone }: { name: string; phone: string }) {
       accessibilityLabel={`Call ${name}`}
       accessibilityRole="button"
       hitSlop={4}
-      onPress={() => void Linking.openURL(`tel:${phone.replace(/[^\d+]/g, '')}`).catch(() => undefined)}
+      onPress={() =>
+        void Linking.openURL(`tel:${phone.replace(/[^\d+]/g, '')}`).catch((error: unknown) => logEvent('call.open-failed', error))
+      }
       style={{
         alignItems: 'center',
         backgroundColor: theme.color.surface,
