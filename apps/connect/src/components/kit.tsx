@@ -177,7 +177,7 @@ export function MessageScreen({
 }: {
   actions: ReactNode;
   detail?: string;
-  icon: { ios: string; md: string };
+  icon: IconNames;
   kicker?: string;
   text: string;
   title: string;
@@ -234,7 +234,7 @@ export function MessageScreen({
 }
 
 /** A 36pt square tile with an ink glyph on the inset fill: the leading mark of an expense row. */
-export function IconTile({ icon, size = 36 }: { icon: { ios: string; md: string }; size?: number }) {
+export function IconTile({ icon, size = 36 }: { icon: IconNames; size?: number }) {
   const theme = useAppTheme();
   return (
     <View
@@ -275,8 +275,14 @@ export function SectionTitle({ action, children }: { action?: { label: string; o
 
 type SymbolName = ComponentProps<typeof SymbolView>['name'];
 
+/** One icon's names: an SF Symbol for iOS, a Material Symbol for Android and web. */
+export interface IconNames {
+  ios: string;
+  md: string;
+}
+
 /** One icon in two systems: an SF Symbol on iOS, a Material Symbol on Android and web. */
-export function Icon({ color, ios, md, size = 20 }: { color?: string; ios: string; md: string; size?: number }) {
+export function Icon({ color, ios, md, size = 20 }: IconNames & { color?: string; size?: number }) {
   const theme = useAppTheme();
   return (
     <SymbolView
@@ -470,7 +476,7 @@ export function TextField({
   ...rest
 }: TextInputProps & {
   hint?: string;
-  icon?: { ios: string; md: string };
+  icon?: IconNames;
   label: string;
   ref?: Ref<ComponentRef<typeof TextInput>>;
   trailing?: ReactNode;
@@ -756,7 +762,7 @@ export function ActionPill({
   onPress,
 }: {
   accessibilityLabel?: string;
-  icon: { ios: string; md: string };
+  icon: IconNames;
   label: string;
   onPress: () => void;
 }) {

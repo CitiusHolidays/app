@@ -1,11 +1,5 @@
 import { WEBSITE_URL } from '@/lib/website';
 
-/** A destination photo from the website: its path and the BlurHash shown before any byte loads. */
-export interface DestinationPhoto {
-  path: string;
-  placeholder: string;
-}
-
 /**
  * Widths the website's image optimizer serves (Next.js image and device sizes). The preview is
  * the smallest that still blurs well; the photo is the first width at or above the cover's real

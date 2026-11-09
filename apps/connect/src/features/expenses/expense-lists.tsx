@@ -1,9 +1,9 @@
 import type { ExpenseRow } from '@citius/backend';
-import { Button, space, StatusPill, Surface, Text, type StatusKind, useAppTheme } from '@citius/ui';
+import { Button, space, StatusPill, type StatusPillProps, Surface, Text, useAppTheme } from '@citius/ui';
 import { Alert, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInUp, LayoutAnimationConfig } from 'react-native-reanimated';
 
-import { Arrive, IconTile, ListCard, QuietState, Row, SectionTitle } from '@/components/kit';
+import { Arrive, type IconNames, IconTile, ListCard, QuietState, Row, SectionTitle } from '@/components/kit';
 import { formatDateRange } from '@/lib/dates';
 import { CLOSE_UP, EASE_OUT, ROW_OUT } from '@/lib/motion';
 
@@ -12,7 +12,7 @@ import type { OutboxItem } from './outbox';
 import type { ServerExpenses } from './server-expenses';
 import { SkeletonBlock, SkeletonLine } from './skeleton';
 
-const CATEGORY_ICONS: Record<string, { ios: string; md: string }> = {
+const CATEGORY_ICONS: Record<string, IconNames> = {
   Activity: { ios: 'ticket', md: 'local_activity' },
   'F&B': { ios: 'fork.knife', md: 'restaurant' },
   Hotel: { ios: 'bed.double', md: 'hotel' },
@@ -33,13 +33,13 @@ export interface PhoneExpense {
   otherTrip: string | null;
 }
 
-function outboxStatus(item: OutboxItem): { kind: StatusKind; label: string } {
+function outboxStatus(item: OutboxItem): StatusPillProps {
   if (item.status === 'done') return { kind: 'good', label: 'Sent' };
   if (item.status === 'needsAttention') return { kind: 'attention', label: 'Needs attention' };
   return { kind: 'neutral', label: item.stage === 'queued' ? 'Saved on phone' : 'Sending' };
 }
 
-function approvalPill(row: ExpenseRow): { kind: StatusKind; label: string } {
+function approvalPill(row: ExpenseRow): StatusPillProps {
   if (!row.submittedForApprovalAt) return { kind: 'neutral', label: 'Draft' };
   if (row.approvalStatus === 'Approved') return { kind: 'good', label: 'Approved' };
   if (row.approvalStatus === 'Rejected') return { kind: 'attention', label: 'Rejected' };
@@ -72,7 +72,7 @@ function Amount({ amount, currency }: { amount: number; currency: string }) {
  * A status pill that crossfades when the expense moves on (Saved on phone, Sending): 150 ms, so the
  * change reads as progress rather than a flicker. Shows still when the screen opens.
  */
-function SwapPill({ kind, label }: { kind: StatusKind; label: string }) {
+function SwapPill({ kind, label }: StatusPillProps) {
   return (
     <LayoutAnimationConfig skipEntering>
       <Animated.View entering={PILL_IN} key={label}>

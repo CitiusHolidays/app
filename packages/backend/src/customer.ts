@@ -1,4 +1,5 @@
 import { define } from "./define";
+import type { DestinationPhoto } from "./types";
 
 /**
  * The customer app's whole API surface (`@citius/backend/customer`). It is a separate entry from
@@ -9,13 +10,10 @@ import { define } from "./define";
  * The shapes below name only the fields the app reads; the app keeps no other field.
  */
 
-export type TripPhase = "upcoming" | "ongoing" | "past";
+/** The same photo shape the staff Command Center returns. A type only: no staff code ships here. */
+export type { DestinationPhoto };
 
-/** A destination photo: a website path and the BlurHash shown before it loads. */
-export interface DestinationPhoto {
-  path: string;
-  placeholder: string;
-}
+export type TripPhase = "upcoming" | "ongoing" | "past";
 
 export interface TripSummary {
   /** The destination's photo, or null when Citius has no sharp enough photo of it yet. */
