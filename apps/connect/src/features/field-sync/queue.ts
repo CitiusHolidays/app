@@ -14,7 +14,7 @@ export type FieldPush =
   | { args: AnnouncementArgs; kind: 'announcement' };
 
 /** What the office said about the last push of this key that landed. */
-export interface OfficeCopy {
+interface OfficeCopy {
   at: number;
   /** Traveller ids the server left out of its record. */
   ignoredTravellerIds: number;
@@ -27,7 +27,7 @@ export interface OfficeCopy {
  * problem, and a synced one always knows when it landed. A pending or refused item may still
  * remember an earlier landing: the stop changed after the office had it.
  */
-export type SyncState =
+type SyncState =
   | { attempts: number; landed?: OfficeCopy; nextAttemptAt: number; status: 'pending' }
   | { landed: OfficeCopy; status: 'synced' }
   | {
@@ -37,7 +37,7 @@ export type SyncState =
       status: 'needsAttention';
     };
 
-export type SyncStatus = SyncState['status'];
+type SyncStatus = SyncState['status'];
 
 interface SyncIdentity {
   key: string;

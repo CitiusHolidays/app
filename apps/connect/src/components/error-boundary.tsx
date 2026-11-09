@@ -17,7 +17,7 @@ interface Props {
  * `ok`: the app is shown. `failed`: a render or query error, nothing deleted. `revoked`: the server
  * refused this account (FORBIDDEN or NOT_STAFF), so the phone's data has been deleted.
  */
-export type BoundaryStatus = 'ok' | 'failed' | 'revoked';
+type BoundaryStatus = 'ok' | 'failed' | 'revoked';
 
 interface State {
   status: BoundaryStatus;

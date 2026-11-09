@@ -75,7 +75,7 @@ export function contactKey(contact: TripContact) {
   return [contact.role, contact.name, contact.phone ?? ''].join('|');
 }
 
-export function dialable(phone: string | undefined | null) {
+function dialable(phone: string | undefined | null) {
   const trimmed = (phone ?? '').trim();
   const digits = trimmed.replace(/[^\d]/g, '');
   if (!digits) {

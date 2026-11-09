@@ -27,4 +27,3 @@ function build() {
 
 /** Null when the Convex URLs are missing; the app then shows a configuration screen. */
 export const clients = build();
-export type Clients = NonNullable<typeof clients>;

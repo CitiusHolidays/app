@@ -13,7 +13,7 @@ import { ListCard } from '@/components/kit';
 /** Rows drawn while the record loads: enough to fill the first screen. */
 const MAX_ROWS = 8;
 
-/** One static bar, one text line tall (no shimmer, like the kit's Placeholder). */
+/** One static bar, one text line tall (no shimmer, like the kit's PlaceholderBar). */
 function Bar({ height, round, width }: { height: number; round?: boolean; width: DimensionValue }) {
   const theme = useAppTheme();
   return <View style={{ backgroundColor: theme.color.tickOff, borderRadius: round ? height / 2 : 6, height, opacity: 0.6, width }} />;

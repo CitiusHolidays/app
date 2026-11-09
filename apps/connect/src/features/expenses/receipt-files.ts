@@ -31,8 +31,8 @@ export interface PickedImage {
  * quality 0.8, typically 400–700 KB; a 12 MP photo is several MB of wasted bytes on 3G. This is
  * the only lossy step: the camera and library hand over the photo at full quality.
  */
-export const RECEIPT_LONG_EDGE = 2048;
-export const RECEIPT_QUALITY = 0.8;
+const RECEIPT_LONG_EDGE = 2048;
+const RECEIPT_QUALITY = 0.8;
 
 /** The resize for a photo, or null when it is already small enough or its size is unknown. */
 export function receiptSize(width: number | undefined, height: number | undefined) {

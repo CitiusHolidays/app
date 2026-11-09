@@ -13,7 +13,7 @@ import { tripsPending } from './trips-list';
 import { useTrips } from './trips-context';
 
 const MISSING_SHOWN = 5;
-export const NOBODY_TRAVELLING = 'Nobody on this trip is travelling, so there is no one to count. Pull down to refresh the trip pack once Operations adds travellers.';
+const NOBODY_TRAVELLING = 'Nobody on this trip is travelling, so there is no one to count. Pull down to refresh the trip pack once Operations adds travellers.';
 
 function CardLabel({ text }: { text: string }) {
   const theme = useAppTheme();

@@ -1,7 +1,7 @@
 import type { FieldPassportRow } from '@citius/backend';
 
 /** The office's zone; the server draws the trip window in it (see listFieldPassports). */
-export const OFFICE_TIME_ZONE = 'Asia/Kolkata';
+const OFFICE_TIME_ZONE = 'Asia/Kolkata';
 
 type PassportWindow = Pick<FieldPassportRow, 'closesAt' | 'opensAt'>;
 

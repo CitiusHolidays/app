@@ -6,8 +6,7 @@ import type { CreateExpenseArgs, ExpenseCategory, ExpenseCurrency } from '@citiu
  * stays on the device until the item is done; nothing here deletes it.
  */
 
-export type OutboxStage = 'queued' | 'created' | 'uploaded' | 'attached' | 'submitted';
-export type OutboxStatus = 'pending' | 'needsAttention' | 'done';
+type OutboxStage = 'queued' | 'created' | 'uploaded' | 'attached' | 'submitted';
 
 export interface ExpenseDraft {
   amount: number;
@@ -55,7 +54,7 @@ interface OutboxBase {
  * step needs: from `created` on there is a server expense, and only `uploaded` holds a storage id
  * (the server deletes the file once it is attached, or when it refuses it).
  */
-export type OutboxStep =
+type OutboxStep =
   | { expenseId?: undefined; stage: 'queued'; storageId?: undefined }
   | { expenseId: string; stage: 'created'; storageId?: undefined }
   | { expenseId: string; stage: 'uploaded'; storageId: string }
@@ -93,7 +92,7 @@ const MAX_DELAY_MS = 30 * 60_000;
 const UNKNOWN_REFUSAL = 'The server did not accept this expense. Check the details and try again.';
 
 /** The notes ref earlier versions wrote on each expense, so they could find it again. */
-export const refFor = (item: Pick<OutboxItem, 'id'>) => `Connect ref ${item.id}`;
+const refFor = (item: Pick<OutboxItem, 'id'>) => `Connect ref ${item.id}`;
 
 export function createOutboxItem(input: {
   draft: ExpenseDraft;

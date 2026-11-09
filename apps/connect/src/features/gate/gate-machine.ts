@@ -6,7 +6,7 @@
  */
 
 /** The saved session cookie, read again after every sign-in change and every sign-out. */
-export interface CookieRead {
+interface CookieRead {
   /** The `isAuthenticated` value this read belongs to; a different value means "read again". */
   forAuth: boolean;
   /** Bumped for each new read, so a slow, outdated read is ignored. */
@@ -19,10 +19,10 @@ export interface CookieRead {
  * manager, so saved data stays closed until the server confirms who signed in. `unread` until the
  * stored flag has loaded.
  */
-export type ServerCheck = 'unread' | 'required' | 'done';
+type ServerCheck = 'unread' | 'required' | 'done';
 
 /** `stalled` once the server has kept the app waiting for SERVER_STALL_MS. */
-export type ServerWait = 'idle' | 'waiting' | 'stalled';
+type ServerWait = 'idle' | 'waiting' | 'stalled';
 
 interface Shared {
   cookie: CookieRead;
