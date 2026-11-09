@@ -204,11 +204,17 @@ export function Button({ busy, disabled, icon, label, variant = "primary", ...re
 
 export type StatusKind = "good" | "attention" | "danger" | "neutral" | "live";
 
+/** What a status pill shows; screens build one from a record's state and spread it in. */
+export interface StatusPillProps {
+  kind: StatusKind;
+  label: string;
+}
+
 /**
  * A pale pill with ink of the same hue and a shape marker, so the state reads without colour:
  * check for done, exclamation for attention, a dashed ring for pending, a dot for live.
  */
-export function StatusPill({ kind, label }: { kind: StatusKind; label: string }) {
+export function StatusPill({ kind, label }: StatusPillProps) {
   const theme = useAppTheme();
   const look = {
     attention: { bg: theme.color.warningSoft, fg: "warning" as const, mark: "!" },

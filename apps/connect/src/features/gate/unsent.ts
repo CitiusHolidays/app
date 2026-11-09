@@ -1,4 +1,4 @@
-import type { StatusKind } from '@citius/ui';
+import type { StatusPillProps } from '@citius/ui';
 
 import type { OutboxItem } from '@/features/expenses/outbox';
 import type { SyncItem } from '@/features/field-sync/queue';
@@ -50,7 +50,7 @@ export function signOutWarning(unsent: Unsent) {
 }
 
 /** One status for everything this phone sends to the office: expenses, headcounts and announcements. */
-export function syncStatus(unsent: Unsent): { kind: StatusKind; label: string; text: string } {
+export function syncStatus(unsent: Unsent): StatusPillProps & { text: string } {
   const { expenses, field } = unsent.refused;
   if (expenses + field > 0) {
     const where = [

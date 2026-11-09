@@ -206,7 +206,7 @@ function BatchChips({
   chosen,
   onChoose,
 }: {
-  batches: readonly { id: string; label: string }[];
+  batches: TripPack['batches'];
   chosen: string | null;
   onChoose: (batchId: string | null) => void;
 }) {

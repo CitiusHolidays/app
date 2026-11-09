@@ -1,4 +1,4 @@
-import type { StatusKind } from '@citius/ui';
+import type { StatusPillProps } from '@citius/ui';
 
 import type { RosterEntry, TripPack } from './trip-pack';
 
@@ -27,7 +27,7 @@ export function groupRoster(pack: Pick<TripPack, 'batches' | 'roster'>): RosterG
 }
 
 /** Calling status as a pill: done is good, no response needs a call back, the rest is pending. */
-export function callingPill(status: string): { kind: StatusKind; label: string } {
+export function callingPill(status: string): StatusPillProps {
   const label = status.trim();
   if (label === 'Done') return { kind: 'good', label: 'Called' };
   if (label === 'No response') return { kind: 'attention', label: 'No response' };
