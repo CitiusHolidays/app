@@ -12,6 +12,7 @@ import {
   createAnnouncement,
   recipientsFor,
 } from '@/features/announcements/announcements';
+import { wasSent } from '@/features/announcements/confirm-sent';
 import { useAnnouncements } from '@/features/announcements/use-announcements';
 import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
@@ -57,15 +58,15 @@ export default function Announce() {
     }
     setProblem(null);
     try {
-      const result = await Share.share({ message });
-      if (result.action === Share.dismissedAction) {
+      // Logged, and sent to the office, only once the message went out.
+      if (!(await wasSent(await Share.share({ message })))) {
         return;
       }
       const announcement = createAnnouncement({ audience, body, id: localId('ann'), now: Date.now(), pack });
       add(announcement);
       haptic('success');
       setBody('');
-      router.replace({ params: { id: announcement.id }, pathname: '/announcement/[id]' });
+      router.replace({ params: { id: announcement.id, trip: announcement.jobCardId }, pathname: '/announcement/[id]' });
     } catch (error) {
       logEvent('announce.share-failed', error);
       setProblem('The share sheet could not open. Copy the message and send it from your messaging app.');
@@ -137,7 +138,7 @@ export default function Announce() {
                   chevron
                   key={item.id}
                   last={index === log.length - 1}
-                  onPress={() => router.push({ params: { id: item.id }, pathname: '/announcement/[id]' })}
+                  onPress={() => router.push({ params: { id: item.id, trip: item.jobCardId }, pathname: '/announcement/[id]' })}
                   subtitle={`To ${item.audienceLabel} · ${acks.acknowledged} of ${acks.total} have seen it`}
                   title={item.body}
                 />

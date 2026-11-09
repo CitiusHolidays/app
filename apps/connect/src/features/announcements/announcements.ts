@@ -16,7 +16,8 @@ export interface Announcement {
   updatedAt?: number;
 }
 
-export const announcementsKey = (jobCardId: string) => `announcements:${jobCardId}`;
+export const ANNOUNCEMENTS_PREFIX = 'announcements:';
+export const announcementsKey = (jobCardId: string) => `${ANNOUNCEMENTS_PREFIX}${jobCardId}`;
 
 export function audienceLabel(pack: TripPack, audience: Audience) {
   if (audience.kind === 'trip') {
