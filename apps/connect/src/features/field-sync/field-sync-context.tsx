@@ -1,11 +1,12 @@
 import { staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
-import { AppState } from 'react-native';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useRef } from 'react';
 
+import { canReachServer } from '@/features/gate/reach';
 import { useStaffSession } from '@/features/gate/session';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
+import { useBackgroundRun } from '@/lib/use-background-run';
 
 import {
   discardRefused,
@@ -32,7 +33,6 @@ interface FieldSyncValue {
 }
 
 const FieldSyncContext = createContext<FieldSyncValue | null>(null);
-const RUN_INTERVAL_MS = 30_000;
 
 /**
  * Sends headcount stops and announcements to the office, like the expense outbox: saved on the
@@ -42,7 +42,7 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
   const convex = useConvex();
   const { gate, online } = useStaffSession();
   const { live } = useAppStore();
-  const canSend = online && gate.kind === 'staff' && !gate.offline;
+  const canSend = canReachServer(gate, online);
   const staffId = gate.kind === 'staff' ? gate.staff.staffId : null;
   const [stored, setStored, loaded] = useStoredValue<StoredSyncItem[]>(fieldOutboxKey, []);
   const items = readSyncItems(stored);
@@ -94,20 +94,7 @@ export function FieldSyncProvider({ children }: { children: ReactNode }) {
     running.current = false;
   }, [canSend, convex, live, loaded, staffId, update]);
 
-  useEffect(() => {
-    if (!canSend) {
-      return;
-    }
-    void Promise.resolve().then(run);
-    const timer = setInterval(() => void run(), RUN_INTERVAL_MS);
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void run();
-    });
-    return () => {
-      clearInterval(timer);
-      subscription.remove();
-    };
-  }, [canSend, run]);
+  useBackgroundRun(canSend, run);
 
   const value: FieldSyncValue = {
     discard: (keys) => {

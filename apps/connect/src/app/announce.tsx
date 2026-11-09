@@ -1,16 +1,18 @@
-import { Banner, Button, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Share, View } from 'react-native';
 
-import { Chip, ChipRow, Icon, ListCard, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
+import { Chip, ChipRow, Icon, ListCard, ProblemBanner, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
 import {
   ackSummary,
+  announcementHref,
   type Audience,
   audienceLabel,
   composeShareText,
   createAnnouncement,
   recipientsFor,
+  tripLabel,
 } from '@/features/announcements/announcements';
 import { wasSent } from '@/features/announcements/confirm-sent';
 import { useAnnouncements } from '@/features/announcements/use-announcements';
@@ -48,7 +50,7 @@ export default function Announce() {
     audienceLabel: label,
     body,
     sender: staff.name,
-    tripLabel: `${selected.jobCode} ${selected.destination}`.trim(),
+    tripLabel: tripLabel(selected),
   });
 
   const share = async () => {
@@ -66,7 +68,7 @@ export default function Announce() {
       add(announcement);
       haptic('success');
       setBody('');
-      router.replace({ params: { id: announcement.id, trip: announcement.jobCardId }, pathname: '/announcement/[id]' });
+      router.replace(announcementHref(announcement));
     } catch (error) {
       logEvent('announce.share-failed', error);
       setProblem('The share sheet could not open. Copy the message and send it from your messaging app.');
@@ -109,11 +111,7 @@ export default function Announce() {
         </Surface>
       ) : null}
       {problem ? (
-        <Banner tone="danger">
-          <Text accessibilityLiveRegion="polite" variant="secondary">
-            {problem}
-          </Text>
-        </Banner>
+        <ProblemBanner text={problem} />
       ) : null}
       <View style={{ gap: space.md }}>
         <Button
@@ -138,7 +136,7 @@ export default function Announce() {
                   chevron
                   key={item.id}
                   last={index === log.length - 1}
-                  onPress={() => router.push({ params: { id: item.id, trip: item.jobCardId }, pathname: '/announcement/[id]' })}
+                  onPress={() => router.push(announcementHref(item))}
                   subtitle={`To ${item.audienceLabel} · ${acks.acknowledged} of ${acks.total} have seen it`}
                   title={item.body}
                 />

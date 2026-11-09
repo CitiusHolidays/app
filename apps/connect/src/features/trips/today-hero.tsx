@@ -9,7 +9,7 @@ import { Icon } from '@/components/kit';
 import { useOutbox } from '@/features/expenses/outbox-context';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { type WaitingPlace, waitingLabel, waitingWork } from '@/features/field-sync/waiting';
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 import { freshnessLabel } from '@/features/trip-pack/trip-pack';
 import { dateKicker, formatDateRange } from '@/lib/dates';
 
@@ -77,10 +77,10 @@ function WaitingTag({ jobCardId }: { jobCardId: string }) {
 
 /** The trip's facts as pills on the photo: code, batches, work waiting to send, and freshness. */
 function HeroFacts({ jobCardId, jobCode, now }: { jobCardId: string; jobCode: string; now: number }) {
-  const { gate, online } = useStaffSession();
+  const canReachServer = useCanReachServer();
   const { pack, packProblem, tripsProblem, tripsSavedAt } = useTrips();
   const savedAt = pack?.savedAt ?? tripsSavedAt;
-  const fresh = online && !(gate.kind === 'staff' && gate.offline) && !(packProblem ?? tripsProblem) && savedAt;
+  const fresh = canReachServer && !(packProblem ?? tripsProblem) && savedAt;
   const batches = pack?.batches.length ?? 0;
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs + 2 }}>

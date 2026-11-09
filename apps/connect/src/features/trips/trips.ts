@@ -1,17 +1,13 @@
 import type { JobCardRow, PaginationResult } from '@citius/backend';
 
+import { midnightOf, parseDay } from '@/lib/dates';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type TripPhase = 'today' | 'upcoming' | 'past' | 'undated';
 
 function dayStart(date: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
-  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime() : null;
-}
-
-function todayStart(now: number) {
-  const date = new Date(now);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return parseDay(date.trim())?.getTime() ?? null;
 }
 
 export function tripPhase(trip: Pick<JobCardRow, 'travelStartDate' | 'travelEndDate'>, now: number): TripPhase {
@@ -20,7 +16,7 @@ export function tripPhase(trip: Pick<JobCardRow, 'travelStartDate' | 'travelEndD
   if (start === null || end === null) {
     return 'undated';
   }
-  const today = todayStart(now);
+  const today = midnightOf(now);
   if (today < start) {
     return 'upcoming';
   }
@@ -34,7 +30,7 @@ export function dayOfTrip(trip: Pick<JobCardRow, 'travelStartDate' | 'travelEndD
   if (start === null || end === null || tripPhase(trip, now) !== 'today') {
     return null;
   }
-  const day = Math.round((todayStart(now) - start) / DAY_MS) + 1;
+  const day = Math.round((midnightOf(now) - start) / DAY_MS) + 1;
   const total = Math.round((end - start) / DAY_MS) + 1;
   return `Day ${day} of ${total}`;
 }

@@ -1,6 +1,6 @@
 import { ConvexError } from 'convex/values';
 
-import { pushOnly, syncedAt as landedAt } from './fixtures';
+import { syncedAt as landedAt } from './fixtures';
 import {
   discardRefused,
   drainSyncQueue,
@@ -8,6 +8,7 @@ import {
   enqueuePush,
   type FieldPush,
   type PushOutcome,
+  pushOf,
   readSyncItems,
   retrySyncNow,
   sendItem,
@@ -201,7 +202,7 @@ describe('field sync queue', () => {
     expect(syncSummary([item])).toEqual({ kind: 'waiting' });
     const synced = landedAt(item, NOW + 5, 1);
     expect(syncSummary([synced])).toEqual({ at: NOW + 5, ignored: 1, kind: 'synced', newerOnServer: false });
-    expect(syncSummary([synced, { ...pushOnly(item), key: 'other', problem: 'No', staffId: 'staff_1', status: 'needsAttention', updatedAt: NOW }])).toEqual({
+    expect(syncSummary([synced, { ...pushOf(item), key: 'other', problem: 'No', staffId: 'staff_1', status: 'needsAttention', updatedAt: NOW }])).toEqual({
       keys: ['other'],
       kind: 'problem',
       problem: 'No',

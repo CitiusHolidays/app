@@ -1,4 +1,4 @@
-import { type AppTheme, face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { type AppTheme, Banner, face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { type AndroidSymbol, type SFSymbol, SymbolView } from 'expo-symbols';
 import { type ComponentRef, type ReactNode, type Ref, useState } from 'react';
 import {
@@ -781,6 +781,17 @@ export function ActionPill({
       <Icon ios={icon.ios} md={icon.md} size={15} />
       <Text variant="label">{label}</Text>
     </PressableScale>
+  );
+}
+
+/** What went wrong with a form, read out as it appears. */
+export function ProblemBanner({ text }: { text: string }) {
+  return (
+    <Banner tone="danger">
+      <Text accessibilityLiveRegion="polite" variant="secondary">
+        {text}
+      </Text>
+    </Banner>
   );
 }
 

@@ -1,9 +1,11 @@
+import { isServerRefusal } from './refusal';
+
 /**
  * The only logging helper. It records an event name and an error category, never a message,
  * name, phone number, amount or server text, so logs cannot carry personal data.
  */
 export function errorCategory(error: unknown) {
-  if (typeof error === 'object' && error !== null && 'data' in error) {
+  if (isServerRefusal(error)) {
     return 'server-refused';
   }
   if (error instanceof TypeError) {

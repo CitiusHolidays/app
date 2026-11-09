@@ -5,6 +5,7 @@ import { View } from 'react-native';
 
 import { FreshnessStamp } from '@/components/freshness';
 import { Arrive, ListCard, PlaceholderBar, PlaceholderRows, QuietState, Row, Screen, SectionTitle } from '@/components/kit';
+import { notificationHref } from '@/features/inbox/notification-href';
 import { fullTime, relativeTime } from '@/features/inbox/relative-time';
 import { useInbox } from '@/features/inbox/use-inbox';
 import { useNow } from '@/lib/use-now';
@@ -36,7 +37,7 @@ function NotificationList({ now, rows }: { now: number; rows: NotificationRow[] 
             key={row.id}
             last={index === rows.length - 1}
             leading={<UnreadDot unread={unread} />}
-            onPress={() => router.push({ params: { id: row.id }, pathname: '/notification/[id]' })}
+            onPress={() => router.push(notificationHref(row.id))}
             subtitle={row.body}
             title={row.title}
             trailing={

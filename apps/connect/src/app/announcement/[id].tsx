@@ -10,6 +10,7 @@ import { announcementPush } from '@/features/field-sync/pushes';
 import { syncKey } from '@/features/field-sync/queue';
 import { SyncLine } from '@/features/field-sync/sync-line';
 import { useStaff } from '@/features/gate/session';
+import { APP_LOCALE, CLOCK_OPTIONS } from '@/lib/dates';
 import { haptic, tick } from '@/lib/haptics';
 import { logEvent } from '@/lib/safe-log';
 
@@ -17,7 +18,7 @@ const ignoredNote = (count: number) =>
   `${count} ${count === 1 ? 'traveller is' : 'travellers are'} not in your group on the office list, so the office record leaves them out.`;
 
 /** "6 Nov, 08:15", built once: an Intl formatter is slow to construct. */
-const SHARED_AT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short' });
+const SHARED_AT = new Intl.DateTimeFormat(APP_LOCALE, { ...CLOCK_OPTIONS, day: 'numeric', month: 'short' });
 
 /** The acknowledgement checklist the tour manager keeps for one announcement, shared with the office. */
 export default function AnnouncementDetail() {

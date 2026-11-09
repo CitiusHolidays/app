@@ -1,7 +1,7 @@
 import type { CreateExpenseArgs, ExpenseCategory, ExpenseCurrency, StaffApi } from '@citius/backend';
 import type { FunctionArgs } from 'convex/server';
 
-import { refusalText } from '@/lib/refusal';
+import { backoff, isServerRefusal, knownRefusal } from '@/lib/refusal';
 
 /**
  * Queued expense submissions. Each item walks create → upload → attach → submit, and is saved
@@ -90,8 +90,6 @@ export interface OutboxDeps {
 }
 
 export const outboxKey = 'outbox:expenses';
-const BASE_DELAY_MS = 30_000;
-const MAX_DELAY_MS = 30 * 60_000;
 const UNKNOWN_REFUSAL = 'The server did not accept this expense. Check the details and try again.';
 
 /** The notes ref earlier versions wrote on each expense, so they could find it again. */
@@ -145,17 +143,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
 ];
 
 export function refusalMessage(error: unknown) {
-  const text = refusalText(error);
-  return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? UNKNOWN_REFUSAL;
-}
-
-/** A ConvexError carries `data`: the server decided. Anything else (network, timeouts) is retried. */
-export function isServerRefusal(error: unknown) {
-  return typeof error === 'object' && error !== null && 'data' in error;
-}
-
-function backoff(attempts: number) {
-  return Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** Math.max(0, attempts - 1));
+  return knownRefusal(error, KNOWN_REFUSALS, UNKNOWN_REFUSAL);
 }
 
 /** One step forward. Each case returns the next stage with exactly the fields that stage carries. */

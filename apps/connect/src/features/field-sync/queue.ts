@@ -1,8 +1,7 @@
 import type { AnnouncementArgs, FieldPushResult, HeadcountStopArgs } from '@citius/backend';
 
-import { isServerRefusal } from '@/features/expenses/outbox';
 import type { FreshnessFormat } from '@/features/trip-pack/trip-pack';
-import { refusalText } from '@/lib/refusal';
+import { backoff, isServerRefusal, knownRefusal } from '@/lib/refusal';
 
 /**
  * Headcount stops and announcements waiting to reach the office. The phone is the record: each
@@ -81,8 +80,6 @@ export type SyncSummary =
   | { keys: string[]; kind: 'problem'; problem: string };
 
 export const fieldOutboxKey = 'outbox:field';
-const BASE_DELAY_MS = 30_000;
-const MAX_DELAY_MS = 30 * 60_000;
 const KEEP_SYNCED_MS = 3 * 24 * 60 * 60 * 1000;
 const UNKNOWN_REFUSAL = 'The office did not accept this update. Refresh the trip, then try again.';
 
@@ -96,7 +93,7 @@ const version = (push: FieldPush) => push.args.clientUpdatedAt ?? 0;
 const sameState = (left: FieldPush, right: FieldPush) => JSON.stringify(left.args) === JSON.stringify(right.args);
 
 /** The push itself, without its queue state. */
-function pushOf(item: FieldPush): FieldPush {
+export function pushOf(item: FieldPush): FieldPush {
   return item.kind === 'headcountStop' ? { args: item.args, kind: item.kind } : { args: item.args, kind: item.kind };
 }
 
@@ -151,12 +148,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
 ];
 
 function refusalMessage(error: unknown) {
-  const text = refusalText(error);
-  return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? UNKNOWN_REFUSAL;
-}
-
-function backoff(attempts: number) {
-  return Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** Math.max(0, attempts - 1));
+  return knownRefusal(error, KNOWN_REFUSALS, UNKNOWN_REFUSAL);
 }
 
 /** Sends one item. Never throws: a server answer, a refusal or a retry. */

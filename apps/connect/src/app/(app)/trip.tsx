@@ -1,4 +1,5 @@
 import type { FieldPassportRow, FieldPassports } from '@citius/backend';
+import { type ScheduleStep, tripSchedule } from '@citius/core/src/schedule';
 import { Banner, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -23,7 +24,6 @@ import { canOpenPassportInApp, passportWindowLine } from '@/features/passports/p
 import { useFieldPassports } from '@/features/passports/use-field-passports';
 import { PackMissing } from '@/features/trip-pack/pack-missing';
 import { callingPill, groupRoster, rosterMeta } from '@/features/trip-pack/roster';
-import { type ScheduleStep, tripSchedule } from '@/features/trip-pack/schedule';
 import { contactKey, type TripPack } from '@/features/trip-pack/trip-pack';
 import { resolveTripView, type TripView } from '@/features/trips/trip-view';
 import { useStaff } from '@/features/gate/session';
