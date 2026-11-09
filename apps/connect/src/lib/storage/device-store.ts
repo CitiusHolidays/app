@@ -30,24 +30,32 @@ async function databaseKey() {
   return hex;
 }
 
-async function openKeyed() {
-  const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+async function unlock(db: SQLite.SQLiteDatabase) {
   // SQLite ignores PRAGMA key without SQLCipher and would store plain text, so check first.
   const cipher = await db.getFirstAsync<{ cipher_version?: string }>('PRAGMA cipher_version');
   if (!cipher?.cipher_version) {
-    await db.closeAsync();
     throw new EncryptionUnavailableError();
   }
   const key = await databaseKey();
   if (!/^[0-9a-f]{64}$/.test(key)) {
-    await db.closeAsync();
     throw new Error('Stored database key is malformed');
   }
   await db.execAsync(`PRAGMA key = "x'${key}'"`);
   await db.execAsync(
     'CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL)'
   );
-  return db;
+}
+
+async function openKeyed() {
+  const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+  try {
+    await unlock(db);
+    return db;
+  } catch (error) {
+    // Closed on every failure: expo-sqlite refuses to delete a database that is still open.
+    await db.closeAsync();
+    throw error;
+  }
 }
 
 /**
@@ -73,7 +81,7 @@ export async function openDeviceStore(): Promise<KeyValueStore> {
     if (!isWrongKeyError(error)) {
       throw error;
     }
-    await SQLite.deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);
+    await SQLite.deleteDatabaseAsync(DATABASE_NAME);
     db = await openKeyed();
   }
   return {
