@@ -1,6 +1,5 @@
 import { staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
-import { AppState } from 'react-native';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
 
 import { canReachServer } from '@/features/gate/reach';
@@ -8,6 +7,7 @@ import { useStaffSession } from '@/features/gate/session';
 import { collectPages } from '@/features/trips/trips';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
+import { useBackgroundRun } from '@/lib/use-background-run';
 
 import { drainOutbox, type OutboxDeps, type OutboxItem, outboxKey, readOutbox, retryNow } from './outbox';
 import { deleteReceipt, uploadReceipt } from './receipt-files';
@@ -20,7 +20,6 @@ interface OutboxValue {
 }
 
 const OutboxContext = createContext<OutboxValue | null>(null);
-const RUN_INTERVAL_MS = 30_000;
 /** How far back the duplicate check looks (pages of 100 of the trip's expenses). */
 const REF_LOOKUP_PAGES = 5;
 const KEEP_DONE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -100,20 +99,7 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
     running.current = false;
   }, [canSend, convex, live, loaded, setItems, staffId]);
 
-  useEffect(() => {
-    if (!canSend) {
-      return;
-    }
-    void Promise.resolve().then(run);
-    const timer = setInterval(() => void run(), RUN_INTERVAL_MS);
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void run();
-    });
-    return () => {
-      clearInterval(timer);
-      subscription.remove();
-    };
-  }, [canSend, run]);
+  useBackgroundRun(canSend, run);
 
   const value: OutboxValue = {
     discard: (id) => {
