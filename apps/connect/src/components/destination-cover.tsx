@@ -2,7 +2,7 @@ import type { DestinationPhoto } from '@citius/backend';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { PixelRatio, type StyleProp, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
+import { PixelRatio, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { cardPhotoWidth, coverUri, originalCoverUri, PREVIEW_WIDTH } from '@/features/trips/cover';
@@ -48,7 +48,7 @@ function useCoverStep(path: string | null) {
  * card opens sharp offline once it has been seen. The foot is darkened so white type reads on
  * any picture. Under reduced motion the layers swap without fading.
  */
-export function DestinationCover({ photo, style }: { photo: DestinationPhoto | null; style?: StyleProp<ViewStyle> }) {
+export function DestinationCover({ photo }: { photo: DestinationPhoto | null }) {
   const reduced = useReducedMotion();
   const window = useWindowDimensions();
   const { fail, step } = useCoverStep(photo?.path ?? null);
@@ -62,7 +62,7 @@ export function DestinationCover({ photo, style }: { photo: DestinationPhoto | n
     <View
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
-      style={[StyleSheet.absoluteFill, { backgroundColor: '#0c1124' }, style]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: '#0c1124' }]}
     >
       {photo ? (
         <Image

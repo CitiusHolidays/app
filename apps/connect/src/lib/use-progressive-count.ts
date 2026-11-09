@@ -11,15 +11,15 @@ export const ROWS_PER_FRAME = 40;
  * before the first paint, and taps and scrolling stay responsive while it fills in. Every row is
  * drawn within a few frames, so screen readers and scrolling reach the whole list.
  */
-export function useProgressiveCount(total: number, first = FIRST_ROWS, step = ROWS_PER_FRAME) {
-  const [shown, setShown] = useState(() => Math.min(total, first));
+export function useProgressiveCount(total: number) {
+  const [shown, setShown] = useState(() => Math.min(total, FIRST_ROWS));
 
   useEffect(() => {
     if (shown >= total) return;
-    const frame = requestAnimationFrame(() => setShown((current) => Math.min(total, Math.max(current, first) + step)));
+    const frame = requestAnimationFrame(() => setShown((current) => Math.min(total, Math.max(current, FIRST_ROWS) + ROWS_PER_FRAME)));
     return () => cancelAnimationFrame(frame);
-  }, [first, shown, step, total]);
+  }, [shown, total]);
 
   // A longer list (the trip pack refreshed) keeps what is drawn; a shorter one shows all of it.
-  return Math.min(total, Math.max(shown, Math.min(total, first)));
+  return Math.min(total, Math.max(shown, Math.min(total, FIRST_ROWS)));
 }

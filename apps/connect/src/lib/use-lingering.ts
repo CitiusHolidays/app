@@ -6,9 +6,9 @@ export const LINGER_MS = 650;
 /**
  * Ids that should stay visible for a moment after they stop matching a filter, so a change confirms
  * itself where the person tapped instead of the row vanishing from under their finger. `hold(id)`
- * keeps one for `ms`; each new hold restarts that id's timer. Timers clear on unmount.
+ * keeps one for `LINGER_MS`; each new hold restarts that id's timer. Timers clear on unmount.
  */
-export function useLingering(ms = LINGER_MS) {
+export function useLingering() {
   const [held, setHeld] = useState<ReadonlySet<string>>(() => new Set());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -34,10 +34,10 @@ export function useLingering(ms = LINGER_MS) {
             next.delete(id);
             return next;
           });
-        }, ms)
+        }, LINGER_MS)
       );
     },
-    [ms]
+    []
   );
 
   return { hold, held };

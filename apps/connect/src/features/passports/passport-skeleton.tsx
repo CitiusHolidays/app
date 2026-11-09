@@ -5,12 +5,15 @@ import Animated, { useReducedMotion } from 'react-native-reanimated';
 /** A slow breathe between two opacities, run by Reanimated's CSS animations on the UI thread. */
 const BREATHE = { from: { opacity: 0.55 }, to: { opacity: 0.9 } } as const;
 
+/** A passport data page's width over its height (ID-3, 125 × 88 mm). */
+const PAGE_ASPECT = 1.42;
+
 /**
  * Stands in for a passport scan while it downloads: the shape of a passport data page (photo,
- * details, the two machine-readable lines) at the scan's own aspect ratio, so nothing jumps when
+ * details, the two machine-readable lines) at a data page's aspect ratio, so nothing jumps when
  * the scan arrives. Pulses gently unless the phone asks for reduced motion.
  */
-export function PassportSkeleton({ aspectRatio = 1.42 }: { aspectRatio?: number }) {
+export function PassportSkeleton() {
   const theme = useAppTheme();
   const reduced = useReducedMotion();
   const breathing = reduced
@@ -31,7 +34,7 @@ export function PassportSkeleton({ aspectRatio = 1.42 }: { aspectRatio?: number 
         accessible
         style={[
           {
-            aspectRatio,
+            aspectRatio: PAGE_ASPECT,
             backgroundColor: theme.color.inset,
             borderRadius: theme.radius.inset,
             gap: '6%',
