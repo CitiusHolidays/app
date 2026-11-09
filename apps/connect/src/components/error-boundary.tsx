@@ -1,8 +1,9 @@
 import { Button } from '@citius/ui';
-import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 import { MessageScreen } from '@/components/kit';
 import { isAccessRevokedError } from '@/features/gate/access-revoked';
+import { SignOutButton } from '@/features/gate/sign-out-button';
 import { logEvent } from '@/lib/safe-log';
 
 interface Props {
@@ -12,27 +13,25 @@ interface Props {
   onSignOut: () => Promise<void>;
 }
 
+/**
+ * `ok`: the app is shown. `failed`: a render or query error, nothing deleted. `revoked`: the server
+ * refused this account (FORBIDDEN or NOT_STAFF), so the phone's data has been deleted.
+ */
+export type BoundaryStatus = 'ok' | 'failed' | 'revoked';
+
 interface State {
-  failed: boolean;
-  revoked: boolean;
+  status: BoundaryStatus;
 }
 
+const OK: State = { status: 'ok' };
+
 function Fallback({ onRetry, onSignOut, revoked }: { onRetry: () => void; onSignOut: () => Promise<void>; revoked: boolean }) {
-  const [busy, setBusy] = useState(false);
   return (
     <MessageScreen
       actions={
         <>
           <Button label="Try again" onPress={onRetry} />
-          <Button
-            busy={busy}
-            label="Sign out"
-            onPress={() => {
-              setBusy(true);
-              void onSignOut().finally(() => setBusy(false));
-            }}
-            variant="secondary"
-          />
+          <SignOutButton onSignOut={onSignOut} variant="secondary" />
         </>
       }
       detail={revoked ? 'If you think this is a mistake, ask HR or your manager to check your staff access.' : undefined}
@@ -53,10 +52,10 @@ function Fallback({ onRetry, onSignOut, revoked }: { onRetry: () => void; onSign
  * deactivated) also deletes everything saved on the phone.
  */
 export class AppErrorBoundary extends Component<Props, State> {
-  state: State = { failed: false, revoked: false };
+  state: State = OK;
 
   static getDerivedStateFromError(error: unknown): State {
-    return { failed: true, revoked: isAccessRevokedError(error) };
+    return { status: isAccessRevokedError(error) ? 'revoked' : 'failed' };
   }
 
   componentDidCatch(error: unknown, _info: ErrorInfo) {
@@ -67,17 +66,18 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    if (!this.state.failed) {
+    const { status } = this.state;
+    if (status === 'ok') {
       return this.props.children;
     }
     return (
       <Fallback
-        onRetry={() => this.setState({ failed: false, revoked: false })}
+        onRetry={() => this.setState(OK)}
         onSignOut={async () => {
           await this.props.onSignOut();
-          this.setState({ failed: false, revoked: false });
+          this.setState(OK);
         }}
-        revoked={this.state.revoked}
+        revoked={status === 'revoked'}
       />
     );
   }
