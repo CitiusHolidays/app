@@ -1,11 +1,6 @@
 import type { ReceiptFile } from './outbox';
-
-export interface PickedImage {
-  fileName?: string | null;
-  fileSize?: number;
-  mimeType?: string | null;
-  uri: string;
-}
+// A type only (erased at build): the web preview never loads the native file module.
+import type { PickedImage } from './receipt-files';
 
 /** Web preview: the picked blob URL is used as is; nothing is written to disk. */
 export async function keepReceipt(image: PickedImage, id: string): Promise<ReceiptFile> {

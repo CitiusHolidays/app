@@ -1,4 +1,5 @@
-import type { CreateExpenseArgs, ExpenseCategory, ExpenseCurrency } from '@citius/backend';
+import type { CreateExpenseArgs, ExpenseCategory, ExpenseCurrency, StaffApi } from '@citius/backend';
+import type { FunctionArgs } from 'convex/server';
 
 /**
  * Queued expense submissions. Each item walks create → upload → attach → submit, and is saved
@@ -72,7 +73,7 @@ export type OutboxItem = OutboxBase & (Pending | NeedsAttention | Done);
 export type PendingItem = Extract<OutboxItem, { status: 'pending' }>;
 
 export interface OutboxDeps {
-  attachProof: (args: { expenseId: string; fileName: string; fileSize: number; mimeType: string; storageId: string }) => Promise<void>;
+  attachProof: (args: FunctionArgs<StaffApi['attachExpenseProof']['ref']>) => Promise<void>;
   createExpense: (args: CreateExpenseArgs) => Promise<string>;
   /**
    * Finds an expense an earlier version of the app created for the item (matched on the ref it
