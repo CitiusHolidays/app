@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { Icon, ListCard, Row, Screen, SectionTitle } from '@/components/kit';
+import { notificationHref } from '@/features/inbox/notification-href';
 import { useInbox } from '@/features/inbox/use-inbox';
 import { HeadcountCard } from '@/features/trips/today-headcount';
 import { TripHero } from '@/features/trips/today-hero';
@@ -52,7 +53,7 @@ function InboxPreview() {
             chevron
             key={row.id}
             last={index === shown.length - 1}
-            onPress={() => router.push({ params: { id: row.id }, pathname: '/notification/[id]' })}
+            onPress={() => router.push(notificationHref(row.id))}
             subtitle={row.body}
             title={row.title}
           />

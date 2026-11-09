@@ -16,6 +16,15 @@ export interface Announcement {
   updatedAt?: number;
 }
 
+/** "J-1234 Bali": how a trip is named in a shared message and on the announcement screen. */
+export const tripLabel = (trip: { destination: string; jobCode: string }) => `${trip.jobCode} ${trip.destination}`.trim();
+
+/** The detail screen for one announcement, opened from the composer after sharing or from its log. */
+export const announcementHref = (announcement: Pick<Announcement, 'id' | 'jobCardId'>) => ({
+  params: { id: announcement.id, trip: announcement.jobCardId },
+  pathname: '/announcement/[id]' as const,
+});
+
 export const ANNOUNCEMENTS_PREFIX = 'announcements:';
 export const announcementsKey = (jobCardId: string) => `${ANNOUNCEMENTS_PREFIX}${jobCardId}`;
 

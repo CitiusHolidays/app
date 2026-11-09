@@ -8,7 +8,7 @@ import { logEvent } from '@/lib/safe-log';
 import type { LiveStore } from '@/lib/storage/live-store';
 import type { KeyValueStore } from '@/lib/storage/kv';
 
-import { type Announcement, ANNOUNCEMENTS_PREFIX } from './announcements';
+import { type Announcement, ANNOUNCEMENTS_PREFIX, tripLabel } from './announcements';
 import { useAnnouncements } from './use-announcements';
 
 export type AnnouncementDetail =
@@ -96,7 +96,7 @@ function namesFrom(tripPack: TripPack | null) {
 /** "J-1234 Bali": from the trips list when the trip is there, otherwise from its saved pack. */
 function labelFor(jobCardId: string, trips: readonly TripSummary[], tripPack: TripPack | null) {
   const source = trips.find((candidate) => candidate.id === jobCardId) ?? tripPack;
-  return source ? `${source.jobCode} ${source.destination}`.trim() : '';
+  return source ? tripLabel(source) : '';
 }
 
 /** The saved pack for a trip: the selected one from memory, any other read from the phone. */
