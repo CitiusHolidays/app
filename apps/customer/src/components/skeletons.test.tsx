@@ -7,32 +7,6 @@ import Updates from '@/app/(tabs)/updates';
 
 import { AnnouncementRows, JourneysSkeleton } from './skeletons';
 
-// Motion is checked on device; a stand-in with the exports these screens touch.
-jest.mock('react-native-reanimated', () => {
-  const RN = jest.requireActual('react-native');
-  const chain: object = new Proxy({}, { get: () => () => chain });
-  return {
-    __esModule: true,
-    cancelAnimation: () => undefined,
-    cubicBezier: () => 'ease-out',
-    default: { FlatList: RN.FlatList, ScrollView: RN.ScrollView, View: RN.View },
-    Easing: { bezier: () => () => 0, ease: () => 0, inOut: () => () => 0 },
-    FadeIn: chain,
-    FadeInDown: chain,
-    FadeInRight: chain,
-    LayoutAnimationConfig: ({ children }: { children: React.ReactNode }) => children,
-    useAnimatedScrollHandler: () => () => undefined,
-    useAnimatedStyle: (fn: () => object) => fn(),
-    useReducedMotion: () => false,
-    useSharedValue: (initial: unknown) => {
-      let value = initial;
-      return { get: () => value, set: (next: unknown) => (value = next) };
-    },
-    withRepeat: (animation: unknown) => animation,
-    withTiming: (to: unknown) => to,
-  };
-});
-jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args) }));
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual('react-native');
   return { Image: (props: object) => <View {...props} /> };
