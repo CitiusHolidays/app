@@ -13,19 +13,25 @@ import Animated from 'react-native-reanimated';
 import { Icon, MessageScreen, Screen, TextField } from '@/components/kit';
 import { DeletionStepSkeleton } from '@/components/skeletons';
 import { STEP_IN, TEXT_SWAP_IN } from '@/components/motion';
-import { deletionStep, type DeletionCheck, type DeletionStep } from '@/features/account/deletion-step';
-import { requestEmailLink } from '@/features/auth/methods';
+import {
+  type DeletionAction,
+  deletionBusy,
+  type DeletionCheck,
+  deletionLinkSent,
+  deletionProblem,
+  deletionStep,
+  type DeletionStep,
+} from '@/features/account/deletion-step';
+import { requestEmailLink, type RequestResult } from '@/features/auth/methods';
 import { returnToFor } from '@/features/session/after-sign-in';
 import { RETURN_TO_KEY, useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL } from '@/features/support/contacts';
 import { serverCode } from '@/features/trips/errors';
 import { useI18n } from '@/i18n/i18n';
-import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
 import { haptic } from '@/lib/haptic';
 import { openUrl } from '@/lib/open-url';
 import { logEvent } from '@/lib/safe-log';
-import { runThen } from '@/lib/run-then';
 
 export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
 
@@ -146,10 +152,8 @@ export default function DeleteAccount() {
   const [, setReturnTo] = useStoredValue<unknown>(RETURN_TO_KEY, null);
   const [check, setCheck] = useState<DeletionCheck>({ kind: 'loading' });
   const [typed, setTyped] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [linkSent, setLinkSent] = useState(false);
-  const [problem, setProblem] = useState<MessageKey | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [action, setAction] = useState<DeletionAction>({ kind: 'idle' });
+  const done = action.kind === 'deleted' ? action.reference : null;
 
   // Re-checked whenever the screen comes back into view, on Try again, and when Convex takes up a
   // new session: the confirmation link brings the traveller back here before Convex has swapped
@@ -201,47 +205,46 @@ export default function DeleteAccount() {
     );
   }
 
+  const step = deletionStep(check, { offline, profileLoaded: profile !== undefined });
+
   const sendLink = async () => {
     if (!profile?.email) return;
     const email = profile.email;
-    setBusy(true);
-    setProblem(null);
-    const result = await runThen(
-      () => requestEmailLink(email),
-      () => setBusy(false)
-    );
+    const sent = deletionLinkSent(action);
+    setAction({ kind: 'sending-link', sent });
+    const result = await requestEmailLink(email).catch((): RequestResult => ({ ok: false, reason: 'network' }));
     if (result.ok) {
       // Only a link that went out can bring the traveller back here.
       await setReturnTo(returnToFor('/delete-account', Date.now()));
-      setLinkSent(true);
+      setAction({ kind: 'link-sent' });
     } else {
-      setProblem(result.reason === 'rate-limited' ? 'signIn.tooMany' : 'signIn.network');
+      const problem = result.reason === 'rate-limited' ? 'signIn.tooMany' : 'signIn.network';
+      setAction({ kind: 'failed', problem, sent, step: 'reauth' });
     }
   };
 
   const confirm = async () => {
-    setBusy(true);
-    setProblem(null);
+    setAction({ kind: 'deleting' });
     try {
-      const result = await runThen(() => deleteAccount({ confirmation: typed.trim() }), () => setBusy(false));
+      const result = await deleteAccount({ confirmation: typed.trim() });
       haptic('success');
-      setDone(result.reference);
+      setAction({ kind: 'deleted', reference: result.reference });
     } catch (error) {
       logEvent('account.deletion-failed', error);
       haptic('error');
       const code = serverCode(error);
       if (code === CUSTOMER_ERRORS.deletionReauth) {
-        setLinkSent(false);
+        setAction({ kind: 'idle' });
         setCheck({ kind: 'answer', value: { status: 'reauthentication_required' } });
       } else if (code === CUSTOMER_ERRORS.deletionStaff) {
+        setAction({ kind: 'idle' });
         setCheck({ kind: 'answer', value: { status: 'staff_account' } });
       } else {
-        setProblem('delete.failed');
+        setAction({ kind: 'failed', problem: 'delete.failed', sent: false, step: 'ready' });
       }
     }
   };
-
-  const step = deletionStep(check, { offline, profileLoaded: profile !== undefined });
+  const problem = deletionProblem(action, step);
   const email = profile?.email ?? '';
   const retry = () => {
     setCheck({ kind: 'loading' });
@@ -264,9 +267,9 @@ export default function DeleteAccount() {
       <Surface style={{ gap: space.md }}>
         <Animated.View entering={step === 'loading' ? undefined : STEP_IN} key={step}>
           <StepBody
-            busy={busy}
+            busy={deletionBusy(action)}
             email={email}
-            linkSent={linkSent}
+            linkSent={deletionLinkSent(action)}
             onConfirm={() => void confirm()}
             onRetry={retry}
             onSendLink={() => void sendLink()}
