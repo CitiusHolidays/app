@@ -25,7 +25,8 @@ export interface ReceiptFile {
   uri: string;
 }
 
-export interface OutboxItem {
+/** What every item carries, whatever its stage. */
+interface OutboxBase {
   attempts: number;
   /**
    * Sent with the create as `clientRef` (the item's id). The server returns the first expense for
@@ -40,20 +41,35 @@ export interface OutboxItem {
    */
   createStartedAt?: number;
   draft: ExpenseDraft;
-  expenseId?: string;
   id: string;
   jobCardId: string;
   nextAttemptAt: number;
-  /** Plain words for the person, set when the server refused the item. */
-  problem?: string;
   receipt: ReceiptFile;
-  stage: OutboxStage;
   /** The staff member who queued it; only they may send it. */
   staffId: string;
-  status: OutboxStatus;
-  storageId?: string;
   updatedAt: number;
 }
+
+/**
+ * Where the item is in create → upload → attach → submit. Each stage carries exactly what the next
+ * step needs: from `created` on there is a server expense, and only `uploaded` holds a storage id
+ * (the server deletes the file once it is attached, or when it refuses it).
+ */
+export type OutboxStep =
+  | { expenseId?: undefined; stage: 'queued'; storageId?: undefined }
+  | { expenseId: string; stage: 'created'; storageId?: undefined }
+  | { expenseId: string; stage: 'uploaded'; storageId: string }
+  | { expenseId: string; stage: 'attached'; storageId?: undefined }
+  | { expenseId: string; stage: 'submitted'; storageId?: undefined };
+
+type Pending = OutboxStep & { problem?: undefined; status: 'pending' };
+/** Refused by the server, with plain words for the person. A refused upload starts again at `created`. */
+type NeedsAttention = Exclude<OutboxStep, { stage: 'uploaded' }> & { problem: string; status: 'needsAttention' };
+/** Only a submitted item is done. */
+type Done = Extract<OutboxStep, { stage: 'submitted' }> & { problem?: undefined; status: 'done' };
+
+export type OutboxItem = OutboxBase & (Pending | NeedsAttention | Done);
+export type PendingItem = Extract<OutboxItem, { status: 'pending' }>;
 
 export interface OutboxDeps {
   attachProof: (args: { expenseId: string; fileName: string; fileSize: number; mimeType: string; storageId: string }) => Promise<void>;
@@ -74,6 +90,7 @@ export interface OutboxDeps {
 export const outboxKey = 'outbox:expenses';
 const BASE_DELAY_MS = 30_000;
 const MAX_DELAY_MS = 30 * 60_000;
+const UNKNOWN_REFUSAL = 'The server did not accept this expense. Check the details and try again.';
 
 /** The notes ref earlier versions wrote on each expense, so they could find it again. */
 export const refFor = (item: Pick<OutboxItem, 'id'>) => `Connect ref ${item.id}`;
@@ -85,7 +102,7 @@ export function createOutboxItem(input: {
   now: number;
   receipt: ReceiptFile;
   staffId: string;
-}): OutboxItem {
+}): Extract<OutboxItem, { stage: 'queued'; status: 'pending' }> {
   return {
     attempts: 0,
     clientRef: input.id,
@@ -103,12 +120,14 @@ export function createOutboxItem(input: {
 }
 
 /** Pending items whose time has come, queued by this staff member. Nobody sends another's. */
-export function dueItems(items: OutboxItem[], now: number, staffId: string) {
-  return items.filter((item) => item.staffId === staffId && item.status === 'pending' && item.nextAttemptAt <= now);
+export function dueItems(items: OutboxItem[], now: number, staffId: string): PendingItem[] {
+  return items.filter((item): item is PendingItem => item.staffId === staffId && item.status === 'pending' && item.nextAttemptAt <= now);
 }
 
+/** A refused item goes back in the queue, due at once. Anything else is left as it is. */
 export function retryNow(item: OutboxItem, now: number): OutboxItem {
-  const { problem: _problem, ...rest } = item;
+  if (item.status !== 'needsAttention') return item;
+  const { problem: _problem, status: _status, ...rest } = item;
   return { ...rest, attempts: 0, nextAttemptAt: now, status: 'pending', updatedAt: now };
 }
 
@@ -125,7 +144,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
 
 export function refusalMessage(error: unknown) {
   const text = typeof (error as { data?: unknown })?.data === 'string' ? (error as { data: string }).data : '';
-  return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? 'The server did not accept this expense. Check the details and try again.';
+  return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? UNKNOWN_REFUSAL;
 }
 
 /** A ConvexError carries `data`: the server decided. Anything else (network, timeouts) is retried. */
@@ -137,7 +156,8 @@ function backoff(attempts: number) {
   return Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** Math.max(0, attempts - 1));
 }
 
-async function advance(item: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> {
+/** One step forward. Each case returns the next stage with exactly the fields that stage carries. */
+async function advance(item: PendingItem, deps: OutboxDeps): Promise<OutboxItem> {
   switch (item.stage) {
     case 'queued': {
       if (!item.clientRef && item.createStartedAt !== undefined) {
@@ -162,26 +182,23 @@ async function advance(item: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> 
       return { ...item, clientRef, expenseId, stage: 'created' };
     }
     case 'created': {
-      const expenseId = requireExpenseId(item);
-      const url = await deps.generateUploadUrl(expenseId);
+      const url = await deps.generateUploadUrl(item.expenseId);
       const storageId = await deps.uploadReceipt(url, item.receipt);
       return { ...item, stage: 'uploaded', storageId };
     }
     case 'uploaded': {
-      if (!item.storageId) {
-        return { ...item, stage: 'created' };
-      }
       await deps.attachProof({
-        expenseId: requireExpenseId(item),
+        expenseId: item.expenseId,
         fileName: item.receipt.fileName,
         fileSize: item.receipt.size,
         mimeType: item.receipt.mimeType,
         storageId: item.storageId,
       });
-      return { ...item, stage: 'attached' };
+      const { storageId: _attached, ...rest } = item;
+      return { ...rest, stage: 'attached' };
     }
     case 'attached': {
-      await deps.submitExpense(requireExpenseId(item));
+      await deps.submitExpense(item.expenseId);
       return { ...item, stage: 'submitted' };
     }
     case 'submitted':
@@ -189,11 +206,15 @@ async function advance(item: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> 
   }
 }
 
-function requireExpenseId(item: OutboxItem) {
-  if (!item.expenseId) {
-    throw new Error('Outbox item lost its expense id');
+/** The server said no: the item stops until the person retries or deletes it. */
+function refused(item: PendingItem, error: unknown, now: number): OutboxItem {
+  const problem = refusalMessage(error);
+  if (item.stage === 'uploaded') {
+    // The server deletes an uploaded file it refuses to attach, so a retry must upload again.
+    const { storageId: _deleted, ...rest } = item;
+    return { ...rest, problem, stage: 'created', status: 'needsAttention', updatedAt: now };
   }
-  return item.expenseId;
+  return { ...item, problem, status: 'needsAttention', updatedAt: now };
 }
 
 /**
@@ -220,26 +241,71 @@ export async function drainOutbox(run: {
 export async function processItem(start: OutboxItem, deps: OutboxDeps): Promise<OutboxItem> {
   let item = start;
   while (item.status === 'pending') {
+    const current: PendingItem = item;
     try {
-      const next = await advance(item, deps);
-      item = { ...next, updatedAt: deps.now() };
+      item = { ...(await advance(current, deps)), updatedAt: deps.now() };
       if (item.status === 'pending') {
         await deps.save(item);
       }
     } catch (error) {
       const now = deps.now();
       if (isServerRefusal(error)) {
-        const stuck: OutboxItem = { ...item, problem: refusalMessage(error), status: 'needsAttention', updatedAt: now };
-        if (item.stage === 'uploaded') {
-          // The server deletes an uploaded file it refuses to attach, so a retry must upload again.
-          const { storageId: _deleted, ...rest } = stuck;
-          return { ...rest, stage: 'created' };
-        }
-        return stuck;
+        return refused(current, error, now);
       }
-      const attempts = item.attempts + 1;
-      return { ...item, attempts, nextAttemptAt: now + backoff(attempts), updatedAt: now };
+      const attempts = current.attempts + 1;
+      return { ...current, attempts, nextAttemptAt: now + backoff(attempts), updatedAt: now };
     }
   }
   return item;
+}
+
+const STAGES: readonly OutboxStage[] = ['queued', 'created', 'uploaded', 'attached', 'submitted'];
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
+
+/**
+ * One saved item, checked where it comes off the disk. Earlier versions saved stage and status as
+ * two loose fields, so a saved item may hold a combination the union rules out (a created item
+ * without its expense id, an upload without its storage id). Each is moved back to the last stage
+ * it can resume from; the server's clientRef replay makes repeating a step safe.
+ */
+function readItem(saved: unknown): OutboxItem | null {
+  if (!isRecord(saved) || !text(saved.id) || !isRecord(saved.draft) || !isRecord(saved.receipt)) {
+    return null;
+  }
+  const {
+    expenseId: savedExpenseId,
+    problem: savedProblem,
+    stage: savedStage,
+    status: savedStatus,
+    storageId: savedStorageId,
+    ...rest
+  } = saved as unknown as OutboxBase & Record<'expenseId' | 'problem' | 'stage' | 'status' | 'storageId', unknown>;
+  const expenseId = text(savedExpenseId);
+  const storageId = text(savedStorageId);
+  const stage = STAGES.includes(savedStage as OutboxStage) ? (savedStage as OutboxStage) : 'queued';
+
+  if (savedStatus === 'done') {
+    return expenseId ? { ...rest, expenseId, stage: 'submitted', status: 'done' } : null;
+  }
+  let step: OutboxStep;
+  if (!expenseId || stage === 'queued') step = { stage: 'queued' };
+  else if (stage === 'uploaded' && storageId) step = { expenseId, stage, storageId };
+  else if (stage === 'uploaded') step = { expenseId, stage: 'created' };
+  else step = { expenseId, stage };
+
+  if (savedStatus === 'needsAttention') {
+    const problem = text(savedProblem) ?? UNKNOWN_REFUSAL;
+    // A refused upload's file is gone from the server, so it starts again from `created`.
+    return step.stage === 'uploaded'
+      ? { ...rest, expenseId: step.expenseId, problem, stage: 'created', status: 'needsAttention' }
+      : { ...rest, ...step, problem, status: 'needsAttention' };
+  }
+  return { ...rest, ...step, status: 'pending' };
+}
+
+/** The saved outbox as typed items. Anything unreadable is left out rather than crashing the tab. */
+export function readOutbox(saved: unknown): OutboxItem[] {
+  if (!Array.isArray(saved)) return [];
+  return saved.map(readItem).filter((item): item is OutboxItem => item !== null);
 }

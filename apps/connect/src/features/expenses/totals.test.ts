@@ -21,36 +21,43 @@ function serverRow(overrides: Partial<ExpenseRow> & Pick<ExpenseRow, 'id' | 'amo
   };
 }
 
-function queued(overrides: Partial<OutboxItem> & Pick<OutboxItem, 'id'> & { amount: number; currency?: 'INR' | 'USD'; category?: 'Hotel' | 'F&B' }): OutboxItem {
-  const { amount, category = 'Hotel', currency = 'INR', ...rest } = overrides;
+/** The stage and status fields of one of the outbox's legal states. */
+type ItemState = OutboxItem extends infer Item ? (Item extends OutboxItem ? Pick<Item, 'expenseId' | 'problem' | 'stage' | 'status' | 'storageId'> : never) : never;
+
+function queued(
+  input: { amount: number; category?: 'Hotel' | 'F&B'; currency?: 'INR' | 'USD'; id: string },
+  state: ItemState = { stage: 'queued', status: 'pending' }
+): OutboxItem {
+  const { amount, category = 'Hotel', currency = 'INR', id } = input;
   return {
     attempts: 0,
     createdAt: 0,
     draft: { amount, category, currency, expenseDate: '2026-11-05', paidBy: 'TM', particulars: '' },
+    id,
     jobCardId: 'jc_1',
     nextAttemptAt: 0,
     receipt: { fileName: 'r.jpg', mimeType: 'image/jpeg', size: 1, uri: 'file:///r.jpg' },
-    stage: 'queued',
     staffId: 'staff_1',
-    status: 'pending',
     updatedAt: 0,
-    ...rest,
+    ...state,
   };
 }
+
+const sent = (expenseId: string): ItemState => ({ expenseId, stage: 'submitted', status: 'done' });
 
 describe('trip spend', () => {
   it('counts each expense once: server rows, plus what is only on this phone', () => {
     const server = [serverRow({ amount: 100, id: 'exp_1' }), serverRow({ amount: 50, id: 'exp_2' })];
     const outbox = [
-      queued({ amount: 100, expenseId: 'exp_1', id: 'q_1', stage: 'created' }),
-      queued({ amount: 30, id: 'q_2', status: 'done' }),
+      queued({ amount: 100, id: 'q_1' }, { expenseId: 'exp_1', stage: 'created', status: 'pending' }),
+      queued({ amount: 30, id: 'q_2' }, sent('exp_9')),
       queued({ amount: 20, id: 'q_3' }),
     ];
     expect(spendEntries(outbox, server).map((entry) => entry.amount)).toEqual([100, 50, 20]);
   });
 
   it('counts everything on this phone when the server list is not available', () => {
-    const outbox = [queued({ amount: 30, id: 'q_1', status: 'done' }), queued({ amount: 20, id: 'q_2' })];
+    const outbox = [queued({ amount: 30, id: 'q_1' }, sent('exp_1')), queued({ amount: 20, id: 'q_2' })];
     expect(spendEntries(outbox, null).map((entry) => entry.amount)).toEqual([30, 20]);
   });
 
@@ -92,12 +99,12 @@ describe('trip spend', () => {
 describe('submittedRows', () => {
   it('lists an expense once: a server draft still being handled on this phone is left to the phone list', () => {
     const server = [serverRow({ amount: 1250, id: 'exp_stuck' }), serverRow({ amount: 300, id: 'exp_other' })];
-    const outbox = [queued({ amount: 1250, expenseId: 'exp_stuck', id: 'q_1', status: 'needsAttention' })];
+    const outbox = [queued({ amount: 1250, id: 'q_1' }, { expenseId: 'exp_stuck', problem: 'Refused', stage: 'attached', status: 'needsAttention' })];
     expect(submittedRows(outbox, server).map((row) => row.id)).toEqual(['exp_other']);
   });
 
   it('shows the server row again once the phone has finished with it', () => {
     const server = [serverRow({ amount: 1250, id: 'exp_done' })];
-    expect(submittedRows([queued({ amount: 1250, expenseId: 'exp_done', id: 'q_1', status: 'done' })], server)).toHaveLength(1);
+    expect(submittedRows([queued({ amount: 1250, id: 'q_1' }, sent('exp_done'))], server)).toHaveLength(1);
   });
 });

@@ -8,7 +8,7 @@ import { collectPages } from '@/features/trips/trips';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
 
-import { drainOutbox, type OutboxDeps, type OutboxItem, outboxKey, retryNow } from './outbox';
+import { drainOutbox, type OutboxDeps, type OutboxItem, outboxKey, readOutbox, retryNow } from './outbox';
 import { deleteReceipt, uploadReceipt } from './receipt-files';
 
 interface OutboxValue {
@@ -16,7 +16,6 @@ interface OutboxValue {
   enqueue: (item: OutboxItem) => void;
   items: OutboxItem[];
   retry: (id: string) => void;
-  runNow: () => void;
 }
 
 const OutboxContext = createContext<OutboxValue | null>(null);
@@ -35,7 +34,13 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
   const { live } = useAppStore();
   const canSend = online && gate.kind === 'staff' && !gate.offline;
   const staffId = gate.kind === 'staff' ? gate.staff.staffId : null;
-  const [items, setItems, loaded] = useStoredValue<OutboxItem[]>(outboxKey, []);
+  const [saved, setSaved, loaded] = useStoredValue<unknown>(outboxKey, []);
+  // Checked as it comes off the disk: everything past this line works with typed items only.
+  const items = readOutbox(saved);
+  const setItems = useCallback(
+    (update: (previous: OutboxItem[]) => OutboxItem[]) => setSaved((previous: unknown) => update(readOutbox(previous))),
+    [setSaved]
+  );
   const itemsRef = useRef(items);
   const running = useRef(false);
 
@@ -126,7 +131,6 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
       setItems((previous) => previous.map((item) => (item.id === id ? retryNow(item, Date.now()) : item)));
       void Promise.resolve().then(run);
     },
-    runNow: () => void run(),
   };
   return <OutboxContext.Provider value={value}>{children}</OutboxContext.Provider>;
 }
