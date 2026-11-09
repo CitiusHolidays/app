@@ -33,7 +33,7 @@ const ANDROID_FACES = {
   JetBrainsMono_500Medium,
 };
 
-void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+void SplashScreen.preventAutoHideAsync();
 
 function Waiting() {
   return (
@@ -48,7 +48,7 @@ function Waiting() {
 
 function MissingConfiguration() {
   useEffect(() => {
-    void SplashScreen.hideAsync().catch(() => undefined);
+    void SplashScreen.hideAsync();
   }, []);
   return (
     <View style={{ backgroundColor: staffTheme.color.ground, flex: 1, gap: 12, justifyContent: 'center', padding: 24 }}>
@@ -83,7 +83,7 @@ function Shell() {
   const { gate } = useStaffSession();
   useEffect(() => {
     if (gate.kind !== 'loading') {
-      void SplashScreen.hideAsync().catch(() => undefined);
+      void SplashScreen.hideAsync();
     }
   }, [gate.kind]);
   if (gate.kind === 'loading') {

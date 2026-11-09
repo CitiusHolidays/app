@@ -12,6 +12,7 @@ import { cardPhotoWidth, coverUri, PREVIEW_WIDTH } from './cover';
 export function prefetchCover(photo: DestinationPhoto | null | undefined, windowWidth: number) {
   if (!photo) return;
   for (const width of [PREVIEW_WIDTH, cardPhotoWidth(windowWidth, PixelRatio.get())]) {
-    void Image.prefetch(coverUri(photo.path, width), 'disk').catch(() => undefined);
+    // Resolves false when offline; the cover view loads the photo again when it is shown.
+    void Image.prefetch(coverUri(photo.path, width), 'disk');
   }
 }
