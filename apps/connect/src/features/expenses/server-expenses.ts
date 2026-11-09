@@ -1,7 +1,7 @@
 import { type ExpenseRow, type PaginationResult, staffApi } from '@citius/backend';
 import { useQuery } from 'convex/react';
 
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 
 /** How many of the trip's expenses the tab reads from the server. */
 export const SERVER_PAGE_SIZE = 50;
@@ -27,8 +27,7 @@ export function serverExpenses(input: {
 
 /** The first page of the trip's expenses on the server; nothing is asked while offline. */
 export function useServerExpenses(jobCardId: string | null): ServerExpenses {
-  const { gate, online } = useStaffSession();
-  const canQuery = online && gate.kind === 'staff' && !gate.offline;
+  const canQuery = useCanReachServer();
   const result = useQuery(
     staffApi.listExpenses.ref,
     canQuery && jobCardId ? { jobCardId, paginationOpts: { cursor: null, numItems: SERVER_PAGE_SIZE } } : 'skip'

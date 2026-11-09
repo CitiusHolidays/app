@@ -3,7 +3,7 @@ import { useConvex } from 'convex/react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useReducer, useState } from 'react';
 import { AppState, useWindowDimensions } from 'react-native';
 
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 import { type PackAction, packOf, packPending, packReducer, type PackStatus, STALE_PACK_PROBLEM } from '@/features/trip-pack/pack-status';
 import { deletePack, loadPack, prunePacksNotIn, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
 import { buildTripPack, type TripPack } from '@/features/trip-pack/trip-pack';
@@ -95,8 +95,7 @@ const LOADING: PackStatus = { kind: 'loading' };
 export function TripsProvider({ children }: { children: ReactNode }) {
   const convex = useConvex();
   const { live, store } = useAppStore();
-  const { gate, online } = useStaffSession();
-  const canReachServer = online && gate.kind === 'staff' && !gate.offline;
+  const canReachServer = useCanReachServer();
   const [storedCache, setCache, tripsLoaded] = useStoredValue<TripsCache | null>('trips:list', null);
   const cache = storedCache?.scope === 'assigned' ? storedCache : null;
   const [selectedId, setSelectedId] = useStoredValue<string | null>('trips:selected', null);

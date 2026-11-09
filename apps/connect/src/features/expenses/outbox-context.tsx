@@ -3,6 +3,7 @@ import { useConvex } from 'convex/react';
 import { AppState } from 'react-native';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
 
+import { canReachServer } from '@/features/gate/reach';
 import { useStaffSession } from '@/features/gate/session';
 import { collectPages } from '@/features/trips/trips';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
@@ -32,7 +33,7 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
   const convex = useConvex();
   const { gate, online } = useStaffSession();
   const { live } = useAppStore();
-  const canSend = online && gate.kind === 'staff' && !gate.offline;
+  const canSend = canReachServer(gate, online);
   const staffId = gate.kind === 'staff' ? gate.staff.staffId : null;
   const [saved, setSaved, loaded] = useStoredValue<unknown>(outboxKey, []);
   // Checked as it comes off the disk: everything past this line works with typed items only.

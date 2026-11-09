@@ -2,7 +2,7 @@ import { Banner, StatusPill, Text } from '@citius/ui';
 import type { ReactNode } from 'react';
 import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
 
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 import { freshnessLabel } from '@/features/trip-pack/trip-pack';
 import { useNow } from '@/lib/use-now';
 import { NOTICE_IN, NOTICE_OUT } from '@/lib/motion';
@@ -47,9 +47,8 @@ export function FreshnessStamp({
   problem?: string | null;
   savedAt: number | null;
 }) {
-  const { gate, online } = useStaffSession();
+  const offline = !useCanReachServer();
   const now = useNow();
-  const offline = !online || (gate.kind === 'staff' && gate.offline);
   const trouble = offline || Boolean(problem);
   const showPill = !trouble && savedAt !== null && part !== 'notice';
   const pillLabel = savedAt === null ? '' : freshnessLabel(savedAt, now);

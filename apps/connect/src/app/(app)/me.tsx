@@ -6,6 +6,7 @@ import { Alert, Platform, View } from 'react-native';
 import { Avatar, ListCard, Row, Screen, SectionTitle, Tag } from '@/components/kit';
 import { useOutbox } from '@/features/expenses/outbox-context';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
+import { useCanReachServer } from '@/features/gate/reach';
 import { useStaff, useStaffSession } from '@/features/gate/session';
 import { signOutWarning, syncStatus, unsentWork } from '@/features/gate/unsent';
 import { TRIP_PACK_TTL_DAYS } from '@/features/trip-pack/trip-pack';
@@ -15,7 +16,7 @@ import { useAppStore } from '@/lib/app-store';
 export default function Me() {
   const theme = useAppTheme();
   const staff = useStaff();
-  const { gate, online, signOut } = useStaffSession();
+  const { signOut } = useStaffSession();
   const { persistent } = useAppStore();
   const outbox = useOutbox();
   const fieldSync = useFieldSync();
@@ -23,7 +24,7 @@ export default function Me() {
   const unsent = unsentWork(fieldSync.items, outbox.items);
   const sync = syncStatus(unsent);
   // The same rule as the freshness notice: no network, or a server that stopped answering.
-  const offline = !online || (gate.kind === 'staff' && gate.offline);
+  const offline = !useCanReachServer();
   const version = Constants.expoConfig?.version ?? 'Unknown';
 
   const doSignOut = () => {

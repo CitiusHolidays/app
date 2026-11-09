@@ -2,7 +2,7 @@ import { type FieldPassports, staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
 import { useEffect, useState } from 'react';
 
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
 
@@ -15,8 +15,7 @@ const REFRESH_MS = 5 * 60 * 1000;
  */
 export function useFieldPassports(jobCardId: string | null) {
   const convex = useConvex();
-  const { gate, online } = useStaffSession();
-  const canReachServer = online && gate.kind === 'staff' && !gate.offline;
+  const canReachServer = useCanReachServer();
   const tick = useNow(REFRESH_MS);
   const [answer, setAnswer] = useState<{ jobCardId: string; passports: FieldPassports } | null>(null);
 

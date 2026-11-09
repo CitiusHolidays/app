@@ -2,7 +2,7 @@ import { type NotificationRow, staffApi } from '@citius/backend';
 import { useQuery } from 'convex/react';
 import { useEffect } from 'react';
 
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 import { useStoredValue } from '@/lib/app-store';
 
 interface InboxCache {
@@ -42,8 +42,7 @@ export function inboxState(input: {
  * `savedAt` and `loaded` are read from `state`, for screens that only need the list.
  */
 export function useInbox() {
-  const { gate, online } = useStaffSession();
-  const canFetch = online && gate.kind === 'staff' && !gate.offline;
+  const canFetch = useCanReachServer();
   const live = useQuery(staffApi.listNotifications.ref, canFetch ? { limit: 50 } : 'skip');
   const [cache, setCache, cacheRead] = useStoredValue<InboxCache | null>('inbox:list', null);
   useEffect(() => {

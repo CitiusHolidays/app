@@ -7,7 +7,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActionPill, PageTitle, QuietState, Screen } from '@/components/kit';
-import { useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
 import { PassportPdf } from '@/features/passports/passport-pdf';
 import { PassportSkeleton } from '@/features/passports/passport-skeleton';
 import { type ScanState, usePassportScan } from '@/features/passports/use-passport-scan';
@@ -144,8 +144,7 @@ export default function PassportViewer() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { gate, online } = useStaffSession();
-  const canReachServer = online && gate.kind === 'staff' && !gate.offline;
+  const canReachServer = useCanReachServer();
   const { pack } = useTrips();
   const name = pack?.roster.find((entry) => entry.id === id)?.name ?? 'Traveller';
   const { again, setView, view } = usePassportScan(id, canReachServer);

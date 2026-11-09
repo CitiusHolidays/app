@@ -12,7 +12,8 @@ import { createOutboxItem } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
 import { useReceipt } from '@/features/expenses/use-receipt';
 import { localDay } from '@/features/headcount/headcount';
-import { useStaff, useStaffSession } from '@/features/gate/session';
+import { useCanReachServer } from '@/features/gate/reach';
+import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
 import { useAnnounce } from '@/lib/use-announce';
@@ -33,8 +34,7 @@ export default function NewExpense() {
   const staff = useStaff();
   const { selected, trips } = useTrips();
   const { enqueue } = useOutbox();
-  const { gate, online } = useStaffSession();
-  const canSend = online && gate.kind === 'staff' && !gate.offline;
+  const canSend = useCanReachServer();
   const toast = useToast();
   const [itemId] = useState(() => localId('exp'));
   // Starts on the trip shown on Today, as headcount does; the chips switch it to another trip.
