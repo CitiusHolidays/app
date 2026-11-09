@@ -1,6 +1,8 @@
 import type { CreateExpenseArgs, ExpenseCategory, ExpenseCurrency, StaffApi } from '@citius/backend';
 import type { FunctionArgs } from 'convex/server';
 
+import { refusalText } from '@/lib/refusal';
+
 /**
  * Queued expense submissions. Each item walks create → upload → attach → submit, and is saved
  * after every step so a crash or a dropped connection resumes where it stopped. The receipt file
@@ -143,7 +145,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
 ];
 
 export function refusalMessage(error: unknown) {
-  const text = typeof (error as { data?: unknown })?.data === 'string' ? (error as { data: string }).data : '';
+  const text = refusalText(error);
   return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? UNKNOWN_REFUSAL;
 }
 
@@ -260,6 +262,7 @@ export async function processItem(start: OutboxItem, deps: OutboxDeps): Promise<
 }
 
 const STAGES: readonly OutboxStage[] = ['queued', 'created', 'uploaded', 'attached', 'submitted'];
+const isStage = (value: unknown): value is OutboxStage => STAGES.some((stage) => stage === value);
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
 
@@ -283,7 +286,7 @@ function readItem(saved: unknown): OutboxItem | null {
   } = saved as unknown as OutboxBase & Record<'expenseId' | 'problem' | 'stage' | 'status' | 'storageId', unknown>;
   const expenseId = text(savedExpenseId);
   const storageId = text(savedStorageId);
-  const stage = STAGES.includes(savedStage as OutboxStage) ? (savedStage as OutboxStage) : 'queued';
+  const stage = isStage(savedStage) ? savedStage : 'queued';
 
   if (savedStatus === 'done') {
     return expenseId ? { ...rest, expenseId, stage: 'submitted', status: 'done' } : null;
