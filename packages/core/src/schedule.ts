@@ -4,7 +4,7 @@
  * kept word for word.
  */
 
-export type StepState = 'done' | 'current' | 'upcoming' | 'undated';
+type StepState = 'done' | 'current' | 'upcoming' | 'undated';
 
 export interface ScheduleStep {
   /** "Day 2", or null for a line without a day. */

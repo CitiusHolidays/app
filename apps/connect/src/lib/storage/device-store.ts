@@ -12,7 +12,7 @@ const KEY_OPTIONS: SecureStore.SecureStoreOptions = {
 };
 
 /** The binary has no SQLCipher, so nothing may be written: the app falls back to memory only. */
-export class EncryptionUnavailableError extends Error {
+class EncryptionUnavailableError extends Error {
   constructor() {
     super('Encrypted storage is not available in this build');
     this.name = 'EncryptionUnavailableError';

@@ -1,7 +1,7 @@
 import { type TypeScale, useAppTheme } from '@citius/ui';
 import { type DimensionValue, View, type ViewStyle } from 'react-native';
 
-/** A static block in the skeleton colour; no shimmer, like the kit's Placeholder. */
+/** A static block in the skeleton colour; no shimmer, like the kit's PlaceholderBar. */
 export function SkeletonBlock({ style }: { style: ViewStyle }) {
   const theme = useAppTheme();
   return <View style={[{ backgroundColor: theme.color.tickOff, borderRadius: 6, opacity: 0.6 }, style]} />;

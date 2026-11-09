@@ -1,9 +1,9 @@
 import { type PortalAccess, TOUR_MANAGER_ROLE } from '@citius/backend';
 
 /** How long a device may open the offline trip pack without reaching the server. */
-export const OFFLINE_VERIFICATION_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const OFFLINE_VERIFICATION_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
-export interface StaffIdentity {
+interface StaffIdentity {
   name: string;
   roles: string[];
   staffId: string;
@@ -43,7 +43,7 @@ export type Gate =
   | { kind: 'notTourManager' }
   | { kind: 'staff'; offline: boolean; staff: StaffIdentity };
 
-export const isTourManager = (roles: readonly string[]) => roles.includes(TOUR_MANAGER_ROLE);
+const isTourManager = (roles: readonly string[]) => roles.includes(TOUR_MANAGER_ROLE);
 
 /** The Better Auth session state the gate reads (`authClient.useSession()`). */
 export interface AuthSessionState {

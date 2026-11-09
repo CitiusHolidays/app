@@ -18,7 +18,7 @@ export type TripsListStatus =
 export const NO_TRIPS = 'No trips yet. A trip shows here once Operations assigns you to it and starts the app for that trip.';
 export const NO_TRIPS_OFFLINE = 'Your trips are not on this phone yet. Connect to the internet to load them.';
 export const TRIPS_LOAD_FAILED = 'Could not load your trips. Pull down to try again.';
-export const TRIPS_REFRESH_FAILED = 'Could not refresh your trips. Showing the saved list.';
+const TRIPS_REFRESH_FAILED = 'Could not refresh your trips. Showing the saved list.';
 
 export function tripsListStatus(input: {
   canReachServer: boolean;

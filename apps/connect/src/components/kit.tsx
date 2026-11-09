@@ -830,17 +830,6 @@ export function PlaceholderBar({ role = 'meta', width = '100%' }: { role?: TextR
   return <View style={{ backgroundColor: theme.color.tickOff, borderRadius: 6, height, opacity: 0.6, width }} />;
 }
 
-/** Static bars while something loads; no shimmer. Each bar is one line of `role` (meta by default). */
-export function Placeholder({ lines = 3, role = 'meta' }: { lines?: number; role?: TextRole }) {
-  return (
-    <View accessibilityLabel="Loading" accessible style={{ gap: space.sm + 2 }}>
-      {Array.from({ length: lines }, (_, index) => (
-        <PlaceholderBar key={index} role={role} width={index === lines - 1 ? '60%' : '100%'} />
-      ))}
-    </View>
-  );
-}
-
 /**
  * Stands in for a ListCard of `Row`s while they load: the same card, row padding, 60pt minimum
  * height and rules, with a title line and a subtitle line in each row, so the list lands in place.
