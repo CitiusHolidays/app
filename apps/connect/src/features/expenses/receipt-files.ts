@@ -4,6 +4,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { logEvent } from '@/lib/safe-log';
 
 import type { ReceiptFile } from './outbox';
+import { storageIdOf } from './upload-answer';
 
 /**
  * Receipts wait in the app's cache folder until their expense is submitted. Unlike documents,
@@ -116,8 +117,7 @@ function storageIdFrom(body: string) {
   } catch {
     return null;
   }
-  const storageId = typeof answer === 'object' && answer !== null ? (answer as { storageId?: unknown }).storageId : undefined;
-  return typeof storageId === 'string' && storageId ? storageId : null;
+  return storageIdOf(answer);
 }
 
 /** Uploads the receipt bytes to a Convex upload URL and returns the storage id. */
