@@ -71,11 +71,11 @@ export default function Journeys() {
   const now = useNow();
   const { width } = useWindowDimensions();
   const list = useMemo(() => trips.data ?? [], [trips.data]);
-  const rows = useMemo(() => journeyRows(list), [list]);
+  const rows = useMemo(() => journeyRows(list, now), [list, now]);
   const refresh = usePullRefresh(trips.status === 'live');
 
   // The trip most likely to be opened next: start its header photo now.
-  const leadCover = featuredTrip(list)?.cover ?? null;
+  const leadCover = featuredTrip(list, now)?.cover ?? null;
   useEffect(() => {
     prefetchCover(leadCover, width);
   }, [leadCover, width]);

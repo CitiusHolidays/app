@@ -8,7 +8,7 @@ import { DESTINATION_TYPE } from '@/components/destination-type';
 import { Icon } from '@/components/kit';
 import { TEXT_SWAP_IN } from '@/components/motion';
 import { datesAndNights, timingText } from '@/features/trips/labels';
-import { tripTiming } from '@/features/trips/model';
+import { tripStage } from '@/features/trips/model';
 import { useI18n } from '@/i18n/i18n';
 
 function GlassPill({ label, tone = 'light' }: { label: string; tone?: 'light' | 'live' }) {
@@ -45,9 +45,8 @@ function GlassPill({ label, tone = 'light' }: { label: string; tone?: 'light' | 
 export function TripCard({ lead, now, onPress, trip }: { lead?: boolean; now: number; onPress: () => void; trip: TripSummary }) {
   const theme = useAppTheme();
   const i18n = useI18n();
-  const timing = tripTiming(trip, now);
-  const past = trip.phase === 'past';
-  const pill = past ? i18n.t('phase.past') : timingText(i18n, timing);
+  const { phase, timing } = tripStage(trip, now);
+  const pill = timingText(i18n, timing);
   const people = [
     trip.travellerName ? i18n.t('trip.you', { name: trip.travellerName }) : null,
     trip.minorCount > 0 ? i18n.tn('journeys.withChildren', trip.minorCount) : null,
@@ -67,7 +66,7 @@ export function TripCard({ lead, now, onPress, trip }: { lead?: boolean; now: nu
     >
       <DestinationCover photo={trip.cover} priority={lead ? 'high' : 'low'} />
       <View style={{ flex: 1, justifyContent: 'space-between', padding: lead ? space.xl : space.lg + 4 }}>
-        <GlassPill label={pill} tone={trip.phase === 'ongoing' ? 'live' : 'light'} />
+        <GlassPill label={pill} tone={phase === 'ongoing' ? 'live' : 'light'} />
         <View style={{ gap: space.sm }}>
           <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.78)' }} variant="secondary">
             {trip.groupName}

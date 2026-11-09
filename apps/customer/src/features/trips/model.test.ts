@@ -1,6 +1,6 @@
 import type { TripSummary } from '@citius/backend/customer';
 
-import { documentProgress, featuredTrip, journeyRows, parseInviteToken, splitTrips, shownVisaStatus, statusKind, tripTiming } from './model';
+import { documentProgress, featuredTrip, journeyRows, parseInviteToken, splitTrips, shownVisaStatus, statusKind, tripStage, tripTiming } from './model';
 
 const at = (year: number, month: number, day: number, hour = 10) => new Date(year, month - 1, day, hour).getTime();
 
@@ -38,6 +38,33 @@ describe('trip timing', () => {
   });
 });
 
+describe('trip stage', () => {
+  it('moves a trip saved before it began into "under way" once its first day comes', () => {
+    // Saved on the 14th (upcoming); opened offline on the 16th.
+    expect(tripStage(trip({ phase: 'upcoming' }), at(2026, 11, 16))).toEqual({ phase: 'ongoing', timing: { day: 2, kind: 'progress', total: 6 } });
+  });
+
+  it('closes a trip saved while under way once its last day has passed', () => {
+    expect(tripStage(trip({ phase: 'ongoing' }), at(2026, 11, 22))).toEqual({ phase: 'past', timing: { kind: 'done' } });
+  });
+
+  it('starts on day 1 when India has reached the first day before this phone has', () => {
+    // A traveller west of India, the evening before: the server already says ongoing.
+    expect(tripStage(trip({ phase: 'ongoing' }), at(2026, 11, 14, 21))).toEqual({ phase: 'ongoing', timing: { day: 1, kind: 'progress', total: 6 } });
+  });
+
+  it('never steps a trip back: a "past" from the server stands on the last evening here', () => {
+    expect(tripStage(trip({ phase: 'past' }), at(2026, 11, 20, 21))).toEqual({ phase: 'past', timing: { kind: 'done' } });
+  });
+
+  it('keeps the phase from the server when the dates are not set', () => {
+    expect(tripStage(trip({ phase: 'upcoming', travelEndDate: null, travelStartDate: null }), at(2026, 11, 1))).toEqual({ phase: 'upcoming', timing: { kind: 'unknown' } });
+  });
+});
+
+/** Before every trip in these lists has started, so their saved phases still hold. */
+const before = at(2026, 11, 1);
+
 describe('trip lists', () => {
   const trips = [
     trip({ travelStartDate: '2026-12-10', tripId: 'later' }),
@@ -47,15 +74,15 @@ describe('trip lists', () => {
   ];
 
   it('orders active trips soonest first and past trips newest first', () => {
-    const { active, past } = splitTrips(trips);
+    const { active, past } = splitTrips(trips, before);
     expect(active.map((row) => row.tripId)).toEqual(['soon', 'later']);
     expect(past.map((row) => row.tripId)).toEqual(['recent', 'old']);
   });
 
   it('leads with a trip under way, else the next one', () => {
-    expect(featuredTrip(trips)?.tripId).toBe('soon');
-    expect(featuredTrip([...trips, trip({ phase: 'ongoing', tripId: 'now' })])?.tripId).toBe('now');
-    expect(featuredTrip([trip({ phase: 'past' })])).toBeNull();
+    expect(featuredTrip(trips, before)?.tripId).toBe('soon');
+    expect(featuredTrip([...trips, trip({ phase: 'ongoing', tripId: 'now' })], before)?.tripId).toBe('now');
+    expect(featuredTrip([trip({ phase: 'past' })], before)).toBeNull();
   });
 });
 
@@ -107,7 +134,7 @@ describe('journeys list rows', () => {
       trip({ phase: 'past', travelStartDate: '2026-01-01', tripId: 'old' }),
       trip({ travelStartDate: '2026-12-10', tripId: 'later' }),
       trip({ phase: 'ongoing', travelStartDate: '2026-11-05', tripId: 'now' }),
-    ]);
+    ], before);
     expect(shape(rows)).toEqual(['# now', 'lead now', '# upcoming', 'card later', '# past', 'card old']);
   });
 
@@ -116,23 +143,33 @@ describe('journeys list rows', () => {
       trip({ travelStartDate: '2026-12-10', tripId: 'later' }),
       trip({ phase: 'ongoing', travelStartDate: '2026-11-05', tripId: 'a' }),
       trip({ phase: 'ongoing', travelStartDate: '2026-11-07', tripId: 'b' }),
-    ]);
+    ], before);
     expect(shape(rows)).toEqual(['# now', 'lead a', 'card b', '# upcoming', 'card later']);
   });
 
   it('calls the lead "your next trip" when nothing is under way', () => {
-    const rows = journeyRows([trip({ tripId: 'a' }), trip({ travelStartDate: '2027-01-01', tripId: 'b' })]);
+    const rows = journeyRows([trip({ tripId: 'a' }), trip({ travelStartDate: '2027-01-01', tripId: 'b' })], before);
     expect(rows.map((row) => row.key)).toEqual(['section:next', 'lead:a', 'section:upcoming', 'card:b']);
   });
 
   it('gives every row a stable unique key', () => {
-    const rows = journeyRows([trip({ phase: 'ongoing', tripId: 'a' }), trip({ phase: 'ongoing', tripId: 'b' }), trip({ phase: 'past', tripId: 'c' })]);
+    const rows = journeyRows([trip({ phase: 'ongoing', tripId: 'a' }), trip({ phase: 'ongoing', tripId: 'b' }), trip({ phase: 'past', tripId: 'c' })], before);
     expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
   });
 
+  it('lists a saved trip under "happening now" once it is under way, whatever was saved', () => {
+    const rows = journeyRows([trip({ phase: 'upcoming', tripId: 'a' }), trip({ travelStartDate: '2027-01-01', travelEndDate: '2027-01-05', tripId: 'b' })], at(2026, 11, 16));
+    expect(shape(rows)).toEqual(['# now', 'lead a', '# upcoming', 'card b']);
+  });
+
+  it('moves a trip that has ended to "past", whatever was saved', () => {
+    const rows = journeyRows([trip({ phase: 'ongoing', tripId: 'a' })], at(2026, 11, 25));
+    expect(shape(rows)).toEqual(['# past', 'card a']);
+  });
+
   it('has no rows and no headings without trips', () => {
-    expect(journeyRows([])).toEqual([]);
-    expect(journeyRows([trip({ phase: 'past', tripId: 'p' })]).map((row) => row.key)).toEqual(['section:past', 'card:p']);
+    expect(journeyRows([], before)).toEqual([]);
+    expect(journeyRows([trip({ phase: 'past', tripId: 'p' })], before).map((row) => row.key)).toEqual(['section:past', 'card:p']);
   });
 });
 
