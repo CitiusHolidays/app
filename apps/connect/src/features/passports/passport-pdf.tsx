@@ -1,10 +1,9 @@
 import { space, Text, useAppTheme } from '@citius/ui';
 import { useState } from 'react';
 import { View } from 'react-native';
+import Pdf from 'react-native-pdf';
 
 import { logEvent } from '@/lib/safe-log';
-
-import { NativePdf } from './pdf-support';
 
 /**
  * A PDF passport from a private `file://` URI: swipe between pages, pinch or double-tap to zoom.
@@ -14,9 +13,6 @@ import { NativePdf } from './pdf-support';
 export function PassportPdf({ name, onError, uri }: { name: string; onError: () => void; uri: string }) {
   const theme = useAppTheme();
   const [pages, setPages] = useState<{ page: number; total: number } | null>(null);
-  if (!NativePdf) {
-    return null;
-  }
   return (
     <View style={{ flex: 1, gap: space.sm }}>
       <View
@@ -24,7 +20,7 @@ export function PassportPdf({ name, onError, uri }: { name: string; onError: () 
         accessible
         style={{ backgroundColor: theme.color.inset, borderRadius: theme.radius.inset, flex: 1, overflow: 'hidden' }}
       >
-        <NativePdf
+        <Pdf
           enableDoubleTapZoom
           enablePaging
           enableTextSelection={false}

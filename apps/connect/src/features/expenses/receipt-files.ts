@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import type { ReceiptFile } from './outbox';
 
@@ -45,10 +46,6 @@ export function receiptSize(width: number | undefined, height: number | undefine
 /** A smaller JPEG of the photo, or null when it cannot be decoded (the original is kept then). */
 async function shrink(image: PickedImage) {
   try {
-    // Loaded on first use: a build without the native module skips shrinking instead of failing
-    // to start.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { ImageManipulator, SaveFormat } = require('expo-image-manipulator') as typeof import('expo-image-manipulator');
     const context = ImageManipulator.manipulate(image.uri);
     const size = receiptSize(image.width, image.height);
     if (size) context.resize(size);
