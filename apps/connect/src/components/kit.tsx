@@ -771,7 +771,7 @@ export function CallButton({ name, phone }: { name: string; phone: string }) {
       accessibilityLabel={`Call ${name}`}
       accessibilityRole="button"
       hitSlop={4}
-      onPress={() => void Linking.openURL(`tel:${phone}`).catch(() => undefined)}
+      onPress={() => void Linking.openURL(`tel:${phone.replace(/[^\d+]/g, '')}`).catch(() => undefined)}
       style={{
         alignItems: 'center',
         backgroundColor: theme.color.surface,
