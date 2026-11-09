@@ -1,6 +1,5 @@
-import { type ExpenseRow, type JobCardRow, staffApi } from '@citius/backend';
+import type { ExpenseRow, JobCardRow } from '@citius/backend';
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
-import { useQuery } from 'convex/react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
@@ -10,6 +9,7 @@ import { useCanReachServer } from '@/features/gate/reach';
 import { fullTime } from '@/features/inbox/relative-time';
 import { useInbox } from '@/features/inbox/use-inbox';
 import { useMarkRead } from '@/features/inbox/use-mark-read';
+import { useExpenseSummary, useJobCardSummary } from '@/features/inbox/use-notification-record';
 import { useTrips } from '@/features/trips/trips-context';
 import { formatDateRange } from '@/lib/dates';
 
@@ -79,7 +79,7 @@ const expenseLines = (expense?: ExpenseRow): Line[] => [
 ];
 
 function JobCardSummary({ id }: { id: string }) {
-  const job = useQuery(staffApi.getJobCardDetail.ref, { jobCardId: id, surface: 'connect' });
+  const job = useJobCardSummary(id);
   if (job === null) {
     return (
       <Surface>
@@ -91,7 +91,7 @@ function JobCardSummary({ id }: { id: string }) {
 }
 
 function ExpenseSummary({ id }: { id: string }) {
-  const expense = useQuery(staffApi.getExpenseRow.ref, { expenseId: id });
+  const expense = useExpenseSummary(id);
   if (expense === null) {
     return (
       <Surface>
