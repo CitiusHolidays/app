@@ -1,9 +1,12 @@
 import { Button } from '@citius/ui';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { MessageScreen } from '@/components/kit';
 import { useLaunchDone } from '@/components/launch-curtain';
 import { useI18n } from '@/i18n/i18n';
+import { closeScreen } from '@/lib/navigation';
 import { logEvent } from '@/lib/safe-log';
 
 interface Props {
@@ -17,6 +20,20 @@ function Fallback({ onRetry, onSignOut }: { onRetry: () => void; onSignOut: () =
   // A failure while the app was still starting must not stay hidden behind the loading screen.
   const launchDone = useLaunchDone();
   useEffect(launchDone, [launchDone]);
+  // Signing out removes the saved trips, which the message just promised are still here: ask first,
+  // the same way Me does.
+  const confirmSignOut = () =>
+    Alert.alert(t('me.signOutConfirmTitle'), t('me.signOutConfirmBody'), [
+      { style: 'cancel', text: t('common.cancel') },
+      {
+        onPress: () => {
+          setBusy(true);
+          void onSignOut().finally(() => setBusy(false));
+        },
+        style: 'destructive',
+        text: t('error.signOut'),
+      },
+    ]);
   return (
     <MessageScreen
       actions={
@@ -25,10 +42,7 @@ function Fallback({ onRetry, onSignOut }: { onRetry: () => void; onSignOut: () =
           <Button
             busy={busy}
             label={t('error.signOut')}
-            onPress={() => {
-              setBusy(true);
-              void onSignOut().finally(() => setBusy(false));
-            }}
+            onPress={confirmSignOut}
             variant="secondary"
           />
         </>
@@ -58,4 +72,29 @@ export class AppErrorBoundary extends Component<Props, { failed: boolean }> {
     }
     return <Fallback onRetry={() => this.setState({ failed: false })} onSignOut={this.props.onSignOut} />;
   }
+}
+
+/**
+ * One screen's own failure (a trip, the plan, an invite): the tabs and every other screen stay
+ * usable, and Close leaves just this one. Exported as `ErrorBoundary` by those routes.
+ */
+export function ScreenError({ error, retry }: ErrorBoundaryProps) {
+  const { t } = useI18n();
+  useEffect(() => logEvent('app.screen-failed', error), [error]);
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false, statusBarStyle: 'dark' }} />
+      <MessageScreen
+        actions={
+          <>
+            <Button label={t('common.retry')} onPress={() => void retry()} />
+            <Button label={t('common.close')} onPress={closeScreen} variant="secondary" />
+          </>
+        }
+        icon={{ ios: 'exclamationmark.triangle', md: 'warning' }}
+        text={t('error.screenBody')}
+        title={t('error.title')}
+      />
+    </>
+  );
 }

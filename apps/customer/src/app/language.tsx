@@ -13,7 +13,10 @@ import { haptic } from '@/lib/haptic';
 /** Long enough to see the tick land on the new language (its pop takes MOTION.fast) before the screen closes. */
 const CLOSE_AFTER_MS = 320;
 
-/** Every language Citius is building for; the ones not translated yet are listed but not offered. */
+const READY = LANGUAGES.filter((option) => option.status === 'complete');
+const PLANNED = LANGUAGES.filter((option) => option.status !== 'complete');
+
+/** The translated languages to choose from, then one line naming the ones still being translated. */
 export default function LanguageScreen() {
   const theme = useAppTheme();
   const { language, setLanguage, t } = useI18n();
@@ -23,15 +26,13 @@ export default function LanguageScreen() {
     <Screen contentInsetAdjustmentBehavior="automatic" tabBar={false}>
       <Text tone="muted">{t('language.body')}</Text>
       <ListCard>
-        {LANGUAGES.map((option, index) => {
+        {READY.map((option, index) => {
           const selected = option.code === language.code;
-          const ready = option.status === 'complete';
           return (
             <PressableScale
-              accessibilityLabel={`${option.nativeName}, ${option.englishName}${ready ? '' : `, ${t('language.planned')}`}`}
+              accessibilityLabel={`${option.nativeName}, ${option.englishName}`}
               accessibilityRole="radio"
-              accessibilityState={{ checked: selected, disabled: !ready }}
-              disabled={!ready}
+              accessibilityState={{ checked: selected }}
               key={option.code}
               onPress={() => {
                 if (selected) {
@@ -46,7 +47,7 @@ export default function LanguageScreen() {
                 style={{
                   alignItems: 'center',
                   borderBottomColor: theme.color.rule,
-                  borderBottomWidth: index === LANGUAGES.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                  borderBottomWidth: index === READY.length - 1 ? 0 : StyleSheet.hairlineWidth,
                   flexDirection: 'row',
                   gap: space.md,
                   minHeight: 60,
@@ -56,7 +57,7 @@ export default function LanguageScreen() {
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text variant="rowTitle">{option.nativeName}</Text>
                   <Text tone="muted" variant="label">
-                    {ready ? option.englishName : `${option.englishName} · ${t('language.planned')}`}
+                    {option.englishName}
                   </Text>
                 </View>
                 {selected && option.code !== opened ? (
@@ -70,6 +71,11 @@ export default function LanguageScreen() {
           );
         })}
       </ListCard>
+      {PLANNED.length > 0 ? (
+        <Text tone="muted" variant="secondary">
+          {t('language.comingSoon', { names: PLANNED.map((option) => option.nativeName).join(', ') })}
+        </Text>
+      ) : null}
     </Screen>
   );
 }

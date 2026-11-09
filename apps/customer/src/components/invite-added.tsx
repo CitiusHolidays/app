@@ -52,22 +52,23 @@ export function AddedMoment({ destination, tripId }: { destination: string | nul
           <Text accessibilityRole="header" style={{ textAlign: 'center' }} variant="display">
             {t('invite.addedTitle')}
           </Text>
-          {destination ? (
-            <Text style={{ textAlign: 'center' }} tone="muted">
-              {t('invite.addedBody', { destination })}
-            </Text>
-          ) : null}
+          <Text style={{ textAlign: 'center' }} tone="muted">
+            {tripId ? (destination ? t('invite.addedBody', { destination }) : '') : t('invite.addedHidden')}
+          </Text>
         </Rise>
-        <Surface style={{ alignSelf: 'stretch', gap: space.sm }}>
-          {items.map((item, index) => (
-            <Rise delay={120} index={index + 2} key={item} style={{ alignItems: 'center', flexDirection: 'row', gap: space.md, minHeight: 32 }}>
-              <Icon color={theme.color.success} ios="checkmark.circle.fill" md="check_circle" size={18} />
-              <Text>{t(item)}</Text>
-            </Rise>
-          ))}
-        </Surface>
+        {/* What the traveller now has, only when the trip is open to them in the app yet. */}
+        {tripId ? (
+          <Surface style={{ alignSelf: 'stretch', gap: space.sm }}>
+            {items.map((item, index) => (
+              <Rise delay={120} index={index + 2} key={item} style={{ alignItems: 'center', flexDirection: 'row', gap: space.md, minHeight: 32 }}>
+                <Icon color={theme.color.success} ios="checkmark.circle.fill" md="check_circle" size={18} />
+                <Text>{t(item)}</Text>
+              </Rise>
+            ))}
+          </Surface>
+        ) : null}
         <Rise delay={120} index={7} style={{ alignSelf: 'stretch' }}>
-          <Button label={t('invite.addedOpen')} onPress={open} />
+          <Button label={t(tripId ? 'invite.addedOpen' : 'common.close')} onPress={open} />
         </Rise>
       </View>
     </View>

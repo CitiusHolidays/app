@@ -26,6 +26,8 @@ import { haptic } from '@/lib/haptic';
 import { logEvent } from '@/lib/safe-log';
 import { runThen } from '@/lib/run-then';
 
+export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
+
 /** The website's deletion API may not be deployed yet; a missing function means "not available". */
 function isMissingFunction(error: unknown) {
   return error instanceof Error && /Could not find public function/i.test(error.message);
@@ -136,7 +138,7 @@ function ConfirmItsYou({ busy, email, linkSent, onSendLink }: Pick<StepProps, 'b
 export default function DeleteAccount() {
   const { t } = useI18n();
   const convex = useConvex();
-  const { forget, gate } = useCustomerSession();
+  const { forget, offline } = useCustomerSession();
   const { isAuthenticated } = useConvexAuth();
   const profile = useQuery(customerApi.getMyProfile.ref, {});
   const deleteAccount = useMutation(customerApi.deleteMyAccount.ref);
@@ -238,7 +240,7 @@ export default function DeleteAccount() {
     }
   };
 
-  const step = deletionStep(check, { offline: gate.kind === 'signedIn' && gate.offline, profileLoaded: profile !== undefined });
+  const step = deletionStep(check, { offline, profileLoaded: profile !== undefined });
   const email = profile?.email ?? '';
   const retry = () => {
     setCheck({ kind: 'loading' });

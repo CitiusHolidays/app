@@ -5,11 +5,16 @@ import { StyleSheet, View } from 'react-native';
 
 import { PageTitle, Screen } from '@/components/kit';
 import { PlanSkeleton } from '@/components/skeletons';
+import { NotSaved, TripUnavailable } from '@/components/trip-states';
+import { Freshness } from '@/components/trip-cards';
+import { useCustomerSession } from '@/features/session/session';
 import { tripDates } from '@/features/trips/labels';
 import { dayNumber } from '@/features/trips/model';
 import { useTrip } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
 import { useNow } from '@/lib/use-now';
+
+export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
 
 /**
  * The whole programme as a timeline: one stop per day, today marked in orange, past days muted.
@@ -20,12 +25,14 @@ export default function PlanScreen() {
   const i18n = useI18n();
   const { id } = useLocalSearchParams<{ id: string }>();
   const trip = useTrip(id);
+  const { offline } = useCustomerSession();
   const now = useNow();
   const detail = trip.data;
+  if (detail === null) return <TripUnavailable />;
   if (!detail) {
     return (
       <Screen contentInsetAdjustmentBehavior="automatic" tabBar={false}>
-        <PlanSkeleton label={i18n.t('common.loading')} />
+        {trip.status === 'unavailable' ? <NotSaved /> : <PlanSkeleton label={i18n.t('common.loading')} />}
       </Screen>
     );
   }
@@ -33,6 +40,7 @@ export default function PlanScreen() {
   return (
     <Screen contentInsetAdjustmentBehavior="automatic" tabBar={false}>
       <PageTitle kicker={detail.trip.groupName} meta={tripDates(i18n, detail.trip)} title={detail.plan?.title || detail.trip.destination} />
+      <Freshness offline={offline} savedAt={trip.status === 'live' ? null : trip.savedAt} />
       {!detail.plan?.content.trim() ? <Text tone="muted">{i18n.t('trip.planEmpty')}</Text> : null}
       {summary ? <Text>{summary}</Text> : null}
       <View>

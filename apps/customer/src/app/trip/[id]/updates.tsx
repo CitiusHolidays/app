@@ -1,13 +1,18 @@
 import { space, Text, useAppTheme } from '@citius/ui';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnnouncementRows } from '@/components/skeletons';
 import { AnnouncementItem } from '@/components/trip-sections';
+import { NotSaved, TripUnavailable } from '@/components/trip-states';
+import { Freshness } from '@/components/trip-cards';
+import { useCustomerSession } from '@/features/session/session';
 import { useTrip } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
 import { useNow } from '@/lib/use-now';
+
+export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
 
 /** Every message the tour managers sent to this traveller (or their children), newest first. */
 export default function TripUpdates() {
@@ -16,8 +21,10 @@ export default function TripUpdates() {
   const { t } = useI18n();
   const { id } = useLocalSearchParams<{ id: string }>();
   const trip = useTrip(id);
+  const { offline } = useCustomerSession();
   const now = useNow();
   const items = trip.data?.announcements ?? [];
+  if (trip.data === null) return <TripUnavailable />;
   const card = {
     backgroundColor: theme.color.card,
     borderColor: theme.color.border,
@@ -27,11 +34,20 @@ export default function TripUpdates() {
   };
   return (
     <FlatList
+      ListHeaderComponent={
+        <View style={{ paddingBottom: space.md }}>
+          {/* Opened from the Updates tab, which lists several trips: the title says which one. */}
+          <Stack.Screen options={trip.data ? { title: trip.data.trip.destination } : {}} />
+          {trip.status === 'unavailable' ? null : <Freshness offline={offline} savedAt={trip.status === 'live' ? null : trip.savedAt} />}
+        </View>
+      }
       ListEmptyComponent={
-        trip.loading ? (
+        trip.status === 'loading' ? (
           <View style={[card, { borderRadius: theme.radius.surface, borderWidth: StyleSheet.hairlineWidth }]}>
             <AnnouncementRows count={3} label={t('common.loading')} />
           </View>
+        ) : trip.status === 'unavailable' ? (
+          <NotSaved />
         ) : (
           <Text tone="muted">{t('trip.noUpdates')}</Text>
         )

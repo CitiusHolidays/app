@@ -99,25 +99,35 @@ describe('invite links', () => {
 });
 
 describe('journeys list rows', () => {
-  it('leads with the trip under way, then upcoming and past under their headings', () => {
+  const shape = (rows: ReturnType<typeof journeyRows>) =>
+    rows.map((row) => (row.kind === 'section' ? `# ${row.section}` : `${row.kind} ${row.trip.tripId}`));
+
+  it('leads with the trip under way under "happening now", then upcoming and past', () => {
     const rows = journeyRows([
       trip({ phase: 'past', travelStartDate: '2026-01-01', tripId: 'old' }),
       trip({ travelStartDate: '2026-12-10', tripId: 'later' }),
       trip({ phase: 'ongoing', travelStartDate: '2026-11-05', tripId: 'now' }),
     ]);
-    expect(rows.map((row) => (row.kind === 'section' ? `# ${row.section}` : `${row.kind} ${row.trip.tripId}`))).toEqual([
-      'lead now',
-      '# upcoming',
-      'card later',
-      '# past',
-      'card old',
+    expect(shape(rows)).toEqual(['# now', 'lead now', '# upcoming', 'card later', '# past', 'card old']);
+  });
+
+  it('keeps a second trip under way with the first, not under "upcoming"', () => {
+    const rows = journeyRows([
+      trip({ travelStartDate: '2026-12-10', tripId: 'later' }),
+      trip({ phase: 'ongoing', travelStartDate: '2026-11-05', tripId: 'a' }),
+      trip({ phase: 'ongoing', travelStartDate: '2026-11-07', tripId: 'b' }),
     ]);
+    expect(shape(rows)).toEqual(['# now', 'lead a', 'card b', '# upcoming', 'card later']);
+  });
+
+  it('calls the lead "your next trip" when nothing is under way', () => {
+    const rows = journeyRows([trip({ tripId: 'a' }), trip({ travelStartDate: '2027-01-01', tripId: 'b' })]);
+    expect(rows.map((row) => row.key)).toEqual(['section:next', 'lead:a', 'section:upcoming', 'card:b']);
   });
 
   it('gives every row a stable unique key', () => {
-    const rows = journeyRows([trip({ tripId: 'a' }), trip({ travelStartDate: '2027-01-01', tripId: 'b' })]);
+    const rows = journeyRows([trip({ phase: 'ongoing', tripId: 'a' }), trip({ phase: 'ongoing', tripId: 'b' }), trip({ phase: 'past', tripId: 'c' })]);
     expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
-    expect(rows.map((row) => row.key)).toEqual(['lead:a', 'section:upcoming', 'card:b']);
   });
 
   it('has no rows and no headings without trips', () => {

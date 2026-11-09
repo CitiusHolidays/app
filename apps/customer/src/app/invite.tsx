@@ -1,4 +1,4 @@
-import { customerApi, PARENTAL_CONSENT_TEXT_VERSION } from '@citius/backend/customer';
+import { customerApi, type InvitePreview, PARENTAL_CONSENT_TEXT_VERSION } from '@citius/backend/customer';
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { useMutation, useQuery } from 'convex/react';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
@@ -11,7 +11,8 @@ import { DestinationCover } from '@/components/destination-cover';
 import { DESTINATION_TYPE } from '@/components/destination-type';
 import { AddedMoment } from '@/components/invite-added';
 import { MOTION } from '@/components/motion';
-import { Icon, MessageScreen, TopTint } from '@/components/kit';
+import { Icon, MessageScreen, QuietState, TopTint } from '@/components/kit';
+import { RoundBackButton } from '@/components/round-button';
 import { InviteSkeleton } from '@/components/skeletons';
 import { PENDING_INVITE_KEY, useCustomerSession } from '@/features/session/session';
 import { inviteErrorMessage } from '@/features/trips/errors';
@@ -23,6 +24,8 @@ import { useStoredValue } from '@/lib/app-store';
 import { haptic } from '@/lib/haptic';
 import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
+
+export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
 
 function Checkbox({ checked, label, onToggle }: { checked: boolean; label: string; onToggle: () => void }) {
   const theme = useAppTheme();
@@ -73,16 +76,108 @@ function Refusal({ body, title }: { body: MessageKey; title: MessageKey }) {
   );
 }
 
+/** Where the page starts: under the round Close button (8pt down, 48pt tall) with room to breathe. */
+const BELOW_CLOSE = space.sm + 48 + space.lg;
+
+/** Leaves the invite for later from any state: back, or Journeys after a cold start from the link. */
+function CloseCorner() {
+  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ left: theme.frame, position: 'absolute', top: insets.top + space.sm, zIndex: 1 }}>
+      <RoundBackButton close onPaper />
+    </View>
+  );
+}
+
+type ValidInvite = Extract<InvitePreview, { status: 'valid' }>;
+
+/** The trip's cover photo with its destination and dates, or a note that the trip opens later. */
+function InviteCover({ trip }: { trip: ValidInvite['trip'] }) {
+  const theme = useAppTheme();
+  const { dayRange, t } = useI18n();
+  return (
+    <View style={{ backgroundColor: theme.color.dark, borderRadius: theme.radius.hero, height: 300, overflow: 'hidden' }}>
+      <DestinationCover photo={trip?.cover ?? null} priority="high" />
+      <View style={{ flex: 1, gap: space.sm, justifyContent: 'flex-end', padding: space.xl }}>
+        {trip ? (
+          <>
+            <Text style={DESTINATION_TYPE.invite} tone="onDark" variant="display">
+              {trip.destination}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.85)' }}>{dayRange(trip.travelStartDate, trip.travelEndDate) ?? ''}</Text>
+          </>
+        ) : (
+          <Text tone="onDark">{t('invite.tripHidden')}</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** One consent tick per child the guardian is accepting for. */
+function GuardianConsent({
+  consents,
+  minors,
+  onToggle,
+}: {
+  consents: ReadonlySet<string>;
+  minors: ValidInvite['minors'];
+  onToggle: (travellerId: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Surface style={{ gap: space.sm }}>
+      <Text accessibilityRole="header" variant="section">
+        {t('invite.minorsTitle')}
+      </Text>
+      <Text tone="muted" variant="secondary">
+        {t('invite.minorsBody')}
+      </Text>
+      {minors.map((minor) => (
+        <Checkbox
+          checked={consents.has(minor.travellerId)}
+          key={minor.travellerId}
+          label={t('invite.consentLabel', { name: minor.firstName })}
+          onToggle={() => {
+            haptic('selection');
+            onToggle(minor.travellerId);
+          }}
+        />
+      ))}
+      <Text tone="muted" variant="label">
+        {t('invite.consentNote')}
+      </Text>
+    </Surface>
+  );
+}
+
+/**
+ * Which account the trip goes to, before the traveller commits (a link forwarded by someone else
+ * must not attach their trip to the wrong account). `email` is undefined while the profile loads.
+ */
+function AcceptingAs({ email, offline }: { email: string | null | undefined; offline: boolean }) {
+  const { t } = useI18n();
+  let text = t('invite.noEmail');
+  if (email) text = t('invite.acceptingAs', { email });
+  else if (email === undefined) text = t(offline ? 'invite.offline' : 'common.loading');
+  return (
+    <Text accessibilityLiveRegion="polite" tone="muted">
+      {text}
+    </Text>
+  );
+}
+
 /** Signed in: what the invite is for, the guardian's consent ticks, and Accept. */
 function InviteForAccount({ token }: { token: string }) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { dayRange, t } = useI18n();
+  const { t } = useI18n();
   const referenceNow = useReferenceNow();
   const preview = useQuery(customerApi.previewInvite.ref, { referenceNow, token });
   const claim = useMutation(customerApi.claimInvite.ref);
   const profile = useQuery(customerApi.getMyProfile.ref, {});
-  const { signOut } = useCustomerSession();
+  const { offline, signOut } = useCustomerSession();
   const [, setPending] = useStoredValue<string | null>(PENDING_INVITE_KEY, null);
   const [consents, setConsents] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -100,9 +195,10 @@ function InviteForAccount({ token }: { token: string }) {
   }
   if (preview === undefined) {
     return (
-      <View style={{ backgroundColor: theme.color.ground, flex: 1, padding: theme.frame, paddingTop: insets.top + space.xxl }}>
+      <View style={{ backgroundColor: theme.color.ground, flex: 1, padding: theme.frame, paddingTop: insets.top + BELOW_CLOSE }}>
         <TopTint />
-        <InviteSkeleton label={t('common.loading')} />
+        {offline ? <QuietState text={t('invite.offline')} /> : <InviteSkeleton label={t('common.loading')} />}
+        <CloseCorner />
       </View>
     );
   }
@@ -147,7 +243,7 @@ function InviteForAccount({ token }: { token: string }) {
     <View style={{ backgroundColor: theme.color.ground, flex: 1 }}>
       <TopTint />
       <ScrollView
-        contentContainerStyle={{ gap: space.xl, padding: theme.frame, paddingBottom: insets.bottom + space.xxl, paddingTop: insets.top + space.xxl }}
+        contentContainerStyle={{ gap: space.xl, padding: theme.frame, paddingBottom: insets.bottom + space.xxl, paddingTop: insets.top + BELOW_CLOSE }}
       >
         <View accessible accessibilityRole="header" style={{ gap: space.sm }}>
           <Text tone="muted" variant="mono">
@@ -155,52 +251,21 @@ function InviteForAccount({ token }: { token: string }) {
           </Text>
           <Text variant="display">{t('invite.greeting', { name: preview.firstName })}</Text>
         </View>
-        <View style={{ backgroundColor: theme.color.dark, borderRadius: theme.radius.hero, height: 300, overflow: 'hidden' }}>
-          <DestinationCover photo={preview.trip?.cover ?? null} priority="high" />
-          <View style={{ flex: 1, gap: space.sm, justifyContent: 'flex-end', padding: space.xl }}>
-            {preview.trip ? (
-              <>
-                <Text style={DESTINATION_TYPE.invite} tone="onDark" variant="display">
-                  {preview.trip.destination}
-                </Text>
-                <Text style={{ color: 'rgba(255,255,255,0.85)' }}>
-                  {dayRange(preview.trip.travelStartDate, preview.trip.travelEndDate) ?? ''}
-                </Text>
-              </>
-            ) : (
-              <Text tone="onDark">{t('invite.tripHidden')}</Text>
-            )}
-          </View>
-        </View>
+        <InviteCover trip={preview.trip} />
         <Text>{t('invite.body')}</Text>
         {preview.minors.length > 0 ? (
-          <Surface style={{ gap: space.sm }}>
-            <Text accessibilityRole="header" variant="section">
-              {t('invite.minorsTitle')}
-            </Text>
-            <Text tone="muted" variant="secondary">
-              {t('invite.minorsBody')}
-            </Text>
-            {preview.minors.map((minor) => (
-              <Checkbox
-                checked={consents.has(minor.travellerId)}
-                key={minor.travellerId}
-                label={t('invite.consentLabel', { name: minor.firstName })}
-                onToggle={() => {
-                  haptic('selection');
-                  setConsents((current) => {
-                    const next = new Set(current);
-                    if (next.has(minor.travellerId)) next.delete(minor.travellerId);
-                    else next.add(minor.travellerId);
-                    return next;
-                  });
-                }}
-              />
-            ))}
-            <Text tone="muted" variant="label">
-              {t('invite.consentNote')}
-            </Text>
-          </Surface>
+          <GuardianConsent
+            consents={consents}
+            minors={preview.minors}
+            onToggle={(travellerId) =>
+              setConsents((current) => {
+                const next = new Set(current);
+                if (next.has(travellerId)) next.delete(travellerId);
+                else next.add(travellerId);
+                return next;
+              })
+            }
+          />
         ) : null}
         {problem ? (
           <Banner tone="danger">
@@ -209,13 +274,7 @@ function InviteForAccount({ token }: { token: string }) {
             </Text>
           </Banner>
         ) : null}
-        {/* Which account the trip goes to, before the traveller commits (a link forwarded by
-            someone else must not attach their trip to the wrong account). */}
-        {profile?.email ? (
-          <Text accessibilityLiveRegion="polite" tone="muted">
-            {t('invite.acceptingAs', { email: profile.email })}
-          </Text>
-        ) : null}
+        <AcceptingAs email={profile === undefined ? undefined : (profile?.email ?? null)} offline={offline} />
         <Button busy={busy} disabled={!profile?.email} label={t('invite.accept')} onPress={() => void accept()} />
         <Button
           label={t('invite.notYou')}
@@ -226,6 +285,7 @@ function InviteForAccount({ token }: { token: string }) {
           variant="secondary"
         />
       </ScrollView>
+      <CloseCorner />
     </View>
   );
 }

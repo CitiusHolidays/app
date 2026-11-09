@@ -4,10 +4,13 @@ import { router } from 'expo-router';
 import { FlatList, Platform, RefreshControl, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ListCard, PageTitle, QuietState, SectionTitle } from '@/components/kit';
+import { ListCard, PageTitle, QuietState, SectionTitle, TAB_BAR_CLEARANCE } from '@/components/kit';
 import { AnnouncementRows, UpdatesSkeleton } from '@/components/skeletons';
 import { tripDates } from '@/features/trips/labels';
 import { AnnouncementItem } from '@/components/trip-sections';
+import { NotSaved } from '@/components/trip-states';
+import { Freshness } from '@/components/trip-cards';
+import { useCustomerSession } from '@/features/session/session';
 import { splitTrips } from '@/features/trips/model';
 import { useTrip, useTrips } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
@@ -39,8 +42,9 @@ function TripUpdates({ now, trip }: { now: number; trip: TripSummary }) {
         {tripDates(i18n, trip)}
       </Text>
       <ListCard>
-        {detail.loading ? <AnnouncementRows count={2} label={i18n.t('common.loading')} /> : null}
-        {!detail.loading && items.length === 0 ? (
+        {detail.status === 'loading' ? <AnnouncementRows count={2} label={i18n.t('common.loading')} /> : null}
+        {detail.status === 'unavailable' ? <NotSaved /> : null}
+        {(detail.status === 'live' || detail.status === 'saved') && items.length === 0 ? (
           <Text style={{ paddingVertical: space.md }} tone="muted">
             {i18n.t('trip.noUpdates')}
           </Text>
@@ -59,27 +63,31 @@ export default function Updates() {
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const trips = useTrips();
+  const { offline } = useCustomerSession();
   const now = useNow();
   const { active } = splitTrips(trips.data ?? []);
   const shown = active.slice(0, MAX_TRIPS);
-  const refresh = usePullRefresh(trips.live);
+  const refresh = usePullRefresh(trips.status === 'live');
   return (
     <FlatList
       ItemSeparatorComponent={() => <View style={{ height: space.xl }} />}
       ListEmptyComponent={
-        trips.loading ? (
+        trips.status === 'loading' ? (
           <UpdatesSkeleton label={t('common.loading')} />
+        ) : trips.status === 'unavailable' ? (
+          <NotSaved />
         ) : (
           <QuietState text={t('updates.empty')} />
         )
       }
       ListHeaderComponent={
-        <View style={{ paddingBottom: space.lg + 4 }}>
+        <View style={{ gap: space.lg + 4, paddingBottom: space.lg + 4 }}>
           <PageTitle title={t('updates.title')} />
+          {trips.status === 'unavailable' ? null : <Freshness offline={offline} savedAt={trips.status === 'live' ? null : trips.savedAt} />}
         </View>
       }
       contentContainerStyle={{
-        paddingBottom: insets.bottom + 96,
+        paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
         paddingHorizontal: theme.frame,
         paddingTop: Platform.OS === 'ios' ? space.sm : insets.top + space.md,
       }}

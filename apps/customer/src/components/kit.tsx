@@ -21,7 +21,7 @@ import { initials } from '@/lib/initials';
 import { useRevealEndOnKeyboard } from '@/lib/use-reveal-end-on-keyboard';
 
 /** Room under the content for the floating tab bar. */
-const TAB_BAR_CLEARANCE = 96;
+export const TAB_BAR_CLEARANCE = 96;
 
 /**
  * A scrolling screen on the stone ground. A titled screen opens with an optional mono kicker

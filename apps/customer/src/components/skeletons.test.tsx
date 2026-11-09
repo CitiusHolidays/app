@@ -21,9 +21,10 @@ jest.mock('@/i18n/i18n', () => {
     (en[key] as string).replace(/\{(\w+)\}/g, (_match: string, name: string) => vars[name] ?? '');
   return { useI18n: () => ({ language: { code: 'en', intl: 'en-IN' }, t }) };
 });
-jest.mock('@/features/session/session', () => ({ useCustomerSession: () => ({ gate: { kind: 'signedIn', offline: false } }) }));
+jest.mock('@/features/session/session', () => ({ useCustomerSession: () => ({ gate: { kind: 'signedIn', offline: false }, live: true, offline: false }) }));
+let mockTripsStatus = 'loading';
 jest.mock('@/features/trips/use-trips', () => ({
-  useTrips: () => ({ data: undefined, live: false, loading: true, savedAt: null }),
+  useTrips: () => ({ data: undefined, savedAt: null, status: mockTripsStatus }),
 }));
 jest.mock('@/features/trips/prefetch-cover', () => ({ prefetchCover: jest.fn() }));
 jest.mock('@/lib/use-now', () => ({ useNow: () => Date.UTC(2026, 10, 9) }));
@@ -43,6 +44,17 @@ function hiddenByAncestor(element: Rendered | null): boolean {
 }
 
 describe('loading placeholders', () => {
+  beforeEach(() => {
+    mockTripsStatus = 'loading';
+  });
+
+  it('says nothing is saved yet instead of shimmering forever when offline with no saved trips', async () => {
+    mockTripsStatus = 'unavailable';
+    await withTheme(<Journeys />);
+    expect(screen.queryByLabelText('Loading')).toBeNull();
+    expect(screen.getByText(/isn't saved on this phone yet/)).toBeOnTheScreen();
+  });
+
   it('Journeys shows its placeholder while trips load, not an empty screen', async () => {
     await withTheme(<Journeys />);
     const placeholder = screen.getByLabelText('Loading');
