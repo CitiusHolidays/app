@@ -49,6 +49,7 @@ export function TripCard({ lead, now, onPress, trip }: { lead?: boolean; now: nu
   const pill = timingText(i18n, timing);
   const people = [
     trip.travellerName ? i18n.t('trip.you', { name: trip.travellerName }) : null,
+    trip.groupCode ? i18n.t('trip.group', { code: trip.groupCode }) : null,
     trip.minorCount > 0 ? i18n.tn('journeys.withChildren', trip.minorCount) : null,
   ].filter(Boolean);
   const progress = timing.kind === 'progress' ? timing.day / timing.total : null;
