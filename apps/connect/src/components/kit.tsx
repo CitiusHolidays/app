@@ -34,8 +34,8 @@ const KEYBOARD_CLEARANCE = 152;
 /** Room under the content for the floating tab bar. */
 const TAB_BAR_CLEARANCE = 96;
 /**
- * The lift under a selected segment: black at 8%, 1pt down, a 6px blur. React Native draws the
- * blur at half its radius on iOS, so this is the earlier iOS-only shadow (radius 3), now on Android too.
+ * The lift under a selected segment, on iOS and Android: black at 8%, 1pt down, a 6px blur.
+ * React Native draws the blur at half its radius on iOS, so it shows there as a 3pt shadow.
  */
 const SELECTED_TAB_SHADOW = '0 1px 6px rgba(0, 0, 0, 0.08)';
 
@@ -90,7 +90,7 @@ export function Screen({
         onRefresh ? (
           <RefreshControl
             onRefresh={() => {
-              // A light tap as the pull commits, on the same frame the spinner starts (apple-design: causality).
+              // A light tap as the pull commits, on the same frame the spinner starts.
               if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
               onRefresh();
             }}

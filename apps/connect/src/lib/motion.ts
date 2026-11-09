@@ -2,7 +2,7 @@ import { Easing, FadeIn, FadeInDown, FadeInUp, FadeOut, LinearTransition } from 
 
 /**
  * Connect's motion vocabulary, shared so every screen moves the same way. Curves from Emil
- * Kowalski's UI set; durations stay under 300 ms (animate-expo, improve-animations AUDIT.md).
+ * Kowalski's UI set; durations stay under 300 ms.
  */
 
 /** Strong ease-out for entrances and state changes. */
@@ -20,10 +20,7 @@ export const NOTICE_OUT = FadeOut.duration(150);
  * before closing the gap over 220 ms, so the next row never slides over the fading one.
  */
 export const ROW_OUT = FadeOut.duration(120);
-/**
- * Kept on purpose, unchanged: it animates layout on every sibling row (the headcount roster after
- * each mark), so its cost is still to be measured on a low-end Android before it is cut or kept.
- */
+/** The rows below a leaving row closing the gap. It animates layout on every sibling row. */
 export const CLOSE_UP = LinearTransition.duration(220).delay(90).easing(EASE_OUT);
 
 /** Whether a count changing from `before` to `after` went up. "All" counts as the top. */

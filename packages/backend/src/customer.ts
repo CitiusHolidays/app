@@ -174,8 +174,8 @@ export type CustomerApi = typeof customerApi;
 
 /**
  * Functions built in website PRs that may land after this app. The contract test checks them only
- * once the website has them. Empty: account deletion landed with website PR 312. The app still
- * shows the support email if a deployment answers "Could not find public function".
+ * once the website has them. Empty when every function is on the website. The app still shows
+ * the support email if a deployment answers "Could not find public function".
  */
 export const CUSTOMER_FUNCTIONS_PENDING_ON_WEBSITE = new Set<keyof CustomerApi>([]);
 
