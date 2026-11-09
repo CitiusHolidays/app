@@ -1,5 +1,5 @@
 import type { FieldPassportRow, FieldPassports } from '@citius/backend';
-import { Banner, Button, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Banner, StatusPill, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -13,21 +13,26 @@ import {
   CallButton,
   Icon,
   ListCard,
-  Placeholder,
   QuietState,
   Row,
   Screen,
   Segmented,
 } from '@/components/kit';
+import { useAnnouncements } from '@/features/announcements/use-announcements';
 import { canOpenPassportInApp, passportWindowLine } from '@/features/passports/passport-window';
 import { useFieldPassports } from '@/features/passports/use-field-passports';
+import { PackMissing } from '@/features/trip-pack/pack-missing';
 import { callingPill, groupRoster, rosterMeta } from '@/features/trip-pack/roster';
 import { type ScheduleStep, tripSchedule } from '@/features/trip-pack/schedule';
 import { contactKey, type TripPack } from '@/features/trip-pack/trip-pack';
 import { resolveTripView, type TripView } from '@/features/trips/trip-view';
 import { useStaff } from '@/features/gate/session';
+import { TripSectionSkeleton } from '@/features/trips/skeletons';
+import { tripsPending } from '@/features/trips/trips-list';
 import { useTrips } from '@/features/trips/trips-context';
+import { TripsStatus } from '@/features/trips/trips-status';
 import { useNow } from '@/lib/use-now';
+import { useToast } from '@/lib/toast';
 import { useProgressiveCount } from '@/lib/use-progressive-count';
 import { formatDateRange, WEEKDAY_DATE } from '@/lib/dates';
 
@@ -275,77 +280,81 @@ function Contacts({ pack }: { pack: TripPack }) {
   );
 }
 
-/** The section on screen. Today opens this tab on a view ("Contacts"); follow the param when it changes. */
+/**
+ * The section on screen, read from the `view` param alone: Today opens this tab on a view
+ * ("Schedule"), and choosing a section writes the param, so a later link to any view still lands.
+ */
 function useTripSection() {
   const { view } = useLocalSearchParams<{ view?: string }>();
-  const [section, setSection] = useState<TripView>(() => resolveTripView(view));
-  const [seenView, setSeenView] = useState(view);
-  if (view !== seenView) {
-    setSeenView(view);
-    if (view) setSection(resolveTripView(view));
-  }
-  const choose = (next: TripView) => {
-    setSection(next);
-    // Keeps the param in step, so a later link to the same view still switches to it.
-    router.setParams({ view: next });
-  };
-  return { choose, section };
+  return { choose: (next: TripView) => router.setParams({ view: next }), section: resolveTripView(view) };
+}
+
+/** Earlier announcements and the composer, one tap from the trip. */
+function AnnouncementsEntry({ jobCardId }: { jobCardId: string }) {
+  const { log } = useAnnouncements(jobCardId);
+  const latest = log[0];
+  return (
+    <ListCard>
+      <Row
+        chevron
+        last
+        leading={<Icon ios="megaphone" md="campaign" size={20} />}
+        onPress={() => router.push('/announce')}
+        subtitle={latest ? `${log.length} shared · Latest: ${latest.body}` : 'None shared yet. Write one for the group.'}
+        subtitleLines={1}
+        title="Announcements"
+      />
+    </ListCard>
+  );
 }
 
 /** The chosen section of the saved pack, or why there is none to show yet. */
-function TripPackSection({
-  onRefresh,
-  refreshing,
-  section,
-}: {
-  onRefresh: () => void;
-  refreshing: boolean;
-  section: TripView;
-}) {
-  const { pack, packLoading, selected } = useTrips();
+function TripPackSection({ section }: { section: TripView }) {
+  const { packStatus, selected } = useTrips();
   const now = useNow();
   const { online, passports } = useFieldPassports(selected?.id ?? null);
-  if (!pack) {
-    return packLoading ? (
-      <Surface>
-        <Placeholder lines={6} />
-      </Surface>
-    ) : (
-      <Banner tone="attention">
-        <Text variant="bodyStrong">Not saved on this phone yet</Text>
-        <Text variant="secondary">Connect to the internet and refresh to save the trip pack for offline use.</Text>
-        <Button busy={refreshing} label="Save trip pack" onPress={onRefresh} />
-      </Banner>
-    );
+  switch (packStatus.kind) {
+    case 'loading':
+    case 'fetching':
+      return <TripSectionSkeleton section={section} />;
+    case 'none':
+    case 'failed':
+    case 'off':
+      return <PackMissing kind={packStatus.kind} />;
+    case 'ready':
+    case 'stale': {
+      const { pack } = packStatus;
+      // Fades in only when the pack arrives after the placeholder; switching sections swaps at once.
+      return (
+        <Arrive>
+          {section === 'roster' ? <Roster now={now} online={online} pack={pack} passports={passports} /> : null}
+          {section === 'schedule' ? <Schedule now={now} pack={pack} /> : null}
+          {section === 'contacts' ? <Contacts pack={pack} /> : null}
+        </Arrive>
+      );
+    }
   }
-  // Fades in only when the pack arrives after the placeholder; switching sections swaps at once.
-  return (
-    <Arrive>
-      {section === 'roster' ? <Roster now={now} online={online} pack={pack} passports={passports} /> : null}
-      {section === 'schedule' ? <Schedule now={now} pack={pack} /> : null}
-      {section === 'contacts' ? <Contacts pack={pack} /> : null}
-    </Arrive>
-  );
 }
 
 /** "Who is on this trip and how do I reach them?" The offline trip pack, read-only. */
 export default function TripPackScreen() {
-  const { pack, packProblem, refreshPack, selected } = useTrips();
+  const { canRefresh, pack, packProblem, refreshPack, selected, tripsStatus } = useTrips();
   const { choose, section } = useTripSection();
   const [refreshing, setRefreshing] = useState(false);
+  const toast = useToast();
 
   const refresh = () => {
+    if (!canRefresh) {
+      toast('Offline. Showing what is saved on this phone.', 'saved');
+      return;
+    }
     setRefreshing(true);
     void refreshPack().finally(() => setRefreshing(false));
   };
 
   if (!selected) {
     return (
-      <Screen title="Trip">
-        <Surface>
-          <QuietState text="Choose a trip on Today first." />
-        </Surface>
-      </Screen>
+      <Screen title="Trip">{tripsPending(tripsStatus) ? <TripSectionSkeleton section={section} /> : <TripsStatus />}</Screen>
     );
   }
 
@@ -357,8 +366,9 @@ export default function TripPackScreen() {
       refreshing={refreshing}
     >
       <FreshnessStamp problem={packProblem} savedAt={pack?.savedAt ?? null} />
+      {pack ? <AnnouncementsEntry jobCardId={selected.id} /> : null}
       <Segmented label="Trip pack section" onChange={choose} options={VIEWS} value={section} />
-      <TripPackSection onRefresh={refresh} refreshing={refreshing} section={section} />
+      <TripPackSection section={section} />
     </Screen>
   );
 }
