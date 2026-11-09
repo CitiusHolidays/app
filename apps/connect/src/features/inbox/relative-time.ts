@@ -1,9 +1,11 @@
+import { APP_LOCALE, CLOCK_OPTIONS } from '@/lib/dates';
+
 const MINUTE = 60_000;
 // Built once: an Intl formatter is slow to construct.
-const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
-const DAY_MONTH_YEAR = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const FULL_TIME = new Intl.DateTimeFormat('en-GB', { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short', weekday: 'short' });
+const WEEKDAY = new Intl.DateTimeFormat(APP_LOCALE, { weekday: 'short' });
+const DAY_MONTH = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short' });
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+const FULL_TIME = new Intl.DateTimeFormat(APP_LOCALE, { ...CLOCK_OPTIONS, day: 'numeric', month: 'short', weekday: 'short' });
 const HOUR = 60 * MINUTE;
 
 function dayStart(time: number) {
