@@ -1,6 +1,7 @@
 import type { ReceiptFile } from './outbox';
 // A type only (erased at build): the web preview never loads the native file module.
 import type { PickedImage } from './receipt-files';
+import { storageIdOf } from './upload-answer';
 
 /** Web preview: the picked blob URL is used as is; nothing is written to disk. */
 export async function keepReceipt(image: PickedImage, id: string): Promise<ReceiptFile> {
@@ -23,7 +24,7 @@ export async function uploadReceipt(url: string, receipt: ReceiptFile) {
   if (!response.ok) {
     throw new TypeError(`Upload failed with status ${response.status}`);
   }
-  const { storageId } = (await response.json()) as { storageId?: string };
+  const storageId = storageIdOf(await response.json());
   if (!storageId) {
     throw new TypeError('Upload returned no storage id');
   }

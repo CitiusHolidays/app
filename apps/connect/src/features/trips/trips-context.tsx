@@ -8,6 +8,7 @@ import { type PackAction, packOf, packPending, packReducer, type PackStatus, STA
 import { deletePack, loadPack, prunePacksNotIn, purgeExpiredPacks, savePack } from '@/features/trip-pack/pack-store';
 import { buildTripPack, type TripPack } from '@/features/trip-pack/trip-pack';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
+import { refusalData } from '@/lib/refusal';
 import { logEvent } from '@/lib/safe-log';
 import { prefetchCover } from '@/features/trips/prefetch-cover';
 import { useNow } from '@/lib/use-now';
@@ -82,7 +83,7 @@ const firstPage = (cursor: string | null): PaginationOpts => ({ cursor, numItems
 const CONNECT = 'connect' as const;
 
 /** The server refuses app reads for a trip whose app pilot was stopped. */
-const isPilotOff = (error: unknown) => (error as { data?: unknown })?.data === 'APP_PILOT_OFF';
+const isPilotOff = (error: unknown) => refusalData(error) === 'APP_PILOT_OFF';
 
 /** Every trip's pack status, each moved on by its own actions. */
 function packsReducer(packs: Readonly<Record<string, PackStatus>>, { action, jobCardId }: { action: PackAction; jobCardId: string }) {

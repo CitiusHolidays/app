@@ -2,6 +2,7 @@ import type { AnnouncementArgs, FieldPushResult, HeadcountStopArgs } from '@citi
 
 import { isServerRefusal } from '@/features/expenses/outbox';
 import type { FreshnessFormat } from '@/features/trip-pack/trip-pack';
+import { refusalText } from '@/lib/refusal';
 
 /**
  * Headcount stops and announcements waiting to reach the office. The phone is the record: each
@@ -49,17 +50,16 @@ interface SyncIdentity {
 export type SyncItem = FieldPush & SyncState & SyncIdentity;
 
 /** An item as earlier versions saved it, with the state spread over side-by-side flags. */
-interface LegacySyncItem extends SyncIdentity {
-  args: FieldPush['args'];
-  attempts: number;
-  ignoredTravellerIds: number;
-  kind: FieldPush['kind'];
-  newerOnServer: boolean;
-  nextAttemptAt: number;
-  problem?: string;
-  status: SyncStatus;
-  syncedAt?: number;
-}
+type LegacySyncItem = FieldPush &
+  SyncIdentity & {
+    attempts: number;
+    ignoredTravellerIds: number;
+    newerOnServer: boolean;
+    nextAttemptAt: number;
+    problem?: string;
+    status: SyncStatus;
+    syncedAt?: number;
+  };
 
 /** What the store may hold under `fieldOutboxKey`. */
 export type StoredSyncItem = SyncItem | LegacySyncItem;
@@ -151,7 +151,7 @@ const KNOWN_REFUSALS: [RegExp, string][] = [
 ];
 
 function refusalMessage(error: unknown) {
-  const text = typeof (error as { data?: unknown })?.data === 'string' ? (error as { data: string }).data : '';
+  const text = refusalText(error);
   return KNOWN_REFUSALS.find(([pattern]) => pattern.test(text))?.[1] ?? UNKNOWN_REFUSAL;
 }
 
@@ -244,7 +244,7 @@ export function readSyncItems(stored: readonly StoredSyncItem[] | null | undefin
 
 function fromLegacy(item: LegacySyncItem): SyncItem {
   const id: SyncIdentity = { key: item.key, staffId: item.staffId, updatedAt: item.updatedAt };
-  const push = pushOf({ args: item.args, kind: item.kind } as FieldPush);
+  const push = pushOf(item);
   const office = (at: number): OfficeCopy => ({ at, ignoredTravellerIds: item.ignoredTravellerIds, newerOnServer: item.newerOnServer });
   const landed = item.syncedAt === undefined ? undefined : office(item.syncedAt);
   if (item.status === 'synced') {

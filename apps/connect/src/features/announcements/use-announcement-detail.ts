@@ -31,8 +31,9 @@ export type AnnouncementDetail =
 async function findAnnouncementTrip(store: KeyValueStore, live: LiveStore, id: string) {
   for (const key of await store.keys(ANNOUNCEMENTS_PREFIX)) {
     const entry = live.snapshot(key);
-    const log = (entry ? entry.value : await store.getJSON<Announcement[]>(key)) as Announcement[] | null;
-    if (log?.some((item) => item.id === id)) {
+    const log: unknown = entry ? entry.value : await store.getJSON(key);
+    // Only the id is read, so only the id is checked: a saved log is never trusted further here.
+    if (Array.isArray(log) && log.some((item: unknown) => typeof item === 'object' && item !== null && 'id' in item && item.id === id)) {
       return key.slice(ANNOUNCEMENTS_PREFIX.length);
     }
   }

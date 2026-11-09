@@ -86,8 +86,8 @@ export function passportProblem(error: unknown) {
   if (!(typeof error === 'object' && error !== null && 'data' in error)) {
     return 'Could not load the passport. Check the connection and try again.';
   }
-  const data = (error as { data: unknown }).data;
-  if (typeof data === 'object' && data !== null && (data as { code?: unknown }).code === 'PORTAL_FILE_RATE_LIMITED') {
+  const { data } = error;
+  if (typeof data === 'object' && data !== null && 'code' in data && data.code === 'PORTAL_FILE_RATE_LIMITED') {
     return 'Too many files were opened in a short time. Wait a minute, then try again.';
   }
   const text = typeof data === 'string' ? data : '';

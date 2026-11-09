@@ -63,7 +63,7 @@ export function sessionRejectedByServer(state: AuthSessionState) {
   if (!state.error) {
     return true;
   }
-  const status = (state.error as { status?: unknown }).status;
+  const status = typeof state.error === 'object' && 'status' in state.error ? state.error.status : undefined;
   return status === 401 || status === 403;
 }
 

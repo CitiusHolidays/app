@@ -1,4 +1,4 @@
-import { anyApi, type DefaultFunctionArgs, type FunctionReference } from "convex/server";
+import { type DefaultFunctionArgs, type FunctionReference, makeFunctionReference } from "convex/server";
 
 export type FunctionKind = "query" | "mutation" | "action";
 
@@ -22,16 +22,12 @@ export function define<Kind extends FunctionKind, Args extends DefaultFunctionAr
   name: string,
   serverCheck: string
 ): FunctionSpec<Kind, Args, Result> {
-  // anyApi is a proxy: each property access extends the function path.
-  let node: Record<string, unknown> = anyApi as unknown as Record<string, unknown>;
-  for (const part of [...module.split("/"), name]) {
-    node = node[part] as Record<string, unknown>;
-  }
   return {
     kind,
     module,
     name,
-    ref: node as unknown as FunctionReference<Kind, "public", Args, Result>,
+    // The same reference `api.crm.staff.getMyPortalAccess` gives: Convex names it "module:name".
+    ref: makeFunctionReference<Kind, Args, Result>(`${module}:${name}`),
     serverCheck,
   };
 }

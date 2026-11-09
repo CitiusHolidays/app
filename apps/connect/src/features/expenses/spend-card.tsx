@@ -9,6 +9,8 @@ import { SERVER_PAGE_SIZE } from './server-expenses';
 import { SkeletonBlock, SkeletonLine } from './skeleton';
 import { categorySplit, formatAmount, type SpendEntry, totalsByCurrency } from './totals';
 
+/** Every category past the named colours shares this one. */
+const LAST_SEGMENT = { color: citius.muted, opacity: 0.5 };
 /** Category segments are data: the Citius data colours, then lighter repeats, always with a legend. */
 const SEGMENTS = [
   { color: citius.blue, opacity: 1 },
@@ -18,9 +20,9 @@ const SEGMENTS = [
   { color: citius.blue, opacity: 0.45 },
   { color: citius.orange, opacity: 0.45 },
   { color: citius.green, opacity: 0.45 },
-  { color: citius.muted, opacity: 0.5 },
+  LAST_SEGMENT,
 ];
-const segment = (index: number) => SEGMENTS[index] ?? SEGMENTS[SEGMENTS.length - 1]!;
+const segment = (index: number) => SEGMENTS[index] ?? LAST_SEGMENT;
 const SPLIT_BAR = { borderRadius: 4, flexDirection: 'row', gap: 2, height: 8, overflow: 'hidden' } as const;
 
 /**

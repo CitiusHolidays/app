@@ -257,11 +257,23 @@ export function themeForScript(theme: AppTheme, script: "latin" | "indic"): AppT
   if (script === "latin") {
     return theme;
   }
-  const type = Object.fromEntries(
-    Object.entries(theme.type).map(([role, value]) => [
-      role,
-      { ...value, letterSpacing: 0, lineHeight: Math.round(value.lineHeight * 1.25), uppercase: false },
-    ])
-  ) as unknown as TypeScale;
-  return { ...theme, name: `${theme.name}-indic`, type };
+  const indic = (role: TypeRole): TypeRole => ({ ...role, letterSpacing: 0, lineHeight: Math.round(role.lineHeight * 1.25), uppercase: false });
+  const { type } = theme;
+  return {
+    ...theme,
+    name: `${theme.name}-indic`,
+    type: {
+      answer: indic(type.answer),
+      body: indic(type.body),
+      bodyStrong: indic(type.bodyStrong),
+      display: indic(type.display),
+      label: indic(type.label),
+      meta: indic(type.meta),
+      mono: indic(type.mono),
+      rowTitle: indic(type.rowTitle),
+      secondary: indic(type.secondary),
+      section: indic(type.section),
+      title: indic(type.title),
+    },
+  };
 }
