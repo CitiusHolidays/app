@@ -1,6 +1,6 @@
 import { type AppTheme, face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
-import { SymbolView } from 'expo-symbols';
-import { type ComponentProps, type ComponentRef, type ReactNode, type Ref, useState } from 'react';
+import { type AndroidSymbol, type SFSymbol, SymbolView } from 'expo-symbols';
+import { type ComponentRef, type ReactNode, type Ref, useState } from 'react';
 import {
   type DimensionValue,
   Linking,
@@ -265,12 +265,13 @@ export function SectionTitle({ action, children }: { action?: { label: string; o
   );
 }
 
-type SymbolName = ComponentProps<typeof SymbolView>['name'];
-
-/** One icon's names: an SF Symbol for iOS, a Material Symbol for Android and web. */
+/**
+ * One icon's names: an SF Symbol for iOS, a Material Symbol for Android and web. Checked against
+ * expo-symbols' lists, so a misspelt name fails to compile.
+ */
 export interface IconNames {
-  ios: string;
-  md: string;
+  ios: SFSymbol;
+  md: AndroidSymbol;
 }
 
 /** One icon in two systems: an SF Symbol on iOS, a Material Symbol on Android and web. */
@@ -278,7 +279,7 @@ export function Icon({ color, ios, md, size = 20 }: IconNames & { color?: string
   const theme = useAppTheme();
   return (
     <SymbolView
-      name={{ android: md, ios, web: md } as SymbolName}
+      name={{ android: md, ios, web: md }}
       size={size}
       tintColor={color ?? theme.color.ink}
       weight="medium"

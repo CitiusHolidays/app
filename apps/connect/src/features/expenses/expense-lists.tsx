@@ -21,7 +21,7 @@ const CATEGORY_ICONS: Record<string, IconNames> = {
   Transport: { ios: 'car', md: 'directions_car' },
   Visa: { ios: 'person.text.rectangle', md: 'badge' },
 };
-const iconFor = (category: string) => CATEGORY_ICONS[category] ?? { ios: 'creditcard', md: 'receipt_long' };
+const iconFor = (category: string): IconNames => CATEGORY_ICONS[category] ?? { ios: 'creditcard', md: 'receipt_long' };
 
 const ROW_IN = FadeInUp.duration(240).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 8 }] });
 const PILL_IN = FadeIn.duration(150);
