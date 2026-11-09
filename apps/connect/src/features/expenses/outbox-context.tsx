@@ -1,12 +1,13 @@
 import { staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
+import { createContext, type ReactNode, useCallback, useContext } from 'react';
 
 import { canReachServer } from '@/features/gate/reach';
 import { useStaffSession } from '@/features/gate/session';
 import { collectPages } from '@/features/trips/trips';
 import { useAppStore, useStoredValue } from '@/lib/app-store';
 import { logEvent } from '@/lib/safe-log';
+import { useSerialRun } from '@/lib/serial-runner';
 import { useBackgroundRun } from '@/lib/use-background-run';
 
 import { drainOutbox, type OutboxDeps, type OutboxItem, outboxKey, readOutbox, retryNow } from './outbox';
@@ -41,18 +42,13 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
     (update: (previous: OutboxItem[]) => OutboxItem[]) => setSaved((previous: unknown) => update(readOutbox(previous))),
     [setSaved]
   );
-  const itemsRef = useRef(items);
-  const running = useRef(false);
+  /** The queue as it is now: the live store holds every change, including one made a moment ago. */
+  const queued = useCallback(() => readOutbox(live.snapshot(outboxKey)?.value), [live]);
 
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
-
-  const run = useCallback(async () => {
-    if (running.current || !canSend || !loaded || !staffId) {
+  const send = useCallback(async () => {
+    if (!canSend || !loaded || !staffId) {
       return;
     }
-    running.current = true;
     // Sign-out or a change of user wipes the store; this run must not write items back after it.
     const current = live.fence();
     const save = async (item: OutboxItem) => {
@@ -85,7 +81,7 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
     await drainOutbox({
       deps,
       isCurrent: current,
-      items: itemsRef.current,
+      items: queued(),
       onSettled: (result) => {
         if (result.status === 'done') {
           deleteReceipt(result.receipt);
@@ -95,26 +91,25 @@ export function OutboxProvider({ children }: { children: ReactNode }) {
         }
       },
       staffId,
-    }).catch((error: unknown) => logEvent('outbox.run-failed', error));
-    running.current = false;
-  }, [canSend, convex, live, loaded, setItems, staffId]);
+    });
+  }, [canSend, convex, live, loaded, queued, setItems, staffId]);
+  // One run at a time; an expense added or retried during a run gets one more run as soon as it ends.
+  const run = useSerialRun(send, (error) => logEvent('outbox.run-failed', error));
 
   useBackgroundRun(canSend, run);
 
   const value: OutboxValue = {
     discard: (id) => {
-      const item = itemsRef.current.find((candidate) => candidate.id === id);
+      const item = queued().find((candidate) => candidate.id === id);
       if (item) deleteReceipt(item.receipt);
       setItems((previous) => previous.filter((candidate) => candidate.id !== id));
     },
     enqueue: (item) => {
-      itemsRef.current = [...itemsRef.current, item];
       setItems((previous) => [...previous.filter((old) => !(old.status === 'done' && Date.now() - old.updatedAt > KEEP_DONE_MS)), item]);
       void Promise.resolve().then(run);
     },
     items,
     retry: (id) => {
-      itemsRef.current = itemsRef.current.map((item) => (item.id === id ? retryNow(item, Date.now()) : item));
       setItems((previous) => previous.map((item) => (item.id === id ? retryNow(item, Date.now()) : item)));
       void Promise.resolve().then(run);
     },

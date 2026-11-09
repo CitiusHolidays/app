@@ -1,6 +1,6 @@
 import type { CommandCenter, DestinationPhoto, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
 
-import { parseDay } from '@/lib/dates';
+import { APP_LOCALE, CLOCK_OPTIONS, parseDay } from '@/lib/dates';
 
 /**
  * Version 2 added `complete`; version 3 keeps only the tour manager's own group (the server
@@ -195,8 +195,8 @@ export function buildTripPack(source: TripPackSource): TripPack {
   };
 }
 
+/** Only for tests, which pin the time zone. The locale and clock are the app's own (lib/dates). */
 export interface FreshnessFormat {
-  locale?: string;
   timeZone?: string;
 }
 
@@ -208,18 +208,10 @@ function sameLocalDay(left: number, right: number) {
 
 /** "Saved, updated 07:12", with the date added when the save was on an earlier day. */
 export function freshnessLabel(savedAt: number, now: number, format: FreshnessFormat = {}) {
-  const time = new Intl.DateTimeFormat(format.locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: format.timeZone,
-  }).format(savedAt);
+  const time = new Intl.DateTimeFormat(APP_LOCALE, { ...CLOCK_OPTIONS, timeZone: format.timeZone }).format(savedAt);
   if (sameLocalDay(savedAt, now)) {
     return `Saved, updated ${time}`;
   }
-  const day = new Intl.DateTimeFormat(format.locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: format.timeZone,
-  }).format(savedAt);
+  const day = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', timeZone: format.timeZone }).format(savedAt);
   return `Saved, updated ${day}, ${time}`;
 }

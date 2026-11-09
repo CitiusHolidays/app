@@ -1,6 +1,7 @@
 import type { AnnouncementArgs, FieldPushResult, HeadcountStopArgs } from '@citius/backend';
 
 import type { FreshnessFormat } from '@/features/trip-pack/trip-pack';
+import { APP_LOCALE, CLOCK_OPTIONS } from '@/lib/dates';
 import { backoff, isServerRefusal, knownRefusal } from '@/lib/refusal';
 
 /**
@@ -165,26 +166,22 @@ export async function sendItem(item: SyncItem, deps: SyncDeps): Promise<PushOutc
 /**
  * One run over the queue: sends this staff member's due items one at a time and settles each.
  * Sequential on purpose: a stop's later state must not race its earlier one to the office, and a
- * sign-out (`isCurrent` turning false) must stop the run before its next request. `again` is set
- * by a run requested while this one was busy; the queue is read afresh before stopping.
+ * sign-out (`isCurrent` turning false) must stop the run before its next request. A change made
+ * during the run is picked up by the next run (see serialRunner).
  */
 export async function drainSyncQueue(run: {
-  again: { current: boolean };
   deps: SyncDeps;
   isCurrent: () => boolean;
   queued: () => SyncItem[];
   settle: (sent: SyncItem, outcome: PushOutcome) => Promise<void>;
   staffId: string;
 }) {
-  do {
-    run.again.current = false;
-    for (const item of dueSyncItems(run.queued(), run.deps.now(), run.staffId)) {
-      if (!run.isCurrent()) return;
-      const outcome = await sendItem(item, run.deps);
-      if (!run.isCurrent()) return;
-      await run.settle(item, outcome);
-    }
-  } while (run.again.current && run.isCurrent());
+  for (const item of dueSyncItems(run.queued(), run.deps.now(), run.staffId)) {
+    if (!run.isCurrent()) return;
+    const outcome = await sendItem(item, run.deps);
+    if (!run.isCurrent()) return;
+    await run.settle(item, outcome);
+  }
 }
 
 /**
@@ -255,10 +252,10 @@ function sameLocalDay(left: number, right: number, timeZone?: string) {
 
 /** "Synced to office 07:12", with the date added when that was on an earlier day. */
 export function syncedLabel(at: number, now: number, format: FreshnessFormat = {}) {
-  const time = new Intl.DateTimeFormat(format.locale, { hour: '2-digit', hourCycle: 'h23', minute: '2-digit', timeZone: format.timeZone }).format(at);
+  const time = new Intl.DateTimeFormat(APP_LOCALE, { ...CLOCK_OPTIONS, timeZone: format.timeZone }).format(at);
   if (sameLocalDay(at, now, format.timeZone)) {
     return `Synced to office ${time}`;
   }
-  const day = new Intl.DateTimeFormat(format.locale, { day: 'numeric', month: 'short', timeZone: format.timeZone }).format(at);
+  const day = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', timeZone: format.timeZone }).format(at);
   return `Synced to office ${day}, ${time}`;
 }

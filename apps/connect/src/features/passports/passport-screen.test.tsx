@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { getFunctionName } from 'convex/server';
 import { ConvexError } from 'convex/values';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -7,7 +7,7 @@ import PassportViewer from '@/app/passport/[id]';
 import { AppStoreProvider } from '@/lib/app-store';
 import type { KeyValueStore } from '@/lib/storage/kv';
 import { fakeFileSystem } from '@/test/fake-file-system';
-import { renderWithTheme } from '@/test/render';
+import { renderWithTheme, withTheme } from '@/test/render';
 
 let mockStore: KeyValueStore & { writes: string[] };
 const mockSession = { online: true };
@@ -73,17 +73,36 @@ function spiedStore() {
   };
 }
 
+const viewer = () => (
+  <AppStoreProvider fallback={null}>
+    <PassportViewer />
+  </AppStoreProvider>
+);
+
 async function renderViewer() {
-  return renderWithTheme(
-    <AppStoreProvider fallback={null}>
-      <PassportViewer />
-    </AppStoreProvider>
-  );
+  return renderWithTheme(viewer());
+}
+
+/** A read that answers only when the test says so. */
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
 }
 
 describe('passport viewer', () => {
   let appStateListener: ((state: AppStateStatus) => void) | null;
+  // React Native's jest mock leaves `currentState` a mock function; the app reads it as a string.
+  const setCurrentState = (state: AppStateStatus) => Object.defineProperty(AppState, 'currentState', { configurable: true, value: state });
+  /** The app moves to `state`, as the OS reports it: AppState's current state, then its listeners. */
+  const moveApp = async (state: AppStateStatus) => {
+    setCurrentState(state);
+    await act(async () => appStateListener?.(state));
+  };
   beforeEach(() => {
+    setCurrentState('active');
     mockStore = spiedStore();
     mockSession.online = true;
     mockAction.mockReset();
@@ -171,15 +190,66 @@ describe('passport viewer', () => {
   it('forgets the scan as soon as the app goes to the background', async () => {
     await renderViewer();
     expect(await screen.findByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
-    await act(async () => appStateListener?.('inactive'));
+    await moveApp('inactive');
     expect(screen.queryByLabelText('Passport scan of Asha Example')).not.toBeOnTheScreen();
     expect(screen.getByText(/hidden when you left the app/)).toBeOnTheScreen();
 
-    // Opening it again is a new, audited read.
+    // Opening it again, back in the app, is a new, audited read.
+    await moveApp('active');
+    expect(screen.getByText(/hidden when you left the app/)).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Show again' }));
     expect(await screen.findByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
     expect(mockAction).toHaveBeenCalledTimes(2);
     expect(mockStore.writes).toEqual([]);
+  });
+
+  it('lets a read in flight finish when the connection drops, and shows it once it is back', async () => {
+    const read = deferred<unknown>();
+    mockAction.mockReturnValue(read.promise);
+    const view = await renderViewer();
+    await waitFor(() => expect(mockAction).toHaveBeenCalledTimes(1));
+    mockSession.online = false;
+    await view.rerender(withTheme(viewer()));
+    expect(screen.getByText(/Passports open only online/)).toBeOnTheScreen();
+    await act(async () => read.resolve({ bytes: SCAN.buffer, fileName: 'passport.jpg', mimeType: 'image/jpeg' }));
+    mockSession.online = true;
+    await view.rerender(withTheme(viewer()));
+    expect(await screen.findByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
+    // One open, one read: coming back online does not read it again.
+    expect(mockAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the scan hidden when a read that was in flight answers after the app comes back', async () => {
+    const read = deferred<unknown>();
+    mockAction.mockReturnValue(read.promise);
+    await renderViewer();
+    await waitFor(() => expect(mockAction).toHaveBeenCalledTimes(1));
+    await moveApp('background');
+    await moveApp('active');
+    await act(async () => read.resolve({ bytes: SCAN.buffer, fileName: 'passport.jpg', mimeType: 'image/jpeg' }));
+    expect(screen.queryByLabelText('Passport scan of Asha Example')).not.toBeOnTheScreen();
+    expect(screen.getByText(/hidden when you left the app/)).toBeOnTheScreen();
+  });
+
+  it('writes no PDF file when the app leaves before the PDF arrives', async () => {
+    const read = deferred<unknown>();
+    mockAction.mockReturnValue(read.promise);
+    await renderViewer();
+    await waitFor(() => expect(mockAction).toHaveBeenCalledTimes(1));
+    await moveApp('background');
+    await act(async () => read.resolve({ bytes: PDF.buffer, fileName: 'passport.pdf', mimeType: 'application/pdf' }));
+    expect(fakeFileSystem.log.filter((entry) => !entry.startsWith('mkdir'))).toEqual([]);
+    expect(screen.getByText(/hidden when you left the app/)).toBeOnTheScreen();
+  });
+
+  it('starts the read once the connection comes back if the viewer opened offline', async () => {
+    mockSession.online = false;
+    const view = await renderViewer();
+    expect(await screen.findByText(/Passports open only online/)).toBeOnTheScreen();
+    mockSession.online = true;
+    await view.rerender(withTheme(viewer()));
+    expect(await screen.findByLabelText('Passport scan of Asha Example')).toBeOnTheScreen();
+    expect(mockAction).toHaveBeenCalledTimes(1);
   });
 
   it('is online only: offline it says so and asks the server for nothing', async () => {
@@ -240,12 +310,13 @@ describe('passport viewer', () => {
     mockAction.mockResolvedValue({ bytes: PDF.buffer, fileName: 'passport.pdf', mimeType: 'application/pdf' });
     await renderViewer();
     expect(await screen.findByTestId('native-pdf')).toBeOnTheScreen();
-    await act(async () => appStateListener?.('background'));
+    await moveApp('background');
     expect(fakeFileSystem.files.size).toBe(0);
     expect(screen.queryByTestId('native-pdf')).not.toBeOnTheScreen();
     expect(screen.getByText(/hidden when you left the app/)).toBeOnTheScreen();
 
     // Showing it again is a new, audited read into a new file.
+    await moveApp('active');
     await fireEvent.press(screen.getByRole('button', { name: 'Show again' }));
     expect(await screen.findByTestId('native-pdf')).toBeOnTheScreen();
     expect(mockAction).toHaveBeenCalledTimes(2);

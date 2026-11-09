@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { Icon, ListCard, Row, SectionTitle, TextField } from '@/components/kit';
+import { APP_LOCALE, CLOCK_OPTIONS } from '@/lib/dates';
 
 import type { EarlierStop } from './headcount';
 
 /** "07:12", built once: an Intl formatter is slow to construct. Same clock as "Synced to office". */
-const STARTED_AT = new Intl.DateTimeFormat(undefined, { hour: '2-digit', hourCycle: 'h23', minute: '2-digit' });
+const STARTED_AT = new Intl.DateTimeFormat(APP_LOCALE, CLOCK_OPTIONS);
 
 /**
  * Names a fresh stop and starts counting again from nobody, after a confirm that says what

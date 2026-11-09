@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert, type AlertButton, AppState, Platform, Share } from 'react-native';
 
 import Announce from '@/app/announce';
+import { type FieldPush, type SyncItem, syncKey } from '@/features/field-sync/queue';
 import { batches, commandCenter, tourManagers, travellers } from '@/features/trip-pack/fixtures';
 import { buildTripPack } from '@/features/trip-pack/trip-pack';
 import { AppStoreProvider } from '@/lib/app-store';
@@ -15,7 +16,8 @@ const mockReplace = jest.fn();
 jest.mock('@/lib/storage/device-store', () => ({
   openDeviceStore: async () => jest.requireActual('@/lib/storage/memory-store').createMemoryStore(),
 }));
-jest.mock('@/features/field-sync/field-sync-context', () => ({ useFieldSync: () => ({ enqueue: mockEnqueue }) }));
+const mockSyncItems: SyncItem[] = [];
+jest.mock('@/features/field-sync/field-sync-context', () => ({ useFieldSync: () => ({ enqueue: mockEnqueue, items: mockSyncItems }) }));
 jest.mock('@/features/trips/trips-context', () => ({ useTrips: () => ({ pack: mockPack, selected: mockJobCard }) }));
 jest.mock('@/features/gate/session', () => ({ useStaff: () => ({ name: 'Test Tour Manager', roles: ['Tour Manager'], staffId: 'staff_1' }) }));
 const mockAllowLeave = jest.fn();
@@ -65,6 +67,7 @@ describe('announcement composer', () => {
   let share: jest.SpyInstance;
   beforeEach(() => {
     mockEnqueue.mockReset();
+    mockSyncItems.length = 0;
     mockReplace.mockReset();
     mockAllowLeave.mockReset();
     mockGuard.prevent = false;
@@ -94,6 +97,18 @@ describe('announcement composer', () => {
     expect(alert).not.toHaveBeenCalled();
     expect(mockEnqueue).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith({ params: { id: expect.any(String), trip: mockPack.jobCardId }, pathname: '/announcement/[id]' });
+  });
+
+  it('marks an earlier announcement the office refused, so the one to open is easy to find', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    // The office refuses what the phone sends.
+    mockEnqueue.mockImplementation((push: FieldPush) => {
+      mockSyncItems.push({ ...push, key: syncKey(push), landed: undefined, problem: 'No', staffId: 'staff_1', status: 'needsAttention', updatedAt: 0 });
+    });
+    await writeAndShare();
+    expect(await screen.findByText('Earlier announcements')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Not synced to the office')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: /^Bus at 8:15\. .*Not synced to the office$/ })).toBeOnTheScreen();
   });
 
   it('logs nothing when the iOS share sheet is dismissed', async () => {
