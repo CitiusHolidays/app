@@ -210,7 +210,8 @@ describe('field sync queue', () => {
   });
 
   it('labels the sync time like the trip pack: time today, date and time on an earlier day', () => {
-    const format = { locale: 'en-GB', timeZone: 'UTC' };
+    // The test runner's own locale is en-US, like a US phone: the label must not follow it.
+    const format = { timeZone: 'UTC' };
     const at = Date.UTC(2026, 10, 6, 7, 12);
     expect(syncedLabel(at, Date.UTC(2026, 10, 6, 9, 0), format)).toBe('Synced to office 07:12');
     expect(syncedLabel(at, Date.UTC(2026, 10, 7, 9, 0), format)).toBe('Synced to office 6 Nov, 07:12');

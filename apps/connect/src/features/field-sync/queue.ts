@@ -1,6 +1,7 @@
 import type { AnnouncementArgs, FieldPushResult, HeadcountStopArgs } from '@citius/backend';
 
 import type { FreshnessFormat } from '@/features/trip-pack/trip-pack';
+import { APP_LOCALE, CLOCK_OPTIONS } from '@/lib/dates';
 import { backoff, isServerRefusal, knownRefusal } from '@/lib/refusal';
 
 /**
@@ -251,10 +252,10 @@ function sameLocalDay(left: number, right: number, timeZone?: string) {
 
 /** "Synced to office 07:12", with the date added when that was on an earlier day. */
 export function syncedLabel(at: number, now: number, format: FreshnessFormat = {}) {
-  const time = new Intl.DateTimeFormat(format.locale, { hour: '2-digit', hourCycle: 'h23', minute: '2-digit', timeZone: format.timeZone }).format(at);
+  const time = new Intl.DateTimeFormat(APP_LOCALE, { ...CLOCK_OPTIONS, timeZone: format.timeZone }).format(at);
   if (sameLocalDay(at, now, format.timeZone)) {
     return `Synced to office ${time}`;
   }
-  const day = new Intl.DateTimeFormat(format.locale, { day: 'numeric', month: 'short', timeZone: format.timeZone }).format(at);
+  const day = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', timeZone: format.timeZone }).format(at);
   return `Synced to office ${day}, ${time}`;
 }

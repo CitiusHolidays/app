@@ -132,7 +132,8 @@ describe('trip pack TTL', () => {
 });
 
 describe('freshnessLabel', () => {
-  const format = { locale: 'en-GB', timeZone: undefined };
+  // The test runner's own locale is en-US, like a US phone: the label must not follow it.
+  const format = { timeZone: undefined };
   it('shows the time alone when saved today', () => {
     expect(freshnessLabel(SAVED_AT, new Date(2026, 10, 6, 15, 0).getTime(), format)).toBe('Saved, updated 07:12');
   });
