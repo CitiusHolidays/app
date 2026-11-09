@@ -22,6 +22,7 @@ import { Icon, TextField } from '@/components/kit';
 import { OPEN_TIMEOUT_MS, type SignInState, signInRefusal } from '@/features/gate/sign-in-state';
 import { clients } from '@/lib/clients';
 import { haptic } from '@/lib/haptics';
+import { EASE_OUT } from '@/lib/motion';
 import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 
@@ -30,7 +31,6 @@ const artwork = require('@/assets/images/sign-in-udaipur.webp');
 const mark = require('@/assets/images/icon.png');
 
 const NIGHT = '#0c1124';
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 /**
  * One entrance as the screen opens, never again: the photo settles from slightly close, then the

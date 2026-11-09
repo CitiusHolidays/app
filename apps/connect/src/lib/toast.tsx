@@ -1,13 +1,13 @@
 import { space, Text, useAppTheme } from '@citius/ui';
 import { createContext, type ReactNode, use, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import Animated, { Easing, FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/kit';
+import { EASE_OUT } from '@/lib/motion';
 
 const SHOWN_MS = 2800;
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const ENTER = FadeInDown.duration(240).easing(EASE_OUT).withInitialValues({ transform: [{ translateY: 16 }] });
 const EXIT = FadeOutDown.duration(180).easing(EASE_OUT);
 /** Sits above the floating tab bar. */

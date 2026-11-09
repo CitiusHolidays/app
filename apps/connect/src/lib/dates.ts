@@ -8,7 +8,7 @@ export const APP_LOCALE = 'en-GB';
 export const CLOCK_OPTIONS = { hour: '2-digit', hourCycle: 'h23', minute: '2-digit' } as const satisfies Intl.DateTimeFormatOptions;
 
 /** "4 Nov". */
-const DAY_MONTH = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short' });
+export const DAY_MONTH = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short' });
 
 /** "Fri 6 Nov": the date line over a screen title, and a day on the trip schedule. */
 export const WEEKDAY_DATE = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', weekday: 'short' });
