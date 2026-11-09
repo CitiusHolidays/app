@@ -6,6 +6,7 @@ import { PixelRatio, type StyleProp, StyleSheet, View, type ViewStyle } from 're
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { coverUri, originalCoverUri, PREVIEW_WIDTH, photoWidth } from '@/features/trips/cover';
+import { useOnline } from '@/lib/network';
 
 const planes = require('@/assets/images/splash-icon.png');
 
@@ -23,6 +24,34 @@ function Poster() {
       <Image contentFit="contain" source={planes} style={{ height: 210, opacity: 0.85, position: 'absolute', right: -40, top: 6, width: 300 }} />
     </View>
   );
+}
+
+/**
+ * A sharp photo that would not load while the phone was online: which photo, and what to try
+ * next (the original file, then only the preview). It belongs to that photo, so a cover that
+ * moves on to another trip starts sharp again, and it is forgotten when the phone comes back
+ * online. A load that fails offline is the connection, not the photo, so it steps nothing down.
+ */
+type CoverFailure = { level: 'original' | 'none'; path: string };
+
+/** The sharp layer's address at this pixel width (null: preview only), and what to do when it fails. */
+function useSharpSource(photo: DestinationPhoto | null, width: number | null) {
+  const online = useOnline();
+  const [failure, setFailure] = useState<CoverFailure | null>(null);
+  const [wasOnline, setWasOnline] = useState(online);
+  if (online !== wasOnline) {
+    setWasOnline(online);
+    if (online) setFailure(null);
+  }
+  const failed = () => {
+    if (!online || !photo) return;
+    const path = photo.path;
+    setFailure((current) => ({ level: current?.path === path && current.level === 'original' ? 'none' : 'original', path }));
+  };
+  if (!photo || !width) return { failed, source: null };
+  const level = failure?.path === photo.path ? failure.level : 'optimized';
+  if (level === 'none') return { failed, source: null };
+  return { failed, source: level === 'optimized' ? coverUri(photo.path, width) : originalCoverUri(photo.path) };
 }
 
 /**
@@ -47,12 +76,8 @@ export function DestinationCover({
 }) {
   const reduced = useReducedMotion();
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
-  const [fallback, setFallback] = useState<'optimized' | 'original' | 'none'>('optimized');
   const width = layoutWidth ? photoWidth(Math.ceil(layoutWidth * PixelRatio.get())) : null;
-  let source: string | null = null;
-  if (photo && width) {
-    source = fallback === 'optimized' ? coverUri(photo.path, width) : fallback === 'original' ? originalCoverUri(photo.path) : null;
-  }
+  const { failed, source } = useSharpSource(photo, width);
   return (
     <View
       importantForAccessibility="no-hide-descendants"
@@ -79,7 +104,7 @@ export function DestinationCover({
         <Image
           cachePolicy="disk"
           contentFit="cover"
-          onError={() => setFallback((current) => (current === 'optimized' ? 'original' : 'none'))}
+          onError={failed}
           priority={priority}
           recyclingKey={source}
           source={{ uri: source }}

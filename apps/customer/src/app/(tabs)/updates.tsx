@@ -65,7 +65,7 @@ export default function Updates() {
   const trips = useTrips();
   const { offline } = useCustomerSession();
   const now = useNow();
-  const { active } = splitTrips(trips.data ?? []);
+  const { active } = splitTrips(trips.data ?? [], now);
   const shown = active.slice(0, MAX_TRIPS);
   const refresh = usePullRefresh(trips.status === 'live');
   return (

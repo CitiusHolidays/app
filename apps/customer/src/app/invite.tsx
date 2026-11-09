@@ -1,8 +1,8 @@
-import { customerApi, type InvitePreview, PARENTAL_CONSENT_TEXT_VERSION } from '@citius/backend/customer';
+import { customerApi, PARENTAL_CONSENT_TEXT_VERSION } from '@citius/backend/customer';
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { useMutation, useQuery } from 'convex/react';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,13 +16,13 @@ import { RoundBackButton } from '@/components/round-button';
 import { InviteSkeleton } from '@/components/skeletons';
 import { PENDING_INVITE_KEY, useCustomerSession } from '@/features/session/session';
 import { inviteErrorMessage } from '@/features/trips/errors';
+import { added, type AcceptState, inviteView, READY, type ValidInvite } from '@/features/trips/invite-flow';
 import { parseInviteToken } from '@/features/trips/model';
 import { useReferenceNow } from '@/features/trips/reference-now';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { useStoredValue } from '@/lib/app-store';
 import { haptic } from '@/lib/haptic';
-import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 
 export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
@@ -76,6 +76,12 @@ function Refusal({ body, title }: { body: MessageKey; title: MessageKey }) {
   );
 }
 
+const REFUSAL: Record<'expired' | 'used' | 'invalid', { body: MessageKey; title: MessageKey }> = {
+  expired: { body: 'invite.expiredBody', title: 'invite.expiredTitle' },
+  invalid: { body: 'invite.invalidBody', title: 'invite.invalidTitle' },
+  used: { body: 'invite.usedBody', title: 'invite.usedTitle' },
+};
+
 /** Where the page starts: under the round Close button (8pt down, 48pt tall) with room to breathe. */
 const BELOW_CLOSE = space.sm + 48 + space.lg;
 
@@ -89,8 +95,6 @@ function CloseCorner() {
     </View>
   );
 }
-
-type ValidInvite = Extract<InvitePreview, { status: 'valid' }>;
 
 /** The trip's cover photo with its destination and dates, or a note that the trip opens later. */
 function InviteCover({ trip }: { trip: ValidInvite['trip'] }) {
@@ -180,20 +184,18 @@ function InviteForAccount({ token }: { token: string }) {
   const { offline, signOut } = useCustomerSession();
   const [, setPending] = useStoredValue<string | null>(PENDING_INVITE_KEY, null);
   const [consents, setConsents] = useState<Set<string>>(() => new Set());
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<MessageKey | null>(null);
-  const attempt = useRef(0);
-  const [added, setAdded] = useState<{ destination: string | null; tripId: string | null } | null>(null);
+  const [accept, setAccept] = useState<AcceptState>(READY);
 
   useEffect(() => {
     // The invite is in hand now; a later sign-in should not reopen it.
     void setPending(null);
   }, [setPending]);
 
-  if (added) {
-    return <AddedMoment destination={added.destination} tripId={added.tripId} />;
+  const view = inviteView(preview, accept);
+  if (view.kind === 'added') {
+    return <AddedMoment destination={view.destination} tripId={view.tripId} />;
   }
-  if (preview === undefined) {
+  if (view.kind === 'loading') {
     return (
       <View style={{ backgroundColor: theme.color.ground, flex: 1, padding: theme.frame, paddingTop: insets.top + BELOW_CLOSE }}>
         <TopTint />
@@ -202,40 +204,29 @@ function InviteForAccount({ token }: { token: string }) {
       </View>
     );
   }
-  if (preview.status === 'claimed_by_you') {
-    return <Redirect href={{ params: { id: preview.tripId }, pathname: '/trip/[id]' }} />;
+  if (view.kind === 'yours') {
+    return <Redirect href={{ params: { id: view.tripId }, pathname: '/trip/[id]' }} />;
   }
-  if (preview.status !== 'valid') {
-    if (preview.status === 'expired') return <Refusal body="invite.expiredBody" title="invite.expiredTitle" />;
-    if (preview.status === 'used') return <Refusal body="invite.usedBody" title="invite.usedTitle" />;
-    return <Refusal body="invite.invalidBody" title="invite.invalidTitle" />;
+  if (view.kind === 'refused') {
+    const { body, title } = REFUSAL[view.reason];
+    return <Refusal body={body} title={title} />;
   }
+  const { invite, problem } = view;
 
-  const accept = async () => {
-    attempt.current += 1;
-    const mine = attempt.current;
-    setBusy(true);
-    setProblem(null);
+  const acceptInvite = async () => {
+    setAccept({ invite, kind: 'accepting' });
+    const minorTravellerIds = invite.minors.map((minor) => minor.travellerId).filter((id) => consents.has(id));
     try {
-      const minorTravellerIds = preview.minors.map((minor) => minor.travellerId).filter((id) => consents.has(id));
-      const result = await runThen(
-        () =>
-          claim({
-            ...(minorTravellerIds.length ? { consent: { minorTravellerIds, textVersion: PARENTAL_CONSENT_TEXT_VERSION } } : {}),
-            token,
-          }),
-        () => setBusy(false)
-      );
-      // The success haptic fires with the badge's first frame, below. A newer attempt owns the
-      // screen if one started meanwhile; this answer is then stale.
-      setAdded((current) =>
-        attempt.current === mine ? { destination: preview.trip?.destination ?? null, tripId: preview.trip ? result.tripId : null } : current
-      );
+      const result = await claim({
+        ...(minorTravellerIds.length ? { consent: { minorTravellerIds, textVersion: PARENTAL_CONSENT_TEXT_VERSION } } : {}),
+        token,
+      });
+      // The success haptic fires with the badge's first frame (AddedMoment).
+      setAccept(added(invite, result.tripId));
     } catch (error) {
       logEvent('invite.claim-failed', error);
-      if (attempt.current !== mine) return;
       haptic('error');
-      setProblem(inviteErrorMessage(error));
+      setAccept({ kind: 'ready', problem: inviteErrorMessage(error) });
     }
   };
 
@@ -249,14 +240,14 @@ function InviteForAccount({ token }: { token: string }) {
           <Text tone="muted" variant="mono">
             {t('invite.kicker')}
           </Text>
-          <Text variant="display">{t('invite.greeting', { name: preview.firstName })}</Text>
+          <Text variant="display">{t('invite.greeting', { name: invite.firstName })}</Text>
         </View>
-        <InviteCover trip={preview.trip} />
+        <InviteCover trip={invite.trip} />
         <Text>{t('invite.body')}</Text>
-        {preview.minors.length > 0 ? (
+        {invite.minors.length > 0 ? (
           <GuardianConsent
             consents={consents}
-            minors={preview.minors}
+            minors={invite.minors}
             onToggle={(travellerId) =>
               setConsents((current) => {
                 const next = new Set(current);
@@ -275,7 +266,7 @@ function InviteForAccount({ token }: { token: string }) {
           </Banner>
         ) : null}
         <AcceptingAs email={profile === undefined ? undefined : (profile?.email ?? null)} offline={offline} />
-        <Button busy={busy} disabled={!profile?.email} label={t('invite.accept')} onPress={() => void accept()} />
+        <Button busy={view.accepting} disabled={!profile?.email} label={t('invite.accept')} onPress={() => void acceptInvite()} />
         <Button
           label={t('invite.notYou')}
           onPress={() => {

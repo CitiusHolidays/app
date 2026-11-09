@@ -1,10 +1,9 @@
-import { customerApi, type ConsentState, PARENTAL_CONSENT_TEXT_VERSION, type TripDetail, type TripSummary } from '@citius/backend/customer';
-import { Banner, Button, citius, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
+import type { TripDetail, TripSummary } from '@citius/backend/customer';
+import { Banner, citius, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { tripSchedule } from '@citius/core';
-import { useMutation } from 'convex/react';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
+import { RefreshControl, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -18,6 +17,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FamilyCard } from '@/components/family-card';
 import { Icon, ListCard, Row, SectionTitle } from '@/components/kit';
 import { TripHeroSkeleton, TripSheetSkeleton } from '@/components/skeletons';
 import { DESTINATION_TYPE } from '@/components/destination-type';
@@ -29,15 +29,11 @@ import { RoundBackButton } from '@/components/round-button';
 import { useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL } from '@/features/support/contacts';
 import { datesAndNights, timingText } from '@/features/trips/labels';
-import { dayNumber, tripTiming } from '@/features/trips/model';
+import { dayNumber, tripStage } from '@/features/trips/model';
 import { useTrip, useTrips } from '@/features/trips/use-trips';
 import { useI18n } from '@/i18n/i18n';
-import type { MessageKey } from '@/i18n/locales/en';
 import { EASE_OUT } from '@/components/motion';
-import { haptic } from '@/lib/haptic';
 import { openUrl } from '@/lib/open-url';
-import { runThen } from '@/lib/run-then';
-import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 
@@ -84,7 +80,7 @@ function TripHeader({ chips, now, scrollY, trip }: { chips: string[]; now: numbe
     return { transform: [{ translateY: Math.min(y, heroHeight) * 0.45 }, { scale: arrive }] };
   });
   const i18n = useI18n();
-  const timing = tripTiming(trip, now);
+  const { phase, timing } = tripStage(trip, now);
   return (
     <View style={{ backgroundColor: theme.color.dark, minHeight: heroHeight }}>
       <Animated.View style={[StyleSheet.absoluteFill, photoStyle]}>
@@ -105,9 +101,9 @@ function TripHeader({ chips, now, scrollY, trip }: { chips: string[]; now: numbe
               paddingVertical: 6,
             }}
           >
-            <View style={{ backgroundColor: trip.phase === 'ongoing' ? citius.orange : theme.color.warning, borderRadius: 4, height: 8, width: 8 }} />
+            <View style={{ backgroundColor: phase === 'ongoing' ? citius.orange : theme.color.warning, borderRadius: 4, height: 8, width: 8 }} />
             <Text style={{ color: theme.color.warning }} variant="label">
-              {trip.phase === 'past' ? i18n.t('phase.past') : timingText(i18n, timing)}
+              {timingText(i18n, timing)}
             </Text>
           </View>
           <View accessible accessibilityRole="header" style={{ gap: space.xs }}>
@@ -197,7 +193,7 @@ function PlanPreview({ detail, now, tripId }: { detail: TripDetail; now: number;
   }
   const { steps } = tripSchedule(detail.plan.content, detail.trip.travelStartDate ?? '', detail.trip.travelEndDate ?? '', now);
   const firstOpen = Math.max(0, steps.findIndex((step) => step.state === 'current' || step.state === 'upcoming'));
-  const shown = (detail.trip.phase === 'past' ? steps : steps.slice(firstOpen)).slice(0, 3);
+  const shown = (tripStage(detail.trip, now).phase === 'past' ? steps : steps.slice(firstOpen)).slice(0, 3);
   return (
     <View style={{ gap: space.sm }}>
       <SectionTitle action={{ label: t('trip.planFull'), onPress: () => router.push({ params: { id: tripId }, pathname: '/trip/[id]/plan' }) }}>
@@ -235,78 +231,6 @@ function PlanPreview({ detail, now, tripId }: { detail: TripDetail; now: number;
         {t('trip.planUpdated', { date: date(detail.plan.updatedAt, true), version: detail.plan.version })}
       </Text>
     </View>
-  );
-}
-
-const CONSENT_LABEL: Record<ConsentState, MessageKey> = {
-  granted: 'trip.consentGiven',
-  none: 'trip.consentNone',
-  withdrawn: 'trip.consentWithdrawn',
-};
-
-/** The children the traveller guards, with their own consent and a way to give or withdraw it. */
-function FamilyCard({ detail, tripId }: { detail: TripDetail; tripId: string }) {
-  const { t } = useI18n();
-  const setConsent = useMutation(customerApi.setParentalConsent.ref);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [problem, setProblem] = useState(false);
-  const change = async (minor: TripDetail['minors'][number], action: 'granted' | 'withdrawn') => {
-    setBusy(minor.travellerId);
-    setProblem(false);
-    try {
-      await runThen(
-        () => setConsent({ action, minorTravellerId: minor.travellerId, textVersion: PARENTAL_CONSENT_TEXT_VERSION, tripId }),
-        () => setBusy(null)
-      );
-      haptic('success');
-    } catch (error) {
-      logEvent('trip.consent-failed', error);
-      setProblem(true);
-    }
-  };
-  // Consent is recorded against the wording the traveller saw, so both directions show it first:
-  // giving shows the same statement the invite asks them to tick.
-  const ask = (minor: TripDetail['minors'][number]) => {
-    const name = minor.fullName.split(' ')[0] ?? minor.fullName;
-    if (minor.consent === 'granted') {
-      Alert.alert(t('trip.withdrawTitle', { name }), t('trip.withdrawBody', { name }), [
-        { style: 'cancel', text: t('common.cancel') },
-        { onPress: () => void change(minor, 'withdrawn'), style: 'destructive', text: t('trip.withdrawConsent') },
-      ]);
-    } else {
-      Alert.alert(t('trip.giveTitle', { name }), t('invite.consentLabel', { name }), [
-        { style: 'cancel', text: t('common.cancel') },
-        { onPress: () => void change(minor, 'granted'), text: t('trip.giveConsent') },
-      ]);
-    }
-  };
-  return (
-    <Surface style={{ gap: space.md }}>
-      <Text accessibilityRole="header" variant="section">
-        {t('trip.family')}
-      </Text>
-      {detail.minors.map((minor) => (
-        <View key={minor.travellerId} style={{ gap: space.sm }}>
-          <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
-            <Text style={{ flex: 1 }} variant="bodyStrong">
-              {minor.fullName}
-            </Text>
-            <StatusPill kind={minor.consent === 'granted' ? 'good' : 'attention'} label={t(CONSENT_LABEL[minor.consent])} />
-          </View>
-          <Button
-            busy={busy === minor.travellerId}
-            label={minor.consent === 'granted' ? t('trip.withdrawConsent') : t('trip.giveConsent')}
-            onPress={() => ask(minor)}
-            variant="secondary"
-          />
-        </View>
-      ))}
-      {problem ? (
-        <Banner tone="danger">
-          <Text variant="secondary">{t('trip.consentFailed')}</Text>
-        </Banner>
-      ) : null}
-    </Surface>
   );
 }
 
@@ -377,7 +301,7 @@ function TripSheet({ detail, now, offline, savedAt, tripId }: { detail: TripDeta
           <Text variant="secondary">{t('trip.organizerNote')}</Text>
         </Banner>
       ) : null}
-      {detail.trip.phase === 'ongoing' ? <TodayCard detail={detail} now={now} /> : null}
+      {tripStage(detail.trip, now).phase === 'ongoing' ? <TodayCard detail={detail} now={now} /> : null}
 
       <View style={{ gap: space.sm }}>
         <SectionTitle>{t('trip.contacts')}</SectionTitle>
@@ -502,7 +426,7 @@ export default function TripScreen() {
           ) : trip.status === 'unavailable' ? (
             <NotSaved />
           ) : (
-            <TripSheetSkeleton label={t('common.loading')} ongoing={summary?.phase === 'ongoing'} />
+            <TripSheetSkeleton label={t('common.loading')} ongoing={summary ? tripStage(summary, now).phase === 'ongoing' : false} />
           )}
         </View>
       </Animated.ScrollView>
