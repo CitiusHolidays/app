@@ -1,9 +1,10 @@
 import { fireEvent, screen } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
+import * as Reanimated from 'react-native-reanimated';
 
 import { renderWithTheme } from '@/test/render';
 
-import { CallButton, Row } from './kit';
+import { CallButton, Row, TickStrip } from './kit';
 
 /** VoiceOver treats an `accessible` view as one element and skips everything inside it. */
 type Node = ReturnType<typeof screen.getByRole>;
@@ -38,5 +39,26 @@ describe('CallButton', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Call Asha Example' }));
     expect(openURL).toHaveBeenCalledWith('tel:+919000000000');
     openURL.mockRestore();
+  });
+});
+
+describe('TickStrip', () => {
+  const delays = () =>
+    screen
+      .getByLabelText('60 of 60 marked here')
+      .children.map((tick) => (StyleSheet.flatten((tick as Node).props.style) as { transitionDelay?: number }).transitionDelay ?? 0);
+
+  it('turns a full group green in one sweep of under 300 ms, however many ticks there are', async () => {
+    await renderWithTheme(<TickStrip marked={60} total={60} />);
+    // Was 12 ms a tick: 708 ms for 60 ticks.
+    expect(Math.max(...delays())).toBe(240);
+    expect(delays()[0]).toBe(0);
+  });
+
+  it('turns every tick at once under reduced motion', async () => {
+    const reduced = jest.spyOn(Reanimated, 'useReducedMotion').mockReturnValue(true);
+    await renderWithTheme(<TickStrip marked={60} total={60} />);
+    expect(new Set(delays())).toEqual(new Set([0]));
+    reduced.mockRestore();
   });
 });

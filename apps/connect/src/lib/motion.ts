@@ -20,6 +20,10 @@ export const NOTICE_OUT = FadeOut.duration(150);
  * before closing the gap over 220 ms, so the next row never slides over the fading one.
  */
 export const ROW_OUT = FadeOut.duration(120);
+/**
+ * Kept on purpose, unchanged: it animates layout on every sibling row (the headcount roster after
+ * each mark), so its cost is still to be measured on a low-end Android before it is cut or kept.
+ */
 export const CLOSE_UP = LinearTransition.duration(220).delay(90).easing(EASE_OUT);
 
 /** Whether a count changing from `before` to `after` went up. "All" counts as the top. */
