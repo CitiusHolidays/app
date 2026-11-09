@@ -1,10 +1,10 @@
 import { customerApi, type ConsentState, PARENTAL_CONSENT_TEXT_VERSION, type TripDetail, type TripSummary } from '@citius/backend/customer';
-import { Banner, Button, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
-import { tripSchedule } from '@citius/core/src/schedule';
+import { Banner, Button, citius, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
+import { tripSchedule } from '@citius/core';
 import { useMutation } from 'convex/react';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -35,6 +35,7 @@ import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/locales/en';
 import { EASE_OUT } from '@/components/motion';
 import { haptic } from '@/lib/haptic';
+import { openUrl } from '@/lib/open-url';
 import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
@@ -104,7 +105,7 @@ function TripHeader({ chips, now, scrollY, trip }: { chips: string[]; now: numbe
               paddingVertical: 6,
             }}
           >
-            <View style={{ backgroundColor: trip.phase === 'ongoing' ? '#f58220' : theme.color.warning, borderRadius: 4, height: 8, width: 8 }} />
+            <View style={{ backgroundColor: trip.phase === 'ongoing' ? citius.orange : theme.color.warning, borderRadius: 4, height: 8, width: 8 }} />
             <Text style={{ color: theme.color.warning }} variant="label">
               {trip.phase === 'past' ? i18n.t('phase.past') : timingText(i18n, timing)}
             </Text>
@@ -156,7 +157,7 @@ function TodayCard({ detail, now }: { detail: TripDetail; now: number }) {
   return (
     <Surface variant="hero" style={{ borderColor: theme.color.primary, borderWidth: 1.5, gap: space.sm }}>
       <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
-        <View style={{ backgroundColor: '#f58220', borderRadius: 5, height: 10, width: 10 }} />
+        <View style={{ backgroundColor: citius.orange, borderRadius: 5, height: 10, width: 10 }} />
         <Text accessibilityRole="header" tone="warning" variant="bodyStrong">
           {t('trip.today')}
           {today?.date ? ` · ${weekday(today.date)}` : ''}
@@ -393,7 +394,7 @@ function TripSheet({ detail, now, offline, savedAt, tripId }: { detail: TripDeta
             chevron
             last
             leading={<Icon color={theme.color.primary} ios="envelope" md="mail" />}
-            onPress={() => void Linking.openURL(`mailto:${CITIUS_EMAIL}`).catch(() => undefined)}
+            onPress={() => openUrl(`mailto:${CITIUS_EMAIL}`)}
             subtitle={CITIUS_EMAIL}
             title={t('trip.officeEmail')}
           />

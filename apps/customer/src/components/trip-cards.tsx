@@ -1,5 +1,5 @@
 import type { TripSummary } from '@citius/backend/customer';
-import { PressableScale, space, Text, useAppTheme } from '@citius/ui';
+import { citius, PressableScale, space, Text, useAppTheme } from '@citius/ui';
 import { View } from 'react-native';
 import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
 
@@ -27,7 +27,7 @@ function GlassPill({ label, tone = 'light' }: { label: string; tone?: 'light' | 
       }}
     >
       {tone === 'live' ? (
-        <View style={{ backgroundColor: '#f58220', borderRadius: 4, height: 8, width: 8 }} />
+        <View style={{ backgroundColor: citius.orange, borderRadius: 4, height: 8, width: 8 }} />
       ) : (
         <Icon color={theme.color.warning} ios="airplane" md="flight" size={13} />
       )}

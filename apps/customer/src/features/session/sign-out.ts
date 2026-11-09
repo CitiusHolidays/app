@@ -6,7 +6,7 @@ export interface SignOutDeps {
   /** Asks the server to end the session. Best effort: it may be offline or never answer. */
   revoke: () => Promise<unknown>;
   timeoutMs?: number;
-  /** Deletes cached verification, trip packs, headcounts, announcements, outbox and receipts. */
+  /** Deletes the saved trips, plans and updates (everything this phone keeps for the account). */
   wipeData: () => Promise<void>;
 }
 

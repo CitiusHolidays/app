@@ -1,6 +1,6 @@
-import { cachedResult, type CacheInput } from './cached-result';
+import { CACHE_SHAPE, cachedResult, type CacheInput, readCached } from './cached-result';
 
-const saved = { savedAt: 100, value: 'saved' };
+const saved = { savedAt: 100, shape: CACHE_SHAPE, value: 'saved' };
 const base: CacheInput<string> = { asking: true, cached: null, held: undefined, live: undefined, loaded: true };
 
 describe('cachedResult', () => {
@@ -27,5 +27,20 @@ describe('cachedResult', () => {
 
   it('is unavailable when not asking and nothing was saved, instead of loading forever', () => {
     expect(cachedResult({ ...base, asking: false })).toEqual({ data: undefined, savedAt: null, status: 'unavailable' });
+  });
+});
+
+describe('readCached', () => {
+  it('reads an answer saved in the current shape', () => {
+    const stored = { savedAt: 100, shape: CACHE_SHAPE, value: 'saved' };
+    expect(readCached(stored)).toBe(stored);
+  });
+
+  it('ignores answers saved by an older build or not saved at all', () => {
+    expect(readCached({ savedAt: 100, value: 'saved' })).toBeNull();
+    expect(readCached({ savedAt: 100, shape: CACHE_SHAPE - 1, value: 'saved' })).toBeNull();
+    expect(readCached({ shape: CACHE_SHAPE, value: 'saved' })).toBeNull();
+    expect(readCached(null)).toBeNull();
+    expect(readCached('saved')).toBeNull();
   });
 });

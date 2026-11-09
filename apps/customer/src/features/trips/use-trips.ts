@@ -1,7 +1,8 @@
 import { customerApi } from '@citius/backend/customer';
+import { useQuery } from 'convex/react';
 
+import { useCachedAnswer } from '@/features/data/use-cached-query';
 import { useCustomerSession } from '@/features/session/session';
-import { useCachedQuery } from '@/features/data/use-cached-query';
 
 import { useReferenceNow } from './reference-now';
 
@@ -9,12 +10,15 @@ import { useReferenceNow } from './reference-now';
 export function useTrips() {
   const { live } = useCustomerSession();
   const referenceNow = useReferenceNow();
-  return useCachedQuery('trips:list', customerApi.listMyTrips.ref, live ? { referenceNow } : 'skip');
+  const answer = useQuery(customerApi.listMyTrips.ref, live ? { referenceNow } : 'skip');
+  return useCachedAnswer('trips:list', answer, live);
 }
 
 /** One trip's detail: saved on the phone, refreshed live. Null when it is not (or no longer) open. */
 export function useTrip(tripId: string | undefined) {
   const { live } = useCustomerSession();
   const referenceNow = useReferenceNow();
-  return useCachedQuery(tripId ? `trips:detail:${tripId}` : null, customerApi.getMyTrip.ref, live && tripId ? { referenceNow, tripId } : 'skip');
+  const asking = live && tripId !== undefined;
+  const answer = useQuery(customerApi.getMyTrip.ref, asking ? { referenceNow, tripId } : 'skip');
+  return useCachedAnswer(tripId ? `trips:detail:${tripId}` : null, answer, asking);
 }

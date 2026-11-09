@@ -1,3 +1,4 @@
+import { parseCalendarDay } from '@/lib/calendar-day';
 import { WEBSITE_URL } from '@/lib/env';
 
 /**
@@ -24,8 +25,8 @@ export function originalCoverUri(path: string) {
 /** Nights between two calendar days, or null. */
 export function tripNights(start: string | null, end: string | null) {
   const day = (value: string | null) => {
-    const match = value ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
-    return match ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+    const parsed = parseCalendarDay(value);
+    return parsed ? Date.UTC(parsed.year, parsed.month, parsed.day) : null;
   };
   const from = day(start);
   const to = day(end);

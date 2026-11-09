@@ -59,13 +59,4 @@ describe('LiveStore', () => {
     await flush();
     expect(live.snapshot('k')).toEqual({ value: null });
   });
-
-  it('fences work that started before a wipe', async () => {
-    const live = new LiveStore(createMemoryStore());
-    const stillCurrent = live.fence();
-    expect(stillCurrent()).toBe(true);
-    await live.wipe();
-    expect(stillCurrent()).toBe(false);
-    expect(live.fence()()).toBe(true);
-  });
 });

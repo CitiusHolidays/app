@@ -51,7 +51,8 @@ function useHasCachedSession(isAuthenticated: boolean, epoch: number) {
       .then((cookie) => {
         if (active) setCached({ for: checkFor, value: Boolean(cookie) });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        logEvent('session.cookie-read-failed', error);
         if (active) setCached({ for: checkFor, value: false });
       });
     return () => {
@@ -98,28 +99,32 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
     });
   }, [ensureProfile, isAuthenticated]);
 
-  const wipeLocalData = useCallback(() => live.wipe(KEPT_THROUGH_WIPE), [live]);
-
-  const end = useCallback(
-    async (revoke: boolean) => {
-      setSigningOut(true);
-      await runThen(
+  /** Clears this phone's session and saved data (and, with `revoke`, the server's session), then re-reads the cookie. */
+  const clearPhone = useCallback(
+    (revoke: boolean) =>
+      runThen(
         () =>
           signOutDevice({
             clearSession: clearLocalAuthSession,
             revoke: async () => {
               if (revoke) await clients?.auth.signOut();
             },
-            wipeData: wipeLocalData,
+            wipeData: () => live.wipe(KEPT_THROUGH_WIPE),
           }),
         () => {
           profileLinked.current = false;
           setEpoch((value) => value + 1);
-          setSigningOut(false);
         }
-      );
+      ),
+    [live]
+  );
+
+  const end = useCallback(
+    async (revoke: boolean) => {
+      setSigningOut(true);
+      await runThen(() => clearPhone(revoke), () => setSigningOut(false));
     },
-    [wipeLocalData]
+    [clearPhone]
   );
 
   const waiting = isLoading || (Boolean(hasCachedSession) && !isAuthenticated);
@@ -146,14 +151,8 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
     if (!rejectedWithData) return;
     logEvent('session.rejected');
     // Already signed out on screen, so no "signing out" state: just clear the phone, then re-read.
-    void runThen(
-      () => signOutDevice({ clearSession: clearLocalAuthSession, revoke: () => Promise.resolve(), wipeData: wipeLocalData }),
-      () => {
-        profileLinked.current = false;
-        setEpoch((value) => value + 1);
-      }
-    );
-  }, [rejectedWithData, wipeLocalData]);
+    void clearPhone(false);
+  }, [clearPhone, rejectedWithData]);
 
   return (
     <SessionContext.Provider value={{ forget: () => end(false), gate, live: gate.kind === 'signedIn' && !gate.offline, offline: gate.kind === 'signedIn' && gate.offline, online, signOut: () => end(true) }}>

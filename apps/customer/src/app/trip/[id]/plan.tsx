@@ -1,5 +1,5 @@
-import { space, StatusPill, Text, useAppTheme } from '@citius/ui';
-import { tripSchedule } from '@citius/core/src/schedule';
+import { citius, space, StatusPill, Text, useAppTheme } from '@citius/ui';
+import { tripSchedule } from '@citius/core';
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
@@ -53,8 +53,8 @@ export default function PlanScreen() {
               <View style={{ alignItems: 'center', width: 28 }}>
                 <View
                   style={{
-                    backgroundColor: current ? '#f58220' : done ? theme.color.tickOff : theme.color.surface,
-                    borderColor: current ? '#f58220' : done ? theme.color.tickOff : theme.color.primary,
+                    backgroundColor: current ? citius.orange : done ? theme.color.tickOff : theme.color.surface,
+                    borderColor: current ? citius.orange : done ? theme.color.tickOff : theme.color.primary,
                     borderRadius: 14,
                     borderWidth: 2,
                     height: 28,

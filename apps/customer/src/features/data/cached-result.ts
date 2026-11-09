@@ -1,6 +1,20 @@
+/**
+ * The layout of a saved answer. Bump it when a saved answer's shape changes, so an updated app
+ * ignores answers an older build saved instead of reading them as the new shape.
+ */
+export const CACHE_SHAPE = 1;
+
 export interface Cached<T> {
+  shape: number;
   savedAt: number;
   value: T;
+}
+
+/** A saved answer read from the phone, or null when it is missing or in an older shape. */
+export function readCached<T>(stored: unknown): Cached<T> | null {
+  if (typeof stored !== 'object' || stored === null || !('value' in stored)) return null;
+  const { savedAt, shape } = stored as Partial<Cached<T>>;
+  return shape === CACHE_SHAPE && typeof savedAt === 'number' ? (stored as Cached<T>) : null;
 }
 
 /**

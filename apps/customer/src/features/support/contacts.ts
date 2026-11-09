@@ -1,3 +1,5 @@
+import { WEBSITE_URL } from '@/lib/env';
+
 /**
  * Citius Holidays' public contact details, as on the website's contact page
  * (`src/data/publicContacts.ts`) and footer. Public information only.
@@ -10,6 +12,5 @@ export const CITIUS_OFFICES = [
   { city: 'Kolkata', dialPhone: '+919831082929', displayPhone: '+91 98310 82929' },
 ] as const;
 
-const SITE = 'https://www.citiusholidays.com';
-export const PRIVACY_URL = `${SITE}/policies?view=privacy`;
-export const TERMS_URL = `${SITE}/policies?view=terms`;
+export const PRIVACY_URL = `${WEBSITE_URL}/policies?view=privacy`;
+export const TERMS_URL = `${WEBSITE_URL}/policies?view=terms`;

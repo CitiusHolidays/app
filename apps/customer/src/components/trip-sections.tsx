@@ -1,9 +1,9 @@
 import type { TripDetail } from '@citius/backend/customer';
-import { space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
+import { citius, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { StyleSheet, View } from 'react-native';
 
 import { Avatar, CallButton } from '@/components/kit';
-import { documentProgress, statusKind } from '@/features/trips/model';
+import { documentProgress, shownVisaStatus, statusKind } from '@/features/trips/model';
 import { useI18n } from '@/i18n/i18n';
 
 /** A tour manager the traveller can call, with their reporting note. */
@@ -65,11 +65,7 @@ export function DocumentsCard({ documents }: { documents: TripDetail['documents'
       {documents.map((person, index) => {
         const rows = [
           { kind: 'passport', label: t('doc.passport'), status: person.passportStatus },
-          {
-            kind: 'visa',
-            label: t('doc.visa'),
-            status: person.visaRequired ? person.visaStatus : 'Not Required',
-          },
+          { kind: 'visa', label: t('doc.visa'), status: shownVisaStatus(person) },
           { kind: 'ticket', label: t('doc.ticket'), status: person.ticketStatus },
         ];
         return (
@@ -132,7 +128,7 @@ export function AnnouncementItem({
         paddingVertical: space.md,
       }}
     >
-      <View style={{ backgroundColor: '#f58220', borderRadius: 2, marginTop: 6, width: 3 }} />
+      <View style={{ backgroundColor: citius.orange, borderRadius: 2, marginTop: 6, width: 3 }} />
       <View style={{ flex: 1, gap: space.xs }}>
         <Text>{announcement.body}</Text>
         <Text tone="muted" variant="label">
