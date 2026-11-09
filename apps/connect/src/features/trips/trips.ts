@@ -39,6 +39,15 @@ export function dayOfTrip(trip: Pick<JobCardRow, 'travelStartDate' | 'travelEndD
   return `Day ${day} of ${total}`;
 }
 
+/** The trip's phase in words: "Day 3 of 8", "Upcoming", "Finished" or "Dates not set". */
+export function phaseLabel(trip: Pick<JobCardRow, 'travelStartDate' | 'travelEndDate'>, now: number) {
+  const phase = tripPhase(trip, now);
+  if (phase === 'today') return dayOfTrip(trip, now) ?? 'On tour';
+  if (phase === 'upcoming') return 'Upcoming';
+  if (phase === 'past') return 'Finished';
+  return 'Dates not set';
+}
+
 const PHASE_ORDER: Record<TripPhase, number> = { past: 3, today: 0, undated: 2, upcoming: 1 };
 
 export function sortTrips<T extends Pick<JobCardRow, 'travelStartDate' | 'travelEndDate'>>(trips: T[], now: number) {
