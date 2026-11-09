@@ -1,22 +1,20 @@
 import { EXPENSE_CATEGORIES, EXPENSE_CURRENCIES, type ExpenseCategory, type ExpenseCurrency } from '@citius/backend';
 import { Banner, Button, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { router, usePreventRemove } from 'expo-router';
+import { useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 import Animated, { Keyframe } from 'react-native-reanimated';
 
 import { Chip, ChipRow, Icon, QuietState, Screen, TextField } from '@/components/kit';
 import { parseAmount } from '@/features/expenses/format';
-import { createOutboxItem, type ReceiptFile } from '@/features/expenses/outbox';
+import { createOutboxItem } from '@/features/expenses/outbox';
 import { useOutbox } from '@/features/expenses/outbox-context';
-import { keepReceipt } from '@/features/expenses/receipt-files';
+import { useReceipt } from '@/features/expenses/use-receipt';
 import { localDay } from '@/features/headcount/headcount';
 import { useStaff, useStaffSession } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
-import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 import { haptic } from '@/lib/haptics';
 import { useToast } from '@/lib/toast';
@@ -33,61 +31,43 @@ const PHOTO_IN = new Keyframe({
 export default function NewExpense() {
   const theme = useAppTheme();
   const staff = useStaff();
-  const { chosen, trips } = useTrips();
+  const { selected, trips } = useTrips();
   const { enqueue } = useOutbox();
   const { gate, online } = useStaffSession();
   const canSend = online && gate.kind === 'staff' && !gate.offline;
   const toast = useToast();
   const [itemId] = useState(() => localId('exp'));
-  // Only a trip the tour manager picked, never a default guess. It must be in their trip list.
-  // The trip picked on Today, or the only trip assigned; with several and none picked, ask.
-  const [tripId, setTripId] = useState<string | null>(chosen?.id ?? (trips.length === 1 ? (trips[0]?.id ?? null) : null));
+  // Starts on the trip shown on Today, as headcount does; the chips switch it to another trip.
+  const [tripId, setTripId] = useState<string | null>(selected?.id ?? null);
   const trip = trips.find((candidate) => candidate.id === tripId) ?? null;
-  const [receipt, setReceipt] = useState<ReceiptFile | null>(null);
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<ExpenseCurrency>('INR');
   const [category, setCategory] = useState<ExpenseCategory | null>(null);
-  const [expenseDate, setExpenseDate] = useState(() => localDay(Date.now()));
+  const [today] = useState(() => localDay(Date.now()));
+  const [expenseDate, setExpenseDate] = useState(today);
   const [particulars, setParticulars] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   useAnnounce(problem);
-  const [busy, setBusy] = useState(false);
+  const { choosePhoto, discard, receipt, takePhoto } = useReceipt({ id: itemId, onProblem: setProblem });
+  const [leaving, setLeaving] = useState(false);
 
-  const keep = async (result: ImagePicker.ImagePickerResult) => {
-    const asset = result.canceled ? null : result.assets[0];
-    if (!asset) return;
-    try {
-      setReceipt(await keepReceipt(asset, itemId));
-      setProblem(null);
-    } catch (error) {
-      logEvent('expense.receipt-copy-failed', error);
-      setProblem('Could not save the photo on this phone. Try again.');
-    }
-  };
-
-  useEffect(() => {
-    // Android may stop the app while the camera is open; pick up the photo it took.
-    ImagePicker.getPendingResultAsync()
-      .then((pending) => {
-        if (pending && 'assets' in pending) void keep(pending);
-      })
-      .catch(() => undefined);
-    // Runs once on open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const takePhoto = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      setProblem('Camera access is off. Allow it in Settings, or choose a photo from your library.');
-      return;
-    }
-    await keep(await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 1 }));
-  };
-
-  const choosePhoto = async () => {
-    await keep(await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 1 }));
-  };
+  // Anything typed or photographed is lost on close, so closing asks first (swipe down or back).
+  const entered = Boolean(receipt || amount.trim() || category || particulars.trim() || expenseDate !== today);
+  const allowLeave = usePreventRemove(entered && !leaving, ({ repeat }) => {
+    const lost = receipt ? 'What you entered and the receipt photo are removed from this phone.' : 'What you entered is not kept.';
+    Alert.alert('Discard this expense?', lost, [
+      { style: 'cancel', text: 'Keep editing' },
+      {
+        onPress: () => {
+          discard();
+          setLeaving(true);
+          repeat();
+        },
+        style: 'destructive',
+        text: 'Discard',
+      },
+    ]);
+  });
 
   const save = () => {
     const value = parseAmount(amount);
@@ -107,7 +87,7 @@ export default function NewExpense() {
       haptic('error');
       return;
     }
-    setBusy(true);
+    setLeaving(true);
     enqueue(
       createOutboxItem({
         draft: { amount: value, category, currency, expenseDate, paidBy: staff.name, particulars: particulars.trim() },
@@ -120,6 +100,8 @@ export default function NewExpense() {
     );
     haptic('success');
     toast(canSend ? 'Expense saved. Sending it for approval.' : 'Saved on this phone. It sends when you have signal.', canSend ? 'done' : 'saved');
+    // Saved, so closing loses nothing: let this close through without the discard question.
+    allowLeave();
     router.back();
   };
 
@@ -230,7 +212,7 @@ export default function NewExpense() {
         </Banner>
       ) : null}
       <View style={{ gap: space.md }}>
-        <Button busy={busy} label="Save expense" onPress={save} />
+        <Button busy={leaving} label="Save expense" onPress={save} />
         <Text style={{ textAlign: 'center' }} tone="muted" variant="secondary">
           Saved on this phone first. It is sent for approval as soon as you are online, and the photo is kept until it is.
         </Text>
