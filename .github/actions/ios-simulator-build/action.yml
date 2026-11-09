@@ -71,6 +71,10 @@ runs:
         echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
         echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
 
+    # Signing stays on, as in a local build: with no team Xcode signs ad hoc for the Simulator and
+    # embeds the simulator entitlements (application-identifier). Without them the Simulator
+    # keychain refuses every SecureStore read, so the app cannot open its encrypted store or keep
+    # a session. CODE_SIGNING_ALLOWED=NO skips that step.
     - name: Build for the iOS Simulator
       shell: bash
       working-directory: ${{ inputs.working-directory }}/ios
@@ -83,7 +87,6 @@ runs:
           -sdk iphonesimulator \
           -destination "generic/platform=iOS Simulator" \
           -derivedDataPath build/DerivedData \
-          CODE_SIGNING_ALLOWED=NO \
           build | { command -v xcbeautify >/dev/null && xcbeautify --renderer github-actions || cat; }
 
     # A tarball keeps the bundle's permissions and symlinks; a bare .app in a zip loses them.
@@ -100,6 +103,11 @@ runs:
         fi
         if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
           echo "No .app in $PRODUCTS"
+          exit 1
+        fi
+        # The keychain needs the embedded simulator entitlements (see the build step).
+        if ! otool -l "$APP_PATH/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Info.plist")" | grep -q "sectname __entitlements"; then
+          echo "::error::$APP_PATH has no embedded simulator entitlements; SecureStore would fail on the Simulator"
           exit 1
         fi
         APP_NAME="$(basename "$APP_PATH")"
