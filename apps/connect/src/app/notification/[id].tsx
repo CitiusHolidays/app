@@ -1,25 +1,38 @@
-import { staffApi } from '@citius/backend';
+import { type ExpenseRow, type JobCardRow, staffApi } from '@citius/backend';
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
 import { useQuery } from 'convex/react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { Icon, PageTitle, Placeholder, QuietState, Screen, SectionTitle } from '@/components/kit';
+import { Icon, PageTitle, PlaceholderBar, QuietState, Screen, SectionTitle } from '@/components/kit';
 import { formatMoney } from '@/features/expenses/format';
 import { useStaffSession } from '@/features/gate/session';
 import { fullTime } from '@/features/inbox/relative-time';
 import { useInbox } from '@/features/inbox/use-inbox';
+import { useMarkRead } from '@/features/inbox/use-mark-read';
 import { useTrips } from '@/features/trips/trips-context';
 import { formatDateRange } from '@/lib/dates';
 
-function Lines({ lines }: { lines: { label: string; value: string }[] }) {
+interface Line {
+  label: string;
+  /** Undefined while the record loads: the row keeps its label and height, with a bar for the value. */
+  value?: string;
+}
+
+/** Label and value rows on one card; the loading state is the same card with bars for the values. */
+function Lines({ lines }: { lines: Line[] }) {
   const theme = useAppTheme();
+  const loading = lines.some((line) => line.value === undefined);
   return (
-    <Surface style={{ paddingVertical: space.xs }}>
+    <Surface
+      accessibilityLabel={loading ? 'Loading' : undefined}
+      accessible={loading || undefined}
+      style={{ paddingVertical: space.xs }}
+    >
       {lines.map((line, index) => (
         <View
-          accessible
-          accessibilityLabel={`${line.label}: ${line.value}`}
+          accessible={!loading}
+          accessibilityLabel={loading ? undefined : `${line.label}: ${line.value}`}
           key={line.label}
           style={{
             borderBottomColor: theme.color.rule,
@@ -32,24 +45,41 @@ function Lines({ lines }: { lines: { label: string; value: string }[] }) {
           <Text style={{ width: 104 }} tone="muted" variant="secondary">
             {line.label}
           </Text>
-          <Text style={{ flex: 1, textAlign: 'right' }} tabular variant="secondary">
-            {line.value}
-          </Text>
+          {line.value === undefined ? (
+            <View style={{ alignItems: 'flex-end', flex: 1 }}>
+              <PlaceholderBar role="secondary" width="60%" />
+            </View>
+          ) : (
+            <Text style={{ flex: 1, textAlign: 'right' }} tabular variant="secondary">
+              {line.value}
+            </Text>
+          )}
         </View>
       ))}
     </Surface>
   );
 }
 
+/** A Job Card's summary lines; without the record, the same labels with bars for the values. */
+const jobCardLines = (job?: JobCardRow): Line[] => [
+  { label: 'Job Card', value: job?.jobCode },
+  { label: 'Client', value: job?.clientName },
+  { label: 'Destination', value: job && (job.destination || 'Not set') },
+  { label: 'Dates', value: job && formatDateRange(job.travelStartDate, job.travelEndDate) },
+  { label: 'Status', value: job?.status },
+];
+
+/** An expense's summary lines; without the record, the same labels with bars for the values. */
+const expenseLines = (expense?: ExpenseRow): Line[] => [
+  { label: 'Amount', value: expense && formatMoney(expense.amount, expense.currency) },
+  { label: 'Category', value: expense?.category },
+  { label: 'Job Card', value: expense?.jobCode },
+  { label: 'Approval', value: expense?.approvalStatus },
+  { label: 'Manager', value: expense?.managerReviewStatus },
+];
+
 function JobCardSummary({ id }: { id: string }) {
-  const job = useQuery(staffApi.getJobCardDetail.ref, { jobCardId: id });
-  if (job === undefined) {
-    return (
-      <Surface>
-        <Placeholder lines={3} />
-      </Surface>
-    );
-  }
+  const job = useQuery(staffApi.getJobCardDetail.ref, { jobCardId: id, surface: 'connect' });
   if (job === null) {
     return (
       <Surface>
@@ -57,28 +87,11 @@ function JobCardSummary({ id }: { id: string }) {
       </Surface>
     );
   }
-  return (
-    <Lines
-      lines={[
-        { label: 'Job Card', value: job.jobCode },
-        { label: 'Client', value: job.clientName },
-        { label: 'Destination', value: job.destination || 'Not set' },
-        { label: 'Dates', value: formatDateRange(job.travelStartDate, job.travelEndDate) },
-        { label: 'Status', value: job.status },
-      ]}
-    />
-  );
+  return <Lines lines={jobCardLines(job)} />;
 }
 
 function ExpenseSummary({ id }: { id: string }) {
   const expense = useQuery(staffApi.getExpenseRow.ref, { expenseId: id });
-  if (expense === undefined) {
-    return (
-      <Surface>
-        <Placeholder lines={3} />
-      </Surface>
-    );
-  }
   if (expense === null) {
     return (
       <Surface>
@@ -86,18 +99,11 @@ function ExpenseSummary({ id }: { id: string }) {
       </Surface>
     );
   }
-  return (
-    <Lines
-      lines={[
-        { label: 'Amount', value: formatMoney(expense.amount, expense.currency) },
-        { label: 'Category', value: expense.category },
-        { label: 'Job Card', value: expense.jobCode },
-        { label: 'Approval', value: expense.approvalStatus },
-        { label: 'Manager', value: expense.managerReviewStatus },
-      ]}
-    />
-  );
+  return <Lines lines={expenseLines(expense)} />;
 }
+
+/** Records the app sums up on this screen; anything else is only on the portal. */
+const SUMMARISED = new Set(['jobCard', 'expense']);
 
 /** A notification and a short summary of its record. Read-only; the portal holds the full record. */
 export default function NotificationDetail() {
@@ -107,6 +113,8 @@ export default function NotificationDetail() {
   const { rows } = useInbox();
   const { selectTrip, trips } = useTrips();
   const notification = rows.find((row) => row.id === id);
+  const canReachServer = online && gate.kind === 'staff' && !gate.offline;
+  useMarkRead(notification, canReachServer);
   if (!notification) {
     return (
       <Screen tabBar={false}>
@@ -116,7 +124,7 @@ export default function NotificationDetail() {
       </Screen>
     );
   }
-  const canQuery = online && gate.kind === 'staff' && !gate.offline && Boolean(notification.entityId);
+  const canQuery = canReachServer && Boolean(notification.entityId);
   const trip = notification.entityType === 'jobCard' ? trips.find((candidate) => candidate.id === notification.entityId) : undefined;
   return (
     <Screen tabBar={false}>
@@ -146,9 +154,13 @@ export default function NotificationDetail() {
           }}
         />
       ) : null}
-      {!['jobCard', 'expense'].includes(notification.entityType) || !canQuery ? (
+      {!canReachServer ? (
         <Text tone="muted" variant="secondary">
-          Open Citius Connect on the web portal for the full record.
+          Connect to load the full record.
+        </Text>
+      ) : !canQuery || !SUMMARISED.has(notification.entityType) ? (
+        <Text tone="muted" variant="secondary">
+          Open the Citius portal for the full record.
         </Text>
       ) : null}
     </Screen>
