@@ -13,10 +13,6 @@ export async function keepReceipt(image: PickedImage, id: string): Promise<Recei
   return { fileName: image.fileName || `receipt-${id}.jpg`, mimeType, size: image.fileSize ?? 0, uri: image.uri };
 }
 
-export function receiptExists() {
-  return true;
-}
-
 export function deleteReceipt() {}
 
 export function deleteAllReceipts() {}

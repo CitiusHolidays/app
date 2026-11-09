@@ -1,10 +1,10 @@
 import { ConvexError } from 'convex/values';
 
-import { createOutboxItem, drainOutbox, dueItems, type OutboxDeps, type OutboxItem, processItem, retryNow } from './outbox';
+import { createOutboxItem, drainOutbox, dueItems, type OutboxDeps, type OutboxItem, processItem, readOutbox, retryNow } from './outbox';
 
 const NOW = 1_000_000;
 
-function newItem(id = 'ob_1'): OutboxItem {
+function newItem(id = 'ob_1') {
   return createOutboxItem({
     draft: {
       amount: 1250.5,
@@ -223,6 +223,52 @@ describe('expense outbox', () => {
     expect(second.nextAttemptAt - first.nextAttemptAt).toBeGreaterThan(first.nextAttemptAt - NOW);
     expect(dueItems([first], NOW, 'staff_1')).toEqual([]);
     expect(dueItems([first], first.nextAttemptAt, 'staff_1')).toEqual([first]);
+  });
+
+  it('only retries a refused item; a sent one stays sent', () => {
+    const sent: OutboxItem = { ...newItem(), expenseId: 'exp_1', stage: 'submitted', status: 'done' };
+    expect(retryNow(sent, NOW + 5)).toBe(sent);
+  });
+
+  describe('reading the saved outbox', () => {
+    const saved = (fields: Record<string, unknown>) => {
+      const { stage: _stage, status: _status, ...base } = newItem();
+      return { ...base, ...fields };
+    };
+
+    it('moves an item saved in an impossible state back to a stage it can resume from', () => {
+      const [lostId, lostStorage, refusedUpload, noWords] = readOutbox([
+        saved({ stage: 'attached', status: 'pending' }),
+        saved({ expenseId: 'exp_1', stage: 'uploaded', status: 'pending' }),
+        saved({ expenseId: 'exp_2', problem: 'Wrong file', stage: 'uploaded', status: 'needsAttention', storageId: 'st_1' }),
+        saved({ expenseId: 'exp_3', stage: 'attached', status: 'needsAttention' }),
+      ]);
+      expect(lostId).toMatchObject({ stage: 'queued', status: 'pending' });
+      expect(lostId?.expenseId).toBeUndefined();
+      expect(lostStorage).toMatchObject({ expenseId: 'exp_1', stage: 'created', status: 'pending' });
+      expect(refusedUpload).toMatchObject({ expenseId: 'exp_2', problem: 'Wrong file', stage: 'created', status: 'needsAttention' });
+      expect(refusedUpload?.storageId).toBeUndefined();
+      expect(noWords).toMatchObject({ problem: 'The server did not accept this expense. Check the details and try again.', stage: 'attached' });
+    });
+
+    it('keeps a sent item only with the expense it filed, and drops what it cannot read', () => {
+      const items = readOutbox([
+        saved({ expenseId: 'exp_1', stage: 'attached', status: 'done', storageId: 'st_old' }),
+        saved({ stage: 'submitted', status: 'done' }),
+        null,
+        { id: 'ob_x' },
+      ]);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ expenseId: 'exp_1', stage: 'submitted', status: 'done' });
+      expect(items[0]?.storageId).toBeUndefined();
+      expect(readOutbox(null)).toEqual([]);
+    });
+
+    it('reads what this version saves unchanged', () => {
+      const item = newItem();
+      const created: OutboxItem = { ...item, expenseId: 'exp_1', stage: 'created', status: 'pending' };
+      expect(readOutbox(JSON.parse(JSON.stringify([item, created])))).toEqual([item, created]);
+    });
   });
 
   describe('a run over the queue', () => {

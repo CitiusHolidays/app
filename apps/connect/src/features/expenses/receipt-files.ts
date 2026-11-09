@@ -92,10 +92,6 @@ export async function keepReceipt(image: PickedImage, id: string): Promise<Recei
   return { fileName: `receipt-${id}.${extension}`, mimeType, size: destination.size, uri: destination.uri };
 }
 
-export function receiptExists(receipt: ReceiptFile) {
-  return new File(receipt.uri).exists;
-}
-
 export function deleteReceipt(receipt: ReceiptFile) {
   const file = new File(receipt.uri);
   if (file.exists) {
