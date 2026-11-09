@@ -1,5 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { logEvent } from '@/lib/safe-log';
+
 import type { ReceiptFile } from './outbox';
 
 /**
@@ -55,7 +57,8 @@ async function shrink(image: PickedImage) {
     const rendered = await context.renderAsync();
     const result = await rendered.saveAsync({ compress: RECEIPT_QUALITY, format: SaveFormat.JPEG });
     return result.uri;
-  } catch {
+  } catch (error) {
+    logEvent('expense.receipt-shrink-failed', error);
     return null;
   }
 }
@@ -85,8 +88,9 @@ export async function keepReceipt(image: PickedImage, id: string): Promise<Recei
   if (smaller) {
     try {
       new File(smaller).delete();
-    } catch {
+    } catch (error) {
       // The manipulator's temporary file is cleared with the cache anyway.
+      logEvent('expense.receipt-temp-delete-failed', error);
     }
   }
   return { fileName: `receipt-${id}.${extension}`, mimeType, size: destination.size, uri: destination.uri };

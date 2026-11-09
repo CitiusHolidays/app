@@ -35,7 +35,7 @@ export function useReceipt({ id, onProblem }: { id: string; onProblem: (problem:
       .then((pending) => {
         if (pending && 'assets' in pending) void keep(pending);
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => logEvent('expense.pending-photo-failed', error));
     // Runs once on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
