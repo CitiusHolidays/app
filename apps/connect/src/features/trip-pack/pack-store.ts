@@ -28,8 +28,8 @@ export async function loadPack(store: KeyValueStore, jobCardId: string, now: num
 
 /**
  * Deletes expired packs; returns the Job Card ids removed. The trips provider runs it at start-up,
- * on a change of trip, and each time the app returns to the foreground.
- * Each pack is checked on its own, so they are checked together.
+ * on a change of trip, and each time the app returns to the foreground. Packs are independent of
+ * each other, so they are checked in parallel.
  */
 export async function purgeExpiredPacks(store: KeyValueStore, now: number) {
   const removed = await Promise.all(

@@ -42,7 +42,6 @@ async function findAnnouncementTrip(store: KeyValueStore, live: LiveStore, id: s
 /**
  * One announcement and its seen-by checklist, from whichever trip it was shared on: the link names
  * the trip, and an older link without it is found by searching every trip's log on this phone.
- * Switching trips on Today no longer hides an announcement from another trip.
  */
 export function useAnnouncementDetail(id: string, tripHint: string | null): AnnouncementDetail {
   const { live, store } = useAppStore();

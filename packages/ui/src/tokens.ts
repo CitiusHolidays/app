@@ -2,8 +2,8 @@ import { Platform } from "react-native";
 
 /**
  * Shared craft layer: spacing, motion, haptic moments, type roles and the accessibility floor.
- * Palettes, radii and density are per app: the staff palette lives in
- * `staffTheme`; the customer app adds its own theme later without touching these.
+ * Palettes, radii and density are per app: `staffTheme` for Connect, `customerTheme` for the
+ * customer app.
  */
 
 export const space = {

@@ -14,7 +14,7 @@ import { useToast } from '@/lib/toast';
 
 const INBOX_SHOWN = 2;
 
-/** The programme for the trip, until the app has a day-by-day schedule. */
+/** The start of the trip's programme, with a way into the full schedule on the Trip tab. */
 function ProgrammeCard({ text, onOpen }: { onOpen: () => void; text: string }) {
   const theme = useAppTheme();
   return (

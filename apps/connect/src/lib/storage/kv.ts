@@ -1,6 +1,6 @@
 /**
  * The app's only local store. On iOS and Android it is an SQLCipher database whose key lives in
- * SecureStore (see sqlite-store.native.ts). Everything that leaves memory goes through here.
+ * SecureStore (see device-store.ts). Everything that leaves memory goes through here.
  */
 export interface KeyValueStore {
   clear: () => Promise<void>;
