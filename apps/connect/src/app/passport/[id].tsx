@@ -51,18 +51,20 @@ function ScanImage({
         }}
         transition={180}
       />
-      {view.quality === 'preview' ? (
-        <Text accessibilityLiveRegion="polite" style={{ marginTop: space.sm }} tone="muted" variant="secondary">
-          Loading full quality…
-        </Text>
-      ) : view.quality === 'previewOnly' ? (
+      {/* One status line in both states, so the card keeps its height when the full scan arrives
+          first (no preview) and matches the skeleton's line. */}
+      {view.quality === 'previewOnly' ? (
         <View style={{ gap: space.sm, marginTop: space.sm }}>
           <Text accessibilityLiveRegion="polite" tone="muted" variant="secondary">
             Showing a lower-quality copy. The full scan could not be loaded.
           </Text>
           <Button label="Try full quality" onPress={onRetry} variant="secondary" />
         </View>
-      ) : null}
+      ) : (
+        <Text accessibilityLiveRegion="polite" style={{ marginTop: space.sm }} tone="muted" variant="secondary">
+          {view.quality === 'preview' ? 'Loading full quality…' : 'Shown in full quality.'}
+        </Text>
+      )}
     </Surface>
   );
 }

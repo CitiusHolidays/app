@@ -124,6 +124,8 @@ describe('passport viewer', () => {
     expect(calls.map((call) => call.variant)).toEqual(['preview', 'full']);
     expect(calls[0]?.openId).toBe(calls[1]?.openId);
     expect(screen.queryByText('Loading full quality…')).not.toBeOnTheScreen();
+    // The status line stays, so the card does not shrink when the full scan replaces the preview.
+    expect(screen.getByText('Shown in full quality.')).toBeOnTheScreen();
     expect(mockStore.writes).toEqual([]);
     expect(fakeFileSystem.log).toEqual([]);
   });
