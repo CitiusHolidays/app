@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { Arrive, Avatar, EveryoneSeal, Icon, QuietState, StepNumber, TickStrip } from '@/components/kit';
-import { headcountAnswer, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
+import { headcountAnswer, nobodyTravelling, PARTIAL_ROSTER_NOTICE, summarize } from '@/features/headcount/headcount';
 import { useHeadcount } from '@/features/headcount/use-headcount';
 import { PackMissing } from '@/features/trip-pack/pack-missing';
 import type { TripPack } from '@/features/trip-pack/trip-pack';
@@ -30,7 +30,7 @@ function Count({ jobCardId, pack }: { jobCardId: string; pack: TripPack }) {
   const theme = useAppTheme();
   const { loaded, state } = useHeadcount(jobCardId);
   // Nobody to count: "Everyone is marked" would be true of no one. Same words as the Headcount screen.
-  if (!pack.roster.some((entry) => entry.travelling)) {
+  if (nobodyTravelling(pack.roster)) {
     return (
       <Arrive>
         <Surface style={{ gap: space.lg }} variant="hero">
