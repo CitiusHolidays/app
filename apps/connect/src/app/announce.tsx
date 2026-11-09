@@ -34,12 +34,20 @@ export default function Announce() {
   const [audience, setAudience] = useState<Audience>({ kind: 'trip' });
   const [body, setBody] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
 
   // A message not yet shared is lost on close, so closing asks first (swipe down or back).
-  const allowLeave = usePreventRemove(Boolean(body.trim()), ({ repeat }) => {
+  const allowLeave = usePreventRemove(Boolean(body.trim()) && !leaving, ({ repeat }) => {
     Alert.alert('Discard this message?', 'It has not been shared, and it is not kept.', [
       { style: 'cancel', text: 'Keep editing' },
-      { onPress: repeat, style: 'destructive', text: 'Discard' },
+      {
+        onPress: () => {
+          setLeaving(true);
+          repeat();
+        },
+        style: 'destructive',
+        text: 'Discard',
+      },
     ]);
   });
 

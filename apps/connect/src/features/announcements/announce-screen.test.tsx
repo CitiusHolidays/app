@@ -1,5 +1,5 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
-import { Alert, type AlertButton, Platform, Share } from 'react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { Alert, type AlertButton, AppState, Platform, Share } from 'react-native';
 
 import Announce from '@/app/announce';
 import { batches, commandCenter, tourManagers, travellers } from '@/features/trip-pack/fixtures';
@@ -40,6 +40,18 @@ async function writeAndShare() {
   await fireEvent.press(screen.getByRole('button', { name: 'Share message' }));
 }
 
+let appStateListeners: ((state: string) => void)[] = [];
+
+/** The Android share sheet covers the app, then closes and hands it back. */
+async function returnFromShareSheet() {
+  await act(async () => {
+    for (const listener of [...appStateListeners]) listener('background');
+  });
+  await act(async () => {
+    for (const listener of [...appStateListeners]) listener('active');
+  });
+}
+
 /** Presses one button of the Alert the screen just raised. */
 async function answerAlert(alert: jest.SpyInstance, text: string) {
   const buttons = (alert.mock.calls.at(-1)?.[2] ?? []) as AlertButton[];
@@ -59,6 +71,16 @@ describe('announcement composer', () => {
     alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     // Android's share sheet reports "shared" whether or not the message went out.
     share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
+    appStateListeners = [];
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      const typed = listener as (state: string) => void;
+      appStateListeners.push(typed);
+      return {
+        remove: () => {
+          appStateListeners = appStateListeners.filter((candidate) => candidate !== typed);
+        },
+      } as ReturnType<typeof AppState.addEventListener>;
+    });
   });
   afterEach(() => {
     alert.mockRestore();
@@ -82,9 +104,33 @@ describe('announcement composer', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
+  it('asks on Android only once the share sheet has closed, since a question raised behind it is lost', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await writeAndShare();
+    await act(async () => {
+      for (const listener of [...appStateListeners]) listener('background');
+    });
+    expect(alert).not.toHaveBeenCalled();
+    await act(async () => {
+      for (const listener of [...appStateListeners]) listener('active');
+    });
+    expect(alert).toHaveBeenCalledWith('Did you send it?', expect.any(String), expect.any(Array), expect.any(Object));
+    expect(appStateListeners).toHaveLength(0);
+  });
+
+  it('asks on Android anyway when the share sheet never covers the app', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await writeAndShare();
+    expect(alert).not.toHaveBeenCalled();
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Did you send it?', expect.any(String), expect.any(Array), expect.any(Object)), {
+      timeout: 3000,
+    });
+  });
+
   it('asks on Android whether the message was sent, and logs nothing if it was not', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     await writeAndShare();
+    await returnFromShareSheet();
     expect(alert).toHaveBeenCalledWith('Did you send it?', expect.any(String), expect.any(Array), expect.objectContaining({ cancelable: true }));
     await answerAlert(alert, 'Not sent');
     expect(mockEnqueue).not.toHaveBeenCalled();
@@ -96,6 +142,7 @@ describe('announcement composer', () => {
   it('logs and sends the announcement on Android once the tour manager says it was sent', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     await writeAndShare();
+    await returnFromShareSheet();
     await answerAlert(alert, 'Yes, sent');
     expect(mockEnqueue).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledTimes(1);
@@ -104,6 +151,7 @@ describe('announcement composer', () => {
   it('logs nothing on Android when the question is dismissed', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     await writeAndShare();
+    await returnFromShareSheet();
     const options = alert.mock.calls.at(-1)?.[3] as { onDismiss?: () => void };
     await act(async () => options.onDismiss?.());
     expect(mockEnqueue).not.toHaveBeenCalled();
@@ -126,6 +174,8 @@ describe('announcement composer', () => {
     expect(repeat).not.toHaveBeenCalled();
     await answerAlert(alert, 'Discard');
     expect(repeat).toHaveBeenCalledTimes(1);
+    // The guard turns off with the leave, so navigation does not warn that it is still on.
+    expect(mockGuard.prevent).toBe(false);
   });
 
   it('opens the checklist after a share without the discard question', async () => {
