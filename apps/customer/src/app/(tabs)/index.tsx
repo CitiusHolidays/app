@@ -4,21 +4,27 @@ import { useEffect, useMemo } from 'react';
 import { FlatList, Platform, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, PageTitle, SectionTitle } from '@/components/kit';
+import { Icon, PageTitle, SectionTitle, TAB_BAR_CLEARANCE } from '@/components/kit';
 import { Pop } from '@/components/motion-views';
 import { JourneysSkeleton } from '@/components/skeletons';
 import { Freshness, TripCard } from '@/components/trip-cards';
+import { NotSaved } from '@/components/trip-states';
 import { useCustomerSession } from '@/features/session/session';
-import { featuredTrip, type JourneyRow, journeyRows } from '@/features/trips/model';
+import { featuredTrip, type JourneyRow, journeyRows, type JourneySection } from '@/features/trips/model';
 import { prefetchCover } from '@/features/trips/prefetch-cover';
 import { useTrips } from '@/features/trips/use-trips';
 import { formatLongDate } from '@/i18n/format';
 import { useI18n } from '@/i18n/i18n';
+import type { MessageKey } from '@/i18n/locales/en';
 import { useNow } from '@/lib/use-now';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 
-/** Room under the list for the floating tab bar. */
-const TAB_BAR_CLEARANCE = 96;
+const SECTION_TITLE: Record<JourneySection, MessageKey> = {
+  next: 'journeys.nextTrip',
+  now: 'journeys.happeningNow',
+  past: 'journeys.past',
+  upcoming: 'journeys.upcoming',
+};
 
 function openTrip(tripId: string) {
   router.push({ params: { id: tripId }, pathname: '/trip/[id]' });
@@ -60,14 +66,13 @@ export default function Journeys() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const i18n = useI18n();
-  const { gate } = useCustomerSession();
+  const { offline } = useCustomerSession();
   const trips = useTrips();
   const now = useNow();
   const { width } = useWindowDimensions();
   const list = useMemo(() => trips.data ?? [], [trips.data]);
   const rows = useMemo(() => journeyRows(list), [list]);
-  const offline = gate.kind === 'signedIn' && gate.offline;
-  const refresh = usePullRefresh(trips.live);
+  const refresh = usePullRefresh(trips.status === 'live');
 
   // The trip most likely to be opened next: start its header photo now.
   const leadCover = featuredTrip(list)?.cover ?? null;
@@ -79,9 +84,9 @@ export default function Journeys() {
   const header = (
     <View style={{ gap: space.lg + 4, paddingBottom: space.lg + 4 }}>
       <PageTitle kicker={kicker} title={i18n.t('journeys.title')} />
-      <Freshness offline={offline} savedAt={trips.live ? null : trips.savedAt} />
-      {trips.loading ? <JourneysSkeleton label={i18n.t('common.loading')} /> : null}
-      {!trips.loading && list.length === 0 ? <NoTrips /> : null}
+      {trips.status === 'unavailable' ? <NotSaved /> : <Freshness offline={offline} savedAt={trips.status === 'live' ? null : trips.savedAt} />}
+      {trips.status === 'loading' ? <JourneysSkeleton label={i18n.t('common.loading')} /> : null}
+      {(trips.status === 'live' || trips.status === 'saved') && list.length === 0 ? <NoTrips /> : null}
     </View>
   );
 
@@ -89,7 +94,7 @@ export default function Journeys() {
     if (item.kind === 'section') {
       return (
         <View style={{ paddingBottom: space.md, paddingTop: space.lg }}>
-          <SectionTitle>{i18n.t(item.section === 'past' ? 'journeys.past' : 'journeys.upcoming')}</SectionTitle>
+          <SectionTitle>{i18n.t(SECTION_TITLE[item.section])}</SectionTitle>
         </View>
       );
     }

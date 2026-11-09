@@ -51,9 +51,11 @@ describe('invite added moment', () => {
     expect(router.replace).toHaveBeenCalledWith({ params: { id: 'trip-1' }, pathname: '/trip/[id]' });
   });
 
-  it('opens at once from the button, and goes to Journeys when the trip is hidden', async () => {
+  it('does not promise a trip that is not open in the app yet: no ticks, Close goes to Journeys', async () => {
     await shown(<AddedMoment destination={null} tripId={null} />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Open trip' }));
+    expect(screen.queryByText('Documents')).toBeNull();
+    expect(screen.getByText(/open it in the app before you travel/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
     expect(router.replace).toHaveBeenCalledWith('/');
   });
 });

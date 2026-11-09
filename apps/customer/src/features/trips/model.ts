@@ -49,19 +49,31 @@ export function featuredTrip(trips: readonly TripSummary[]) {
   return active.find((trip) => trip.phase === 'ongoing') ?? active[0] ?? null;
 }
 
+export type JourneySection = 'now' | 'next' | 'upcoming' | 'past';
+
 export type JourneyRow =
   | { key: string; kind: 'lead' | 'card'; trip: TripSummary }
-  | { key: string; kind: 'section'; section: 'upcoming' | 'past' };
+  | { key: string; kind: 'section'; section: JourneySection };
 
 /**
- * The Journeys screen as one flat list, so it can be virtualised: the lead trip, then upcoming
- * and past trips under their headings. Headings appear only above trips.
+ * The Journeys screen as one flat list, so it can be virtualised. The lead trip comes first under
+ * "Happening now" (with any other trip under way) or "Your next trip", then the remaining upcoming
+ * trips, then past ones. Headings appear only above trips.
  */
 export function journeyRows(trips: readonly TripSummary[]): JourneyRow[] {
   const lead = featuredTrip(trips);
   const { active, past } = splitTrips(trips);
-  const upcoming = active.filter((trip) => trip.tripId !== lead?.tripId);
-  const rows: JourneyRow[] = lead ? [{ key: `lead:${lead.tripId}`, kind: 'lead', trip: lead }] : [];
+  const rest = active.filter((trip) => trip.tripId !== lead?.tripId);
+  // The lead is the first trip under way when there is one, so any other trip under way joins it.
+  const leadOngoing = lead?.phase === 'ongoing';
+  const alsoNow = rest.filter((trip) => trip.phase === 'ongoing');
+  const upcoming = rest.filter((trip) => trip.phase !== 'ongoing');
+  const rows: JourneyRow[] = [];
+  if (lead) {
+    const section = leadOngoing ? 'now' : 'next';
+    rows.push({ key: `section:${section}`, kind: 'section', section }, { key: `lead:${lead.tripId}`, kind: 'lead', trip: lead });
+    for (const trip of alsoNow) rows.push({ key: `card:${trip.tripId}`, kind: 'card', trip });
+  }
   for (const [section, list] of [['upcoming', upcoming], ['past', past]] as const) {
     if (list.length === 0) continue;
     rows.push({ key: `section:${section}`, kind: 'section', section });

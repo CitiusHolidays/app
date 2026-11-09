@@ -10,8 +10,8 @@ export const hi: Messages = {
   'common.cancel': 'रद्द करें',
   'common.close': 'बंद करें',
   'common.comingSoon': 'जल्द आ रहा है',
-  'common.continue': 'आगे बढ़ें',
   'common.loading': 'लोड हो रहा है',
+  'common.notSaved': 'यह अभी इस फ़ोन पर सेव नहीं है। एक बार इंटरनेट से जुड़ें, फिर यह ऑफ़लाइन भी दिखेगा।',
   'common.offline': 'आप ऑफ़लाइन हैं। इस फ़ोन पर सेव की गई जानकारी दिखाई जा रही है।',
   'common.retry': 'फिर से कोशिश करें',
   'common.seeAll': 'सभी देखें',
@@ -25,6 +25,7 @@ export const hi: Messages = {
   'tabs.updates': 'अपडेट',
 
   'error.body': 'यह स्क्रीन नहीं दिखाई जा सकी। इस फ़ोन पर सेव की गई यात्राएँ सुरक्षित हैं।',
+  'error.screenBody': 'यह स्क्रीन नहीं दिखाई जा सकी। ऐप का बाकी हिस्सा काम कर रहा है, और इस फ़ोन पर सेव की गई यात्राएँ अब भी यहाँ हैं।',
   'error.signOut': 'साइन आउट करें',
   'error.title': 'कुछ गड़बड़ हो गई',
 
@@ -63,6 +64,7 @@ export const hi: Messages = {
   'invite.alreadyOnTrip': 'आपका खाता इस यात्रा में पहले से किसी और यात्री के रूप में जुड़ा है। हर यात्री का अपना खाता होना चाहिए।',
   'invite.addedTitle': 'सब तैयार है',
   'invite.addedBody': '{destination} अब आपकी यात्राओं में है।',
+  'invite.addedHidden': 'आप इस यात्रा में शामिल हैं। Citius Holidays आपकी यात्रा से पहले इसे ऐप में खोल देगा।',
   'invite.addedOpen': 'यात्रा खोलें',
   'invite.body': 'इस यात्रा को अपने खाते में जोड़ने के लिए स्वीकार करें। आपको दिन-प्रतिदिन का कार्यक्रम, दस्तावेज़ों की स्थिति, आपके टूर मैनेजर और अपडेट दिखेंगे।',
   'invite.consentLabel': 'मैं {name} का/की माता-पिता या अभिभावक हूँ। मैं Citius Holidays को इस यात्रा के लिए {name} की जानकारी इस्तेमाल करने की सहमति देता/देती हूँ।',
@@ -74,7 +76,6 @@ export const hi: Messages = {
   'invite.expiredBody': 'निमंत्रण 30 दिन तक काम करता है, और नया निमंत्रण पुराने की जगह ले लेता है। Citius Holidays से नया लिंक माँगें।',
   'invite.expiredTitle': 'यह निमंत्रण समाप्त हो गया है',
   'invite.failed': 'निमंत्रण स्वीकार नहीं हो सका। फिर से कोशिश करें।',
-  'invite.goToTrip': 'यात्रा पर जाएँ',
   'invite.greeting': 'नमस्ते {name}',
   'invite.invalidBody': 'जाँच लें कि आपने पूरा लिंक खोला है। अगर फिर भी काम न करे, तो Citius Holidays से नया लिंक माँगें।',
   'invite.invalidTitle': 'यह निमंत्रण लिंक काम नहीं कर रहा',
@@ -87,6 +88,8 @@ export const hi: Messages = {
   'invite.signIn': 'स्वीकार करने के लिए साइन इन करें',
   'invite.signedOutBody': 'Citius Holidays ने आपको इस ऐप में अपनी यात्रा देखने के लिए आमंत्रित किया है। स्वीकार करने के लिए अपने ईमेल से साइन इन करें।',
   'invite.signedOutTitle': 'आपको आमंत्रित किया गया है',
+  'invite.offline': 'आप ऑफ़लाइन हैं। यह आमंत्रण देखने के लिए इंटरनेट से जुड़ें।',
+  'invite.noEmail': 'इस खाते में कोई ईमेल पता नहीं है, इसलिए आमंत्रण इसमें नहीं जोड़ा जा सकता। अपने ईमेल लिंक से साइन इन करें।',
   'invite.tripHidden': 'Citius Holidays आपकी यात्रा से पहले इसे ऐप में खोल देगा। आप अभी स्वीकार कर सकते हैं।',
   'invite.usedBody': 'यह निमंत्रण किसी दूसरे खाते से स्वीकार किया जा चुका है। अगर वह आप नहीं थे, तो Citius Holidays से संपर्क करें।',
   'invite.usedTitle': 'यह निमंत्रण पहले ही इस्तेमाल हो चुका है',
@@ -105,9 +108,7 @@ export const hi: Messages = {
   'journeys.withChildren_one': '{count} बच्चे के साथ',
   'journeys.withChildren_other': '{count} बच्चों के साथ',
 
-  'phase.ongoing': 'यात्रा पर',
   'phase.past': 'पूरी हुई',
-  'phase.upcoming': 'आने वाली',
 
   'countdown.days_one': '{count} दिन में शुरू',
   'countdown.days_other': '{count} दिन में शुरू',
@@ -127,6 +128,7 @@ export const hi: Messages = {
   'trip.documentsNote': 'Citius Holidays में दर्ज स्थिति। दस्तावेज़ Citius के पास ही रहते हैं।',
   'trip.family': 'इस यात्रा पर बच्चे',
   'trip.giveConsent': 'सहमति दें',
+  'trip.giveTitle': '{name} के लिए सहमति दें?',
   'trip.group': 'समूह {code}',
   'trip.minor': 'बच्चा',
   'trip.noContacts': 'यात्रा से पहले आपके टूर मैनेजर की जानकारी यहाँ दिखेगी।',
@@ -152,7 +154,6 @@ export const hi: Messages = {
   'doc.passport': 'पासपोर्ट',
   'doc.ticket': 'टिकट',
   'doc.visa': 'वीज़ा',
-  'doc.visaNotRequired': 'ज़रूरी नहीं',
 
   'status.passport.Not Required': 'ज़रूरी नहीं',
   'status.passport.Pending': 'बाकी है',
@@ -195,7 +196,7 @@ export const hi: Messages = {
   'me.version': 'संस्करण {version}',
 
   'language.body': 'ऐप की भाषा चुनें। यात्रा का कार्यक्रम और संदेश वैसे ही दिखेंगे जैसे Citius Holidays ने लिखे हैं।',
-  'language.planned': 'अनुवाद जल्द आ रहा है',
+  'language.comingSoon': 'जल्द आ रही हैं: {names}',
   'language.title': 'भाषा',
 
   'delete.confirm': 'मेरा खाता हटाएँ',

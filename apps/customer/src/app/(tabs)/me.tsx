@@ -19,8 +19,7 @@ function open(url: string) {
 export default function Me() {
   const theme = useAppTheme();
   const { language, t } = useI18n();
-  const { gate, signOut } = useCustomerSession();
-  const live = gate.kind === 'signedIn' && !gate.offline;
+  const { live, signOut } = useCustomerSession();
   const profile = useQuery(customerApi.getMyProfile.ref, live ? {} : 'skip');
   const trips = useTrips();
   const travellerName = trips.data?.find((trip) => trip.travellerName)?.travellerName ?? null;

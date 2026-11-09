@@ -24,6 +24,10 @@ const KEPT_THROUGH_WIPE = [LANGUAGE_KEY, PENDING_INVITE_KEY];
 interface CustomerSession {
   gate: Gate;
   online: boolean;
+  /** Signed in, and the server can be reached: live queries run. */
+  live: boolean;
+  /** Signed in without a connection: screens show what was saved, and say so. */
+  offline: boolean;
   /** Ends the session here and on the server, and deletes everything saved on this phone. */
   signOut: () => Promise<void>;
   /** Deletes saved data and the local session after the account itself was deleted. */
@@ -152,7 +156,7 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
   }, [rejectedWithData, wipeLocalData]);
 
   return (
-    <SessionContext.Provider value={{ forget: () => end(false), gate, online, signOut: () => end(true) }}>
+    <SessionContext.Provider value={{ forget: () => end(false), gate, live: gate.kind === 'signedIn' && !gate.offline, offline: gate.kind === 'signedIn' && gate.offline, online, signOut: () => end(true) }}>
       {children}
     </SessionContext.Provider>
   );

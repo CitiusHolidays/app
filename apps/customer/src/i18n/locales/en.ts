@@ -9,8 +9,8 @@ export const en = {
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.comingSoon': 'Coming soon',
-  'common.continue': 'Continue',
   'common.loading': 'Loading',
+  'common.notSaved': "This isn't saved on this phone yet. Connect to the internet once and it will be here offline too.",
   'common.offline': "You're offline. Showing what was saved on this phone.",
   'common.retry': 'Try again',
   'common.seeAll': 'See all',
@@ -24,6 +24,7 @@ export const en = {
   'tabs.updates': 'Updates',
 
   'error.body': 'This screen could not be shown. The trips saved on this phone are still here.',
+  'error.screenBody': "This screen could not be shown. The rest of the app still works, and trips saved on this phone are still here.",
   'error.signOut': 'Sign out',
   'error.title': 'Something went wrong',
 
@@ -62,6 +63,7 @@ export const en = {
   'invite.alreadyOnTrip': 'Your account is already on this trip as another traveller. Each traveller needs their own account.',
   'invite.addedTitle': "You're all set",
   'invite.addedBody': '{destination} is in your trips now.',
+  'invite.addedHidden': "You're on the trip. Citius Holidays will open it in the app before you travel.",
   'invite.addedOpen': 'Open trip',
   'invite.body': "Accept to add this trip to your account. You'll see the day-by-day plan, your documents' status, your tour manager and updates.",
   'invite.consentLabel': "I am {name}'s parent or guardian. I consent to Citius Holidays using {name}'s details to run this trip.",
@@ -73,7 +75,6 @@ export const en = {
   'invite.expiredBody': 'An invite works for 30 days, and a newer invite replaces an older one. Ask Citius Holidays for a new link.',
   'invite.expiredTitle': 'This invite has expired',
   'invite.failed': 'The invite could not be accepted. Try again.',
-  'invite.goToTrip': 'Go to the trip',
   'invite.greeting': 'Hello {name}',
   'invite.invalidBody': "Check that you opened the whole link. If it still doesn't work, ask Citius Holidays to send a new one.",
   'invite.invalidTitle': "This invite link doesn't work",
@@ -86,6 +87,8 @@ export const en = {
   'invite.signIn': 'Sign in to accept',
   'invite.signedOutBody': 'Citius Holidays has invited you to see your trip in this app. Sign in with your email to accept.',
   'invite.signedOutTitle': "You're invited",
+  'invite.offline': "You're offline. Connect to the internet to see this invite.",
+  'invite.noEmail': 'This account has no email address, so the invite cannot be added to it. Sign in with your email link instead.',
   'invite.tripHidden': 'Citius Holidays will open your trip in the app before you travel. You can accept now.',
   'invite.usedBody': "This invite was accepted with another account. If that wasn't you, contact Citius Holidays.",
   'invite.usedTitle': 'This invite was already used',
@@ -104,9 +107,7 @@ export const en = {
   'journeys.withChildren_one': 'With {count} child',
   'journeys.withChildren_other': 'With {count} children',
 
-  'phase.ongoing': 'On trip',
   'phase.past': 'Completed',
-  'phase.upcoming': 'Upcoming',
 
   'countdown.days_one': 'Starts in {count} day',
   'countdown.days_other': 'Starts in {count} days',
@@ -126,6 +127,7 @@ export const en = {
   'trip.documentsNote': 'Status as recorded by Citius Holidays. The documents themselves stay with Citius.',
   'trip.family': 'Children on this trip',
   'trip.giveConsent': 'Give consent',
+  'trip.giveTitle': 'Give consent for {name}?',
   'trip.group': 'Group {code}',
   'trip.minor': 'Child',
   'trip.noContacts': "Your tour manager's details appear here before you travel.",
@@ -151,7 +153,6 @@ export const en = {
   'doc.passport': 'Passport',
   'doc.ticket': 'Ticket',
   'doc.visa': 'Visa',
-  'doc.visaNotRequired': 'Not required',
 
   'status.passport.Not Required': 'Not required',
   'status.passport.Pending': 'Pending',
@@ -194,7 +195,7 @@ export const en = {
   'me.version': 'Version {version}',
 
   'language.body': 'Choose the language for the app. Trip plans and messages appear as Citius Holidays wrote them.',
-  'language.planned': 'Translation coming soon',
+  'language.comingSoon': 'Coming soon: {names}',
   'language.title': 'Language',
 
   'delete.confirm': 'Delete my account',

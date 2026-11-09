@@ -1,10 +1,10 @@
 import { customerApi, type ConsentState, PARENTAL_CONSENT_TEXT_VERSION, type TripDetail, type TripSummary } from '@citius/backend/customer';
-import { Banner, Button, PressableScale, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
+import { Banner, Button, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { tripSchedule } from '@citius/core/src/schedule';
 import { useMutation } from 'convex/react';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, StyleSheet, View } from 'react-native';
+import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -18,12 +18,14 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, ListCard, MessageScreen, Row, SectionTitle } from '@/components/kit';
+import { Icon, ListCard, Row, SectionTitle } from '@/components/kit';
 import { TripHeroSkeleton, TripSheetSkeleton } from '@/components/skeletons';
 import { DESTINATION_TYPE } from '@/components/destination-type';
 import { DestinationCover } from '@/components/destination-cover';
 import { Freshness } from '@/components/trip-cards';
 import { AnnouncementItem, ContactRow, DocumentsCard } from '@/components/trip-sections';
+import { NotSaved, TripUnavailable } from '@/components/trip-states';
+import { RoundBackButton } from '@/components/round-button';
 import { useCustomerSession } from '@/features/session/session';
 import { CITIUS_EMAIL } from '@/features/support/contacts';
 import { datesAndNights, timingText } from '@/features/trips/labels';
@@ -36,34 +38,12 @@ import { haptic } from '@/lib/haptic';
 import { runThen } from '@/lib/run-then';
 import { logEvent } from '@/lib/safe-log';
 import { useNow } from '@/lib/use-now';
+import { usePullRefresh } from '@/lib/use-pull-refresh';
+
+export { ScreenError as ErrorBoundary } from '@/components/error-boundary';
 
 /** The photo's arrival from the Journeys card: short, so the header is still before a tap lands. */
 const PHOTO_SETTLE_MS = 280;
-
-function BackButton({ onPaper }: { onPaper?: boolean }) {
-  const theme = useAppTheme();
-  const { t } = useI18n();
-  return (
-    <PressableScale
-      accessibilityLabel={t('common.back')}
-      accessibilityRole="button"
-      hitSlop={8}
-      onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-      style={{
-        alignItems: 'center',
-        backgroundColor: onPaper ? theme.color.card : 'rgba(11,16,38,0.45)',
-        borderColor: onPaper ? theme.color.border : 'rgba(255,255,255,0.35)',
-        borderRadius: 24,
-        borderWidth: 1,
-        height: 48,
-        justifyContent: 'center',
-        width: 48,
-      }}
-    >
-      <Icon color={onPaper ? theme.color.ink : '#ffffff'} ios="chevron.left" md="arrow_back" size={18} />
-    </PressableScale>
-  );
-}
 
 /** The traveller's own line under the title: their name, group code and children, as chips. */
 function yourChips(i18n: ReturnType<typeof useI18n>, trip: TripSummary, detail: TripDetail | undefined) {
@@ -110,7 +90,7 @@ function TripHeader({ chips, now, scrollY, trip }: { chips: string[]; now: numbe
         <DestinationCover photo={trip.cover} priority="high" scrim="full" />
       </Animated.View>
       <View style={{ flex: 1, justifyContent: 'space-between', paddingBottom: space.xxl + space.xl, paddingHorizontal: theme.frame, paddingTop: insets.top + space.sm }}>
-        <BackButton />
+        <RoundBackButton />
         <View style={{ gap: space.sm }}>
           <View
             style={{
@@ -171,6 +151,8 @@ function TodayCard({ detail, now }: { detail: TripDetail; now: number }) {
   const { steps } = tripSchedule(detail.plan?.content ?? '', detail.trip.travelStartDate ?? '', detail.trip.travelEndDate ?? '', now);
   const today = steps.find((step) => step.state === 'current');
   const next = steps.find((step) => step.state === 'upcoming');
+  const todayNumber = today ? dayNumber(today.dayLabel) : null;
+  const nextNumber = next ? dayNumber(next.dayLabel) : null;
   return (
     <Surface variant="hero" style={{ borderColor: theme.color.primary, borderWidth: 1.5, gap: space.sm }}>
       <View style={{ alignItems: 'center', flexDirection: 'row', gap: space.sm }}>
@@ -182,7 +164,7 @@ function TodayCard({ detail, now }: { detail: TripDetail; now: number }) {
       </View>
       {today ? (
         <>
-          <Text variant="section">{dayNumber(today.dayLabel) ? t('plan.day', { day: dayNumber(today.dayLabel) ?? '' }) : ''}</Text>
+          {todayNumber ? <Text variant="section">{t('plan.day', { day: todayNumber })}</Text> : null}
           <Text>{today.text || t('trip.todayNothing')}</Text>
         </>
       ) : (
@@ -190,7 +172,7 @@ function TodayCard({ detail, now }: { detail: TripDetail; now: number }) {
       )}
       {next?.text ? (
         <Text numberOfLines={2} tone="muted" variant="secondary">
-          {dayNumber(next.dayLabel) ? `${t('plan.day', { day: dayNumber(next.dayLabel) ?? '' })}: ` : ''}
+          {nextNumber ? `${t('plan.day', { day: nextNumber })}: ` : ''}
           {next.text}
         </Text>
       ) : null}
@@ -281,12 +263,21 @@ function FamilyCard({ detail, tripId }: { detail: TripDetail; tripId: string }) 
       setProblem(true);
     }
   };
-  const askToWithdraw = (minor: TripDetail['minors'][number]) => {
+  // Consent is recorded against the wording the traveller saw, so both directions show it first:
+  // giving shows the same statement the invite asks them to tick.
+  const ask = (minor: TripDetail['minors'][number]) => {
     const name = minor.fullName.split(' ')[0] ?? minor.fullName;
-    Alert.alert(t('trip.withdrawTitle', { name }), t('trip.withdrawBody', { name }), [
-      { style: 'cancel', text: t('common.cancel') },
-      { onPress: () => void change(minor, 'withdrawn'), style: 'destructive', text: t('trip.withdrawConsent') },
-    ]);
+    if (minor.consent === 'granted') {
+      Alert.alert(t('trip.withdrawTitle', { name }), t('trip.withdrawBody', { name }), [
+        { style: 'cancel', text: t('common.cancel') },
+        { onPress: () => void change(minor, 'withdrawn'), style: 'destructive', text: t('trip.withdrawConsent') },
+      ]);
+    } else {
+      Alert.alert(t('trip.giveTitle', { name }), t('invite.consentLabel', { name }), [
+        { style: 'cancel', text: t('common.cancel') },
+        { onPress: () => void change(minor, 'granted'), text: t('trip.giveConsent') },
+      ]);
+    }
   };
   return (
     <Surface style={{ gap: space.md }}>
@@ -304,7 +295,7 @@ function FamilyCard({ detail, tripId }: { detail: TripDetail; tripId: string }) 
           <Button
             busy={busy === minor.travellerId}
             label={minor.consent === 'granted' ? t('trip.withdrawConsent') : t('trip.giveConsent')}
-            onPress={() => (minor.consent === 'granted' ? askToWithdraw(minor) : void change(minor, 'granted'))}
+            onPress={() => ask(minor)}
             variant="secondary"
           />
         </View>
@@ -364,7 +355,7 @@ function CompactBar({
         barStyle,
       ]}
     >
-      <BackButton onPaper />
+      <RoundBackButton onPaper />
       <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }} variant="bodyStrong">
         {title}
       </Text>
@@ -448,10 +439,11 @@ export default function TripScreen() {
   const insets = useSafeAreaInsets();
   const i18n = useI18n();
   const { t } = i18n;
-  const { gate } = useCustomerSession();
+  const { offline } = useCustomerSession();
   const { id } = useLocalSearchParams<{ id: string }>();
   const trip = useTrip(id);
   const trips = useTrips();
+  const refresh = usePullRefresh(trip.status === 'live');
   const now = useNow();
   const detail = trip.data;
   const summary = detail?.trip ?? trips.data?.find((item) => item.tripId === id);
@@ -470,26 +462,14 @@ export default function TripScreen() {
       scheduleOnRN(setOnSheet, next);
     }
   });
-  if (detail === null) {
-    return (
-      <>
-        <Stack.Screen options={{ statusBarStyle: 'dark' }} />
-        <MessageScreen
-          actions={<Button label={t('common.close')} onPress={() => router.replace('/')} variant="secondary" />}
-          icon={{ ios: 'eye.slash', md: 'visibility_off' }}
-          text={t('trip.notAvailableBody')}
-          title={t('trip.notAvailableTitle')}
-        />
-      </>
-    );
-  }
-  const offline = gate.kind === 'signedIn' && gate.offline;
+  if (detail === null) return <TripUnavailable />;
   return (
     <View style={{ backgroundColor: theme.color.ground, flex: 1 }}>
       <Animated.ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}
         contentInsetAdjustmentBehavior="never"
         onScroll={onScroll}
+        refreshControl={<RefreshControl onRefresh={refresh.onRefresh} refreshing={refresh.refreshing} tintColor="#ffffff" />}
         scrollEventThrottle={16}
         style={{ backgroundColor: theme.color.ground }}
       >
@@ -502,7 +482,7 @@ export default function TripScreen() {
           {summary ? (
             <TripHeader chips={yourChips(i18n, summary, detail)} now={now} scrollY={scrollY} trip={summary} />
           ) : (
-            <TripHeroSkeleton back={<BackButton />} />
+            <TripHeroSkeleton back={<RoundBackButton />} />
           )}
         </View>
         <View
@@ -517,7 +497,9 @@ export default function TripScreen() {
           }}
         >
           {detail ? (
-            <TripSheet detail={detail} now={now} offline={offline} savedAt={trip.live ? null : trip.savedAt} tripId={id ?? ''} />
+            <TripSheet detail={detail} now={now} offline={offline} savedAt={trip.status === 'live' ? null : trip.savedAt} tripId={id ?? ''} />
+          ) : trip.status === 'unavailable' ? (
+            <NotSaved />
           ) : (
             <TripSheetSkeleton label={t('common.loading')} ongoing={summary?.phase === 'ongoing'} />
           )}
