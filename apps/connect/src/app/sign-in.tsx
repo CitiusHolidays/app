@@ -19,11 +19,10 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, TextField } from '@/components/kit';
-import { OPEN_TIMEOUT_MS, type SignInState, signInRefusal } from '@/features/gate/sign-in-state';
-import { clients } from '@/lib/clients';
+import { canSignIn, signInWithEmail } from '@/features/gate/sign-in';
+import { OPEN_TIMEOUT_MS, type SignInState } from '@/features/gate/sign-in-state';
 import { haptic } from '@/lib/haptics';
 import { EASE_OUT } from '@/lib/motion';
-import { logEvent } from '@/lib/safe-log';
 import { useAnnounce } from '@/lib/use-announce';
 
 /** The website's sign-in artwork (Udaipur), bundled so the screen opens complete with no network. */
@@ -86,31 +85,19 @@ export default function SignIn() {
   };
 
   const submit = async () => {
-    if (!clients || busy) return;
+    if (!canSignIn || busy) return;
     if (!email.trim() || !password) {
       setState({ kind: 'refused', message: 'Enter your work email and password.' });
       refuse();
       return;
     }
     setState({ kind: 'submitting' });
-    try {
-      const { error } = await clients.auth.signIn.email({ email: email.trim(), password });
-      if (error) {
-        logEvent('auth.sign-in-refused');
-        const next = signInRefusal(error.status);
-        // Only the person's own mistake shakes the fields; anything else just buzzes.
-        if (next.kind === 'refused') refuse();
-        else haptic('error');
-        setState(next);
-      } else {
-        haptic('success');
-        setState({ kind: 'done' });
-      }
-    } catch (error) {
-      logEvent('auth.sign-in-failed', error);
-      haptic('error');
-      setState({ kind: 'error', message: 'Could not reach Citius. Check your connection and try again.' });
-    }
+    const next = await signInWithEmail(email.trim(), password);
+    // Only the person's own mistake shakes the fields; anything else just buzzes.
+    if (next.kind === 'done') haptic('success');
+    else if (next.kind === 'refused') refuse();
+    else haptic('error');
+    setState(next);
   };
 
   const photoHeight = Math.round(height * 0.56);
