@@ -61,7 +61,7 @@ async function holdsSavedSession() {
 
 /** Asks Better Auth to fetch the session again; Convex then asks for a new token. */
 function refetchSession() {
-  (clients?.auth as { $store?: { notify: (signal: '$sessionSignal') => void } } | undefined)?.$store?.notify('$sessionSignal');
+  clients?.auth.$store.notify('$sessionSignal');
 }
 
 export function StaffSessionProvider({ children }: { children: ReactNode }) {

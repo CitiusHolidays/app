@@ -43,7 +43,8 @@ export async function clearLocalAuthSession() {
   if (Platform.OS !== 'web') {
     await deleteStoredSession(SecureStore);
   }
-  const atom = (clients?.auth as { $store?: { atoms?: { session?: SessionAtom } } } | undefined)?.$store?.atoms?.session;
+  // Better Auth types its atoms loosely; the session atom holds the `useSession()` state.
+  const atom: SessionAtom | undefined = clients?.auth.$store.atoms.session;
   if (atom) {
     atom.set({ ...atom.get(), data: null, error: null, isPending: false });
   }

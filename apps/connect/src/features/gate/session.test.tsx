@@ -33,6 +33,7 @@ jest.mock('@/lib/clients', () => ({
   APP_SCHEME: 'citiusconnect',
   clients: {
     auth: {
+      $store: { notify: () => undefined },
       getCookie: async () => 'better-auth.session_token=synthetic',
       signOut: () => mockSignOut(),
       useSession: () => mockSession,
