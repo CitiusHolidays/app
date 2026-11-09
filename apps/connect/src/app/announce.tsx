@@ -1,7 +1,7 @@
 import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
-import { router } from 'expo-router';
+import { router, usePreventRemove } from 'expo-router';
 import { useState } from 'react';
-import { Share, View } from 'react-native';
+import { Alert, Share, View } from 'react-native';
 
 import { Chip, ChipRow, Icon, ListCard, ProblemBanner, QuietState, Row, Screen, SectionTitle, TextField } from '@/components/kit';
 import {
@@ -34,6 +34,22 @@ export default function Announce() {
   const [audience, setAudience] = useState<Audience>({ kind: 'trip' });
   const [body, setBody] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  // A message not yet shared is lost on close, so closing asks first (swipe down or back).
+  const allowLeave = usePreventRemove(Boolean(body.trim()) && !leaving, ({ repeat }) => {
+    Alert.alert('Discard this message?', 'It has not been shared, and it is not kept.', [
+      { style: 'cancel', text: 'Keep editing' },
+      {
+        onPress: () => {
+          setLeaving(true);
+          repeat();
+        },
+        style: 'destructive',
+        text: 'Discard',
+      },
+    ]);
+  });
 
   if (!pack || !selected) {
     return (
@@ -68,6 +84,8 @@ export default function Announce() {
       add(announcement);
       haptic('success');
       setBody('');
+      // Shared and logged, so leaving loses nothing: open the checklist without the discard question.
+      allowLeave();
       router.replace(announcementHref(announcement));
     } catch (error) {
       logEvent('announce.share-failed', error);
