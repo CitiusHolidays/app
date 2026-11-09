@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { getFunctionName } from 'convex/server';
 import { useEffect } from 'react';
-import { Text } from 'react-native';
+import { AppState, Text } from 'react-native';
 
 import { batches, commandCenter, tourManagers, travellers } from '@/features/trip-pack/fixtures';
 import { buildTripPack } from '@/features/trip-pack/trip-pack';
@@ -106,7 +106,9 @@ describe('trips provider', () => {
     });
     await renderTrips();
     await waitFor(async () => expect(await mockStore.keys('pack:')).toEqual([]));
-    await waitFor(() => expect(handles.trips?.packProblem).toBe('This trip is not live in the app any more.'));
+    await waitFor(() => expect(handles.trips?.packStatus.kind).toBe('off'));
+    // The banner explains it; the freshness notice does not repeat it.
+    expect(handles.trips?.packProblem).toBeNull();
   });
 
   it('keeps saved packs when the trip list came back incomplete', async () => {
@@ -174,5 +176,68 @@ describe('trips provider', () => {
     });
     await waitFor(async () => expect(await mockStore.keys('pack:')).toEqual([]));
     expect(await mockStore.getJSON('trips:list')).toBeNull();
+  });
+
+  it("never shows one trip's pack problem on another trip", async () => {
+    const other = { ...commandCenter.jobCard, id: 'jc_other' };
+    const jobCardId = commandCenter.jobCard.id;
+    await mockStore.setJSON(`pack:${jobCardId}`, { ...savedPack(jobCardId), savedAt: 0 });
+    await mockStore.setJSON('pack:jc_other', savedPack('jc_other'));
+    mockQuery.mockImplementation(async (ref: unknown) => {
+      const name = getFunctionName(ref as Parameters<typeof getFunctionName>[0]);
+      if (name === 'crm/jobCards:listMyAssignedPage') return page([commandCenter.jobCard, other]);
+      throw new Error('network');
+    });
+    await renderTrips();
+    await waitFor(() => expect(handles.trips?.packStatus.kind).toBe('stale'));
+    expect(handles.trips?.packProblem).toBe('Could not update the trip pack. Showing the saved copy.');
+    await act(async () => handles.trips?.selectTrip('jc_other'));
+    await waitFor(() => expect(handles.trips?.packStatus.kind).toBe('ready'));
+    expect(handles.trips?.packProblem).toBeNull();
+  });
+
+  it('says it is still loading the first trip list, rather than that there are no trips', async () => {
+    let release: () => void = () => undefined;
+    mockHold = new Promise((resolve) => {
+      release = resolve;
+    });
+    await renderTrips();
+    await waitFor(() => expect(handles.trips?.tripsStatus.kind).toBe('loading'));
+    await act(async () => release());
+    await waitFor(() => expect(handles.trips?.tripsStatus.kind).toBe('ready'));
+  });
+
+  it('says the first trip list could not be loaded, and an empty answer means no trips', async () => {
+    mockQuery.mockImplementation(async () => {
+      throw new Error('network');
+    });
+    await renderTrips();
+    await waitFor(() => expect(handles.trips?.tripsStatus.kind).toBe('failed'));
+    expect(handles.trips?.tripsProblem).toBe('Could not load your trips. Pull down to try again.');
+
+    mockQuery.mockImplementation(async () => page([]));
+    await act(async () => handles.trips?.refreshTrips());
+    expect(handles.trips?.tripsStatus.kind).toBe('empty');
+    expect(handles.trips?.tripsProblem).toBeNull();
+  });
+
+  it('refreshes a stale pack when the app comes back to the foreground', async () => {
+    const listeners: ((state: string) => void)[] = [];
+    const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      listeners.push(listener as (state: string) => void);
+      return { remove: () => undefined } as ReturnType<typeof AppState.addEventListener>;
+    });
+    try {
+      await renderTrips();
+      expect(await screen.findByText('trips:1 pack:complete chosen:none')).toBeOnTheScreen();
+      const jobCardId = commandCenter.jobCard.id;
+      await waitFor(async () => expect(await mockStore.getJSON(`pack:${jobCardId}`)).not.toBeNull());
+      await mockStore.setJSON(`pack:${jobCardId}`, { ...savedPack(jobCardId), savedAt: Date.now() - 60 * 60 * 1000 });
+      mockQuery.mockClear();
+      await act(async () => listeners.forEach((listener) => listener('active')));
+      await waitFor(() => expect(calledNames()).toContain('crm/jobCards:getCommandCenter'));
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
