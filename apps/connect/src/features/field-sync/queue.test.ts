@@ -157,9 +157,10 @@ describe('field sync queue', () => {
   });
 
   it('reads items saved before the explicit states, with their flags turned into one state', () => {
-    const [item] = enqueuePush([], stop(['t_1'], NOW), 'staff_1', NOW);
+    const push = stop(['t_1'], NOW);
+    const [item] = enqueuePush([], push, 'staff_1', NOW);
     if (!item) throw new Error('no item');
-    const legacy = { args: item.args, attempts: 0, ignoredTravellerIds: 1, key: item.key, kind: item.kind, newerOnServer: false, nextAttemptAt: NOW, staffId: 'staff_1', updatedAt: NOW };
+    const legacy = { ...push, attempts: 0, ignoredTravellerIds: 1, key: item.key, newerOnServer: false, nextAttemptAt: NOW, staffId: 'staff_1', updatedAt: NOW };
     const [synced, refused, waiting] = readSyncItems([
       { ...legacy, status: 'synced', syncedAt: NOW + 5 },
       { ...legacy, problem: 'No', status: 'needsAttention' },

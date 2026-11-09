@@ -12,7 +12,7 @@ export interface RosterGroup {
 
 /** The roster by travel batch, in the pack's batch order; travellers without a batch come last. */
 export function groupRoster(pack: Pick<TripPack, 'batches' | 'roster'>): RosterGroup[] {
-  const groups = pack.batches.map((batch) => ({ entries: [] as RosterEntry[], id: batch.id, label: batch.label }));
+  const groups = pack.batches.map((batch): Omit<RosterGroup, 'travelling'> => ({ entries: [], id: batch.id, label: batch.label }));
   const byId = new Map(groups.map((group) => [group.id, group]));
   const loose: RosterEntry[] = [];
   for (const entry of pack.roster) {
