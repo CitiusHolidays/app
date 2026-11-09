@@ -11,7 +11,8 @@ import { useCallback, useState } from 'react';
 import { Linking, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { Icon, MessageScreen, Placeholder, Screen, TextField } from '@/components/kit';
+import { Icon, MessageScreen, Screen, TextField } from '@/components/kit';
+import { DeletionStepSkeleton } from '@/components/skeletons';
 import { STEP_IN, TEXT_SWAP_IN } from '@/components/motion';
 import { requestEmailLink } from '@/features/auth/methods';
 import { RETURN_TO_KEY, useCustomerSession } from '@/features/session/session';
@@ -135,7 +136,7 @@ export default function DeleteAccount() {
   let step: string;
   if (check.kind === 'loading' || profile === undefined) {
     step = 'loading';
-    action = <Placeholder label={t('common.loading')} lines={2} />;
+    action = <DeletionStepSkeleton label={t('common.loading')} />;
   } else if (check.kind === 'unavailable') {
     step = 'unavailable';
     action = (

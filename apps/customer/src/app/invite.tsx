@@ -8,9 +8,9 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DestinationCover } from '@/components/destination-cover';
+import { DESTINATION_TYPE } from '@/components/destination-type';
 import { AddedMoment } from '@/components/invite-added';
 import { MOTION } from '@/components/motion';
-import { Pop } from '@/components/motion-views';
 import { Icon, MessageScreen, TopTint } from '@/components/kit';
 import { InviteSkeleton } from '@/components/skeletons';
 import { PENDING_INVITE_KEY, useCustomerSession } from '@/features/session/session';
@@ -34,7 +34,7 @@ function Checkbox({ checked, label, onToggle }: { checked: boolean; label: strin
       onPress={onToggle}
       style={{ alignItems: 'flex-start', flexDirection: 'row', gap: space.md, minHeight: theme.minTarget, paddingVertical: space.sm }}
     >
-      {/* The box fills (150ms), then the tick pops in; unticking just clears (transitions.dev check). */}
+      {/* The box fills (150ms) with the tick in it; unticking just clears (transitions.dev check). */}
       <Animated.View
         style={{
           alignItems: 'center',
@@ -50,11 +50,7 @@ function Checkbox({ checked, label, onToggle }: { checked: boolean; label: strin
           width: 26,
         }}
       >
-        {checked ? (
-          <Pop>
-            <Icon color={theme.color.onPrimary} ios="checkmark" md="check" size={15} />
-          </Pop>
-        ) : null}
+        {checked ? <Icon color={theme.color.onPrimary} ios="checkmark" md="check" size={15} /> : null}
       </Animated.View>
       <Text style={{ flex: 1 }}>{label}</Text>
     </PressableScale>
@@ -105,6 +101,7 @@ function InviteForAccount({ token }: { token: string }) {
   if (preview === undefined) {
     return (
       <View style={{ backgroundColor: theme.color.ground, flex: 1, padding: theme.frame, paddingTop: insets.top + space.xxl }}>
+        <TopTint />
         <InviteSkeleton label={t('common.loading')} />
       </View>
     );
@@ -163,7 +160,7 @@ function InviteForAccount({ token }: { token: string }) {
           <View style={{ flex: 1, gap: space.sm, justifyContent: 'flex-end', padding: space.xl }}>
             {preview.trip ? (
               <>
-                <Text style={{ fontSize: 42, lineHeight: 46 }} tone="onDark" variant="display">
+                <Text style={DESTINATION_TYPE.invite} tone="onDark" variant="display">
                   {preview.trip.destination}
                 </Text>
                 <Text style={{ color: 'rgba(255,255,255,0.85)' }}>

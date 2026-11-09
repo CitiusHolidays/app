@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Icon, ListCard, Screen } from '@/components/kit';
+import { MOTION } from '@/components/motion';
 import { Pop } from '@/components/motion-views';
 import { useI18n } from '@/i18n/i18n';
 import { LANGUAGES } from '@/i18n/languages';
 import { haptic } from '@/lib/haptic';
 
-/** Long enough to see the tick land on the new language before the screen closes. */
+/** Long enough to see the tick land on the new language (its pop takes MOTION.fast) before the screen closes. */
 const CLOSE_AFTER_MS = 320;
 
 /** Every language Citius is building for; the ones not translated yet are listed but not offered. */
@@ -59,7 +60,7 @@ export default function LanguageScreen() {
                   </Text>
                 </View>
                 {selected && option.code !== opened ? (
-                  <Pop>
+                  <Pop duration={MOTION.fast}>
                     <Icon color={theme.color.primary} ios="checkmark.circle.fill" md="check_circle" size={22} />
                   </Pop>
                 ) : null}

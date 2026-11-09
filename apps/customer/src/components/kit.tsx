@@ -13,9 +13,10 @@ import {
   type TextInputProps,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Pop, Rise } from '@/components/motion-views';
+import { FADE_IN } from '@/components/motion';
 import { initials } from '@/lib/initials';
 import { useRevealEndOnKeyboard } from '@/lib/use-reveal-end-on-keyboard';
 
@@ -161,9 +162,10 @@ export function MessageScreen({
         contentInsetAdjustmentBehavior="never"
       >
         <View style={{ alignItems: 'center', gap: space.lg }}>
-          {/* Occasional screens (a refusal, an error, a finished deletion): the mark pops, then the
-              words and the way out rise in, so the change of screen reads as one beat. */}
-          <Pop
+          {/* Refusals and errors arrive plainly: the mark fades in (150ms), and the words and the way
+              out are there at once, so the next tap is never held back. */}
+          <Animated.View
+            entering={FADE_IN}
             style={{
               alignItems: 'center',
               backgroundColor: theme.color.card,
@@ -176,8 +178,7 @@ export function MessageScreen({
             }}
           >
             <Icon ios={icon.ios} md={icon.md} size={24} />
-          </Pop>
-          <Rise index={1}>
+          </Animated.View>
           <View accessible accessibilityRole="header" style={{ alignItems: 'center', gap: space.xs + 2 }}>
             {kicker ? (
               <Text tone="muted" variant="mono">
@@ -188,19 +189,14 @@ export function MessageScreen({
               {title}
             </Text>
           </View>
-          </Rise>
-          <Rise index={2}>
           <Text style={{ maxWidth: 340, textAlign: 'center' }}>{text}</Text>
-          </Rise>
           {detail ? (
             <Text style={{ maxWidth: 340, textAlign: 'center' }} tone="muted" variant="secondary">
               {detail}
             </Text>
           ) : null}
         </View>
-        <Rise index={3} style={{ gap: space.sm }}>
-          {actions}
-        </Rise>
+        <View style={{ gap: space.sm }}>{actions}</View>
       </ScrollView>
     </View>
   );
@@ -674,7 +670,7 @@ export function QuietState({ good, text }: { good?: boolean; text: string }) {
   const theme = useAppTheme();
   return (
     <View accessible accessibilityLabel={text} style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
-      <Pop
+      <View
         style={{
           alignItems: 'center',
           backgroundColor: good ? theme.color.successSoft : theme.color.inset,
@@ -685,25 +681,10 @@ export function QuietState({ good, text }: { good?: boolean; text: string }) {
         }}
       >
         <Icon color={good ? theme.color.success : theme.color.muted} ios={good ? 'checkmark' : 'minus'} md={good ? 'check' : 'remove'} size={15} />
-      </Pop>
+      </View>
       <Text style={{ maxWidth: 280, textAlign: 'center' }} tone="muted" variant="secondary">
         {text}
       </Text>
-    </View>
-  );
-}
-
-/** Static bars at real size while something loads; no shimmer. */
-export function Placeholder({ label, lines = 3 }: { label: string; lines?: number }) {
-  const theme = useAppTheme();
-  return (
-    <View accessibilityLabel={label} accessible style={{ gap: space.sm + 2 }}>
-      {Array.from({ length: lines }, (_, index) => (
-        <View
-          key={index}
-          style={{ backgroundColor: theme.color.tickOff, borderRadius: 6, height: 18, opacity: 0.6, width: index === lines - 1 ? '60%' : '100%' }}
-        />
-      ))}
     </View>
   );
 }
