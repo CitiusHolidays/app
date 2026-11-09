@@ -1,0 +1,117 @@
+name: iOS simulator build
+description: >
+  Generates the native iOS project for one Expo app (continuous native generation), builds it for
+  the iOS Simulator (Debug, no code signing) and uploads the .app as a tar.gz artifact.
+  Adapted from the testing-react-native-apps github-actions skill (callstackincubator/ios).
+
+inputs:
+  working-directory:
+    description: The Expo app folder, for example apps/connect
+    required: true
+  configuration:
+    description: Xcode configuration
+    required: false
+    default: Debug
+  artifact-name:
+    description: Name of the uploaded artifact
+    required: true
+  artifact-retention-days:
+    description: Days GitHub keeps the artifact
+    required: false
+    default: "7"
+
+outputs:
+  artifact-name:
+    description: Uploaded artifact name
+    value: ${{ inputs.artifact-name }}
+  artifact-id:
+    description: Uploaded artifact id
+    value: ${{ steps.upload.outputs.artifact-id }}
+  artifact-url:
+    description: Uploaded artifact URL (needs a signed-in GitHub session)
+    value: ${{ steps.upload.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    # Neither app commits ios/. Pods are installed below so they can come from the cache.
+    - name: Generate the native project
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bunx expo prebuild --platform ios --no-install
+
+    # Pods depend only on the lockfile, the app config and the app's dependencies.
+    - name: Cache Pods
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ inputs.working-directory }}/ios/Pods
+          ~/Library/Caches/CocoaPods
+        key: pods-${{ runner.os }}-${{ inputs.working-directory }}-${{ hashFiles('bun.lock', format('{0}/app.json', inputs.working-directory), format('{0}/package.json', inputs.working-directory)) }}
+        restore-keys: pods-${{ runner.os }}-${{ inputs.working-directory }}-
+
+    - name: Install Pods
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}/ios
+      run: pod install
+
+    - name: Find the workspace and scheme
+      id: resolve
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}/ios
+      run: |
+        set -euo pipefail
+        WORKSPACE="$(find . -maxdepth 1 -name '*.xcworkspace' | head -n1)"
+        if [[ -z "$WORKSPACE" ]]; then
+          echo "No .xcworkspace in $(pwd)"
+          exit 1
+        fi
+        # Expo names the workspace and its app scheme after the sanitised app name.
+        SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+        echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
+        echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+
+    - name: Build for the iOS Simulator
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}/ios
+      run: |
+        set -euo pipefail
+        xcodebuild \
+          -workspace "${{ steps.resolve.outputs.workspace }}" \
+          -scheme "${{ steps.resolve.outputs.scheme }}" \
+          -configuration "${{ inputs.configuration }}" \
+          -sdk iphonesimulator \
+          -destination "generic/platform=iOS Simulator" \
+          -derivedDataPath build/DerivedData \
+          CODE_SIGNING_ALLOWED=NO \
+          build | { command -v xcbeautify >/dev/null && xcbeautify --renderer github-actions || cat; }
+
+    # A tarball keeps the bundle's permissions and symlinks; a bare .app in a zip loses them.
+    - name: Package the .app
+      id: package
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}/ios
+      run: |
+        set -euo pipefail
+        PRODUCTS="build/DerivedData/Build/Products/${{ inputs.configuration }}-iphonesimulator"
+        APP_PATH="$PRODUCTS/${{ steps.resolve.outputs.scheme }}.app"
+        if [[ ! -d "$APP_PATH" ]]; then
+          APP_PATH="$(find "$PRODUCTS" -maxdepth 1 -type d -name '*.app' ! -name '*Tests*.app' | sort | head -n1 || true)"
+        fi
+        if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
+          echo "No .app in $PRODUCTS"
+          exit 1
+        fi
+        APP_NAME="$(basename "$APP_PATH")"
+        TARBALL="$(pwd)/build/${APP_NAME%.app}.app.tar.gz"
+        tar -C "$(dirname "$APP_PATH")" -czf "$TARBALL" "$APP_NAME"
+        echo "path=$TARBALL" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the artifact
+      id: upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.package.outputs.path }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.artifact-retention-days }}
