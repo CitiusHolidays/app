@@ -5,6 +5,7 @@ import { Text } from 'react-native';
 import { AppStoreProvider } from '@/lib/app-store';
 import type { KeyValueStore } from '@/lib/storage/kv';
 
+import { SERVER_STALL_MS } from './gate-machine';
 import { StaffSessionProvider, useStaffSession } from './session';
 
 const tmAccess = (staffId: string, roles = ['Tour Manager']) => ({
@@ -170,5 +171,45 @@ describe('staff session', () => {
     expect(await mockStore.getJSON('session:verifiedStaff')).toBeNull();
     expect(mockDeleteAllReceipts).toHaveBeenCalled();
     expect(mockDeleteAllPassportPdfs).toHaveBeenCalled();
+  });
+
+  it('says the server is not answering after a sign-in, with a way to try again, instead of spinning for ever', async () => {
+    jest.useFakeTimers();
+    try {
+      await mockStore.setJSON('session:needsServerCheck', true);
+      await mockStore.setJSON('session:verifiedStaff', { name: 'A', roles: ['Tour Manager'], staffId: 'staff_a', verifiedAt: Date.now() });
+      const view = await renderSession();
+      expect(await screen.findByText('gate:loading')).toBeOnTheScreen();
+      await act(async () => {
+        jest.advanceTimersByTime(SERVER_STALL_MS);
+      });
+      expect(screen.getByText('gate:stalled')).toBeOnTheScreen();
+
+      await act(async () => {
+        handles.session?.retry();
+      });
+      expect(screen.getByText('gate:loading')).toBeOnTheScreen();
+
+      // The server answers at last.
+      mockAuth.access = tmAccess('staff_a');
+      await view.rerender(
+        <AppStoreProvider fallback={null}>
+          <StaffSessionProvider>
+            <Probe />
+          </StaffSessionProvider>
+        </AppStoreProvider>
+      );
+      expect(await screen.findByText('gate:staff')).toBeOnTheScreen();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("requires the server to confirm whoever signs in next once the sign-in screen shows", async () => {
+    mockAuth.isAuthenticated = false;
+    mockSession.data = null;
+    await renderSession();
+    expect(await screen.findByText('gate:signedOut')).toBeOnTheScreen();
+    await waitFor(async () => expect(await mockStore.getJSON('session:needsServerCheck')).toBe(true));
   });
 });

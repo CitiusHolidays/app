@@ -112,6 +112,12 @@ export const staffApi = {
     "listNotifications",
     "requireStaff (any active staff); only notifications addressed to the caller"
   ),
+  markNotificationRead: define<"mutation", { notificationId: string }, IdResult | null>(
+    "mutation",
+    "crm/activity",
+    "markNotificationRead",
+    "requireStaffSession; FORBIDDEN unless the notification is addressed to the caller; null when it is gone"
+  ),
   listTourManagers: define<
     "query",
     { jobCardId?: string; paginationOpts: PaginationOpts; surface?: "connect" },

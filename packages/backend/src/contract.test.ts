@@ -58,6 +58,7 @@ describe("staff API manifest", () => {
         "mutation crm/fieldSync:recordAnnouncement",
         "query crm/fieldPassports:listFieldPassports",
         "action crm/fieldPassportActions:getFieldPassportFile",
+        "mutation crm/activity:markNotificationRead",
       ])
     );
     // The general Job Card list would show a tour manager every trip they can see, not theirs.

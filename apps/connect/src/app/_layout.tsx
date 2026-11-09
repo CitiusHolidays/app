@@ -15,6 +15,7 @@ import { AppErrorBoundary } from '@/components/error-boundary';
 import { OutboxProvider } from '@/features/expenses/outbox-context';
 import { FieldSyncProvider } from '@/features/field-sync/field-sync-context';
 import { StaffSessionProvider, useStaffSession } from '@/features/gate/session';
+import { StillConnecting } from '@/features/gate/still-connecting';
 import { TripsProvider } from '@/features/trips/trips-context';
 import { AppStoreProvider } from '@/lib/app-store';
 import { clients } from '@/lib/clients';
@@ -87,6 +88,9 @@ function Shell() {
   }, [gate.kind]);
   if (gate.kind === 'loading') {
     return <Waiting />;
+  }
+  if (gate.kind === 'stalled') {
+    return <StillConnecting />;
   }
   const staff = gate.kind === 'staff';
   return (

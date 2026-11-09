@@ -1,8 +1,9 @@
-import { face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { type AppTheme, face, PressableScale, space, Surface, Text, useAppTheme } from '@citius/ui';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import { type ComponentProps, type ComponentRef, type ReactNode, type Ref, useState } from 'react';
 import {
+  type DimensionValue,
   Linking,
   Platform,
   RefreshControl,
@@ -11,6 +12,7 @@ import {
   StyleSheet,
   TextInput,
   type TextInputProps,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -20,8 +22,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ARRIVE, ROLL_DOWN, ROLL_UP, rollsUp } from '@/lib/motion';
 
-/** A small overshoot for a check landing: the one place Connect lets something bounce. */
-const POP = cubicBezier(0.34, 1.56, 0.64, 1);
 /** Strong ease-in-out for things that move across the screen. */
 const EASE_IN_OUT = cubicBezier(0.77, 0, 0.175, 1);
 const SEAL_IN = ZoomIn.duration(320).easing(Easing.bezier(0.34, 1.56, 0.64, 1)).withInitialValues({ transform: [{ scale: 0.6 }] });
@@ -148,7 +148,7 @@ export function PageTitle({ kicker, meta, title }: { kicker?: string; meta?: str
  * bands stand in for a gradient (no gradient library is installed); at these opacities the steps
  * do not show.
  */
-export function TopTint({ height = 360 }: { height?: number }) {
+function TopTint({ height = 360 }: { height?: number }) {
   const theme = useAppTheme();
   const bands = 18;
   return (
@@ -547,7 +547,6 @@ function initials(name: string) {
 /** A person: an initials circle, with a check badge once they are marked. */
 export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?: boolean; name: string; size?: number; tone?: 'light' | 'dark' }) {
   const theme = useAppTheme();
-  const reduced = useReducedMotion();
   const dark = tone === 'dark';
   return (
     <View importantForAccessibility="no-hide-descendants" style={{ height: size, width: size }}>
@@ -567,7 +566,9 @@ export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?:
           {initials(name)}
         </Text>
       </View>
-      {/* Always mounted, so a row scrolling into view does not replay the pop; only a change does. */}
+      {/* Always mounted, so a row scrolling into view does not replay the fade; only a change does.
+          Marking is the most frequent tap in the app, so the badge only fades (150 ms ease-out):
+          no scale, no overshoot, nothing that moves under reduced motion. */}
       <Animated.View
         style={{
           alignItems: 'center',
@@ -581,10 +582,9 @@ export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?:
           position: 'absolute',
           right: -4,
           top: -4,
-          transform: [{ scale: checked || reduced ? 1 : 0.5 }],
-          transitionDuration: checked ? 260 : 140,
-          transitionProperty: ['transform', 'opacity'],
-          transitionTimingFunction: checked ? POP : 'ease-out',
+          transitionDuration: 150,
+          transitionProperty: 'opacity',
+          transitionTimingFunction: 'ease-out',
           width: 20,
         }}
       >
@@ -594,16 +594,23 @@ export function Avatar({ checked, name, size = 40, tone = 'light' }: { checked?:
   );
 }
 
+/** The longest the everyone-here sweep across the tick strip may take, first tick to last. */
+const TICK_SWEEP_MS = 240;
+
 /**
  * One tick per traveller: filled Citius blue when marked here, stone when not. Reads as one
  * figure to VoiceOver ("9 of 14 marked here").
  */
 export function TickStrip({ marked, total }: { marked: number; total: number }) {
   const theme = useAppTheme();
+  const reduced = useReducedMotion();
   const shown = Math.min(total, 60);
   const filled = total > shown ? Math.round((marked / total) * shown) : marked;
-  // Everyone here: the strip turns green together, the one moment of colour change on the count.
+  // Everyone here: the strip turns green in one quick sweep, the one moment of colour change on the
+  // count. The whole sweep stays within TICK_SWEEP_MS however many ticks there are; reduced motion
+  // turns them all at once.
   const complete = total > 0 && marked >= total;
+  const step = complete && !reduced && shown > 1 ? TICK_SWEEP_MS / (shown - 1) : 0;
   return (
     <View
       accessibilityLabel={`${marked} of ${total} marked here`}
@@ -618,58 +625,11 @@ export function TickStrip({ marked, total }: { marked: number; total: number }) 
             backgroundColor: index < filled ? (complete ? theme.color.success : theme.color.accent) : theme.color.tickOff,
             borderRadius: 2,
             flex: 1,
-            transitionDelay: complete ? index * 12 : 0,
+            transitionDelay: Math.round(index * step),
             transitionDuration: 160,
             transitionProperty: 'backgroundColor',
           }}
         />
-      ))}
-    </View>
-  );
-}
-
-export interface TrayAction {
-  icon: { ios: string; md: string };
-  label: string;
-  onPress: () => void;
-}
-
-/** The dark action tray: up to four shortcuts, icon over label. */
-export function ActionTray({ actions }: { actions: TrayAction[] }) {
-  const theme = useAppTheme();
-  return (
-    <View
-      style={{
-        backgroundColor: theme.color.dark,
-        borderRadius: theme.radius.surface + 2,
-        flexDirection: 'row',
-        gap: 6,
-        padding: 6,
-      }}
-    >
-      {actions.map((action) => (
-        <PressableScale
-          accessibilityLabel={action.label}
-          accessibilityRole="button"
-          key={action.label}
-          onPress={action.onPress}
-          outerStyle={{ flex: 1 }}
-          style={{
-            alignItems: 'center',
-            backgroundColor: '#1a2035',
-            borderRadius: theme.radius.inset,
-            flex: 1,
-            gap: 6,
-            justifyContent: 'center',
-            minHeight: 68,
-            paddingHorizontal: 4,
-          }}
-        >
-          <Icon color={theme.color.onDark} ios={action.icon.ios} md={action.icon.md} size={20} />
-          <Text numberOfLines={1} tone="onDark" variant="label">
-            {action.label}
-          </Text>
-        </PressableScale>
       ))}
     </View>
   );
@@ -849,17 +809,66 @@ export function QuietState({ good, text }: { good?: boolean; text: string }) {
   );
 }
 
-/** Static bars at real size while something loads; no shimmer. */
-export function Placeholder({ lines = 3 }: { lines?: number }) {
+/** A text role of the theme ("secondary", "rowTitle"...): placeholder bars take its line height. */
+type TextRole = keyof AppTheme['type'];
+
+/**
+ * The height one line of `role` takes on screen: its line height, grown with the phone's text
+ * size the way `Text` grows it, so a placeholder stays the size of the text it stands in for.
+ */
+function useLineHeight(role: TextRole) {
   const theme = useAppTheme();
+  const { fontScale } = useWindowDimensions();
+  const type = theme.type[role];
+  return Math.round(type.lineHeight * Math.min(fontScale, type.maxFontSizeMultiplier ?? fontScale));
+}
+
+/** One static bar the height of a line of `role`; no shimmer. */
+export function PlaceholderBar({ role = 'meta', width = '100%' }: { role?: TextRole; width?: DimensionValue }) {
+  const theme = useAppTheme();
+  const height = useLineHeight(role);
+  return <View style={{ backgroundColor: theme.color.tickOff, borderRadius: 6, height, opacity: 0.6, width }} />;
+}
+
+/** Static bars while something loads; no shimmer. Each bar is one line of `role` (meta by default). */
+export function Placeholder({ lines = 3, role = 'meta' }: { lines?: number; role?: TextRole }) {
   return (
     <View accessibilityLabel="Loading" accessible style={{ gap: space.sm + 2 }}>
       {Array.from({ length: lines }, (_, index) => (
-        <View
-          key={index}
-          style={{ backgroundColor: theme.color.tickOff, borderRadius: 6, height: 18, opacity: 0.6, width: index === lines - 1 ? '60%' : '100%' }}
-        />
+        <PlaceholderBar key={index} role={role} width={index === lines - 1 ? '60%' : '100%'} />
       ))}
+    </View>
+  );
+}
+
+/**
+ * Stands in for a ListCard of `Row`s while they load: the same card, row padding, 60pt minimum
+ * height and rules, with a title line and a subtitle line in each row, so the list lands in place.
+ */
+export function PlaceholderRows({ rows = 3 }: { rows?: number }) {
+  const theme = useAppTheme();
+  return (
+    <View accessibilityLabel="Loading" accessible>
+      <ListCard>
+        {Array.from({ length: rows }, (_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.row,
+              {
+                borderBottomColor: theme.color.rule,
+                borderBottomWidth: index === rows - 1 ? 0 : StyleSheet.hairlineWidth,
+                minHeight: 60,
+              },
+            ]}
+          >
+            <View style={styles.rowText}>
+              <PlaceholderBar role="rowTitle" width="55%" />
+              <PlaceholderBar role="secondary" width="85%" />
+            </View>
+          </View>
+        ))}
+      </ListCard>
     </View>
   );
 }

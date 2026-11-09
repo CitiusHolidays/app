@@ -50,4 +50,26 @@ describe('sign-in screen', () => {
     expect(announce).toHaveBeenCalledWith('Too many attempts. Wait a minute, then try again.');
     announce.mockRestore();
   });
+
+  it('keeps the button busy after a successful sign-in, so a second tap sends nothing', async () => {
+    mockSignInEmail.mockResolvedValue({ error: null });
+    await renderWithTheme(<SignIn />);
+    await fireEvent.changeText(screen.getByLabelText('Work email'), 'tm.one@example.test');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'synthetic-password');
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    expect(mockSignInEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not blame the password when the server fails', async () => {
+    mockSignInEmail.mockResolvedValue({ error: { status: 500 } });
+    await renderWithTheme(<SignIn />);
+    await fireEvent.changeText(screen.getByLabelText('Work email'), 'tm.one@example.test');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'synthetic-password');
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Citius could not sign you in just now. Try again in a minute.')).toBeOnTheScreen();
+    expect(screen.queryByText('That email and password do not match a Citius account.')).not.toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
 });

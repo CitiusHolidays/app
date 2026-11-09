@@ -36,6 +36,8 @@ export interface GateInput {
 
 export type Gate =
   | { kind: 'loading' }
+  /** The server has not answered for SERVER_STALL_MS and nothing saved may open: say so. */
+  | { kind: 'stalled' }
   | { kind: 'signedOut' }
   | { kind: 'notStaff' }
   | { kind: 'notTourManager' }
@@ -105,14 +107,15 @@ export function resolveGate(input: GateInput): Gate {
 /**
  * While the server has not answered: a phone that verified this tour manager recently opens the
  * saved data straight away (a slow 3G link must not hold the splash screen), marked offline only
- * once the wait has stalled. After a fresh sign-in it waits for the server instead.
+ * once the wait has stalled. After a fresh sign-in it waits for the server instead, and says so
+ * once the wait has stalled rather than spinning for ever.
  */
 function whileWaiting(input: GateInput): Gate {
   const saved = input.needsServerCheck ? null : offlineGate(input);
   if (saved?.kind === 'staff') {
     return { ...saved, offline: Boolean(input.stalled) };
   }
-  return saved ?? { kind: 'loading' };
+  return saved ?? { kind: input.stalled ? 'stalled' : 'loading' };
 }
 
 /**
