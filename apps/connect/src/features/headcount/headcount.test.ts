@@ -1,6 +1,6 @@
 import type { RosterEntry } from '@/features/trip-pack/trip-pack';
 
-import { headcountAnswer, localDay, newStop, startHeadcount, summarize, togglePresent } from './headcount';
+import { earlierStops, headcountAnswer, localDay, newStop, nobodyTravelling, startHeadcount, summarize, togglePresent } from './headcount';
 
 function entry(id: string, batchId: string, travelling = true): RosterEntry {
   return { batchId, batchLabel: batchId, callingStatus: '', guestType: 'Client', id, name: `Name ${id}`, passportStatus: '', phone: '', travelling, visaStatus: '' };
@@ -46,6 +46,24 @@ describe('headcount', () => {
     expect(state.stops).toHaveLength(2);
     expect(state.stops[0]?.present).toEqual(['a']);
     expect(summarize(state, roster)).toMatchObject({ present: 0, stopLabel: 'Temple car park' });
+  });
+
+  it("lists today's earlier stops newest first, each counted against the whole group", () => {
+    let state = togglePresent(startHeadcount('jc1', MORNING), 'a');
+    state = newStop(state, 'Temple car park', MORNING + 1);
+    state = togglePresent(togglePresent(state, 'b'), 'c');
+    state = newStop(state, '', MORNING + 2);
+    expect(earlierStops(state, roster)).toEqual([
+      { answer: '2 of 3 here', id: `stop-${MORNING + 1}`, label: 'Temple car park', startedAt: MORNING + 1 },
+      { answer: '1 of 3 here', id: `stop-${MORNING}`, label: 'Start of day', startedAt: MORNING },
+    ]);
+    expect(earlierStops(startHeadcount('jc1', MORNING), roster)).toEqual([]);
+  });
+
+  it('knows when nobody on the roster is travelling', () => {
+    expect(nobodyTravelling(roster)).toBe(false);
+    expect(nobodyTravelling([entry('d', 'b2', false)])).toBe(true);
+    expect(nobodyTravelling([])).toBe(true);
   });
 
   it('says everyone is here when nobody is missing', () => {
