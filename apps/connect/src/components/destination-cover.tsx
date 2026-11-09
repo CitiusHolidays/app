@@ -1,10 +1,11 @@
+import type { DestinationPhoto } from '@citius/backend';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { PixelRatio, type StyleProp, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { cardPhotoWidth, coverUri, type DestinationPhoto, originalCoverUri, PREVIEW_WIDTH } from '@/features/trips/cover';
+import { cardPhotoWidth, coverUri, originalCoverUri, PREVIEW_WIDTH } from '@/features/trips/cover';
 import { useStaffSession } from '@/features/gate/session';
 
 const mark = require('@/assets/images/splash-icon.png');

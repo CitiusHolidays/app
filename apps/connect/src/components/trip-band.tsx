@@ -1,8 +1,8 @@
+import type { DestinationPhoto } from '@citius/backend';
 import { space, Text, useAppTheme } from '@citius/ui';
 import { View } from 'react-native';
 
 import { DestinationCover } from '@/components/destination-cover';
-import type { DestinationPhoto } from '@/features/trips/cover';
 
 /**
  * A screen's opening on the trip's own photo: a mono kicker over a serif title and a meta line,

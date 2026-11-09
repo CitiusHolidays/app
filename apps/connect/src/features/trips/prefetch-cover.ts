@@ -1,7 +1,8 @@
+import type { DestinationPhoto } from '@citius/backend';
 import { Image } from 'expo-image';
 import { PixelRatio } from 'react-native';
 
-import { cardPhotoWidth, coverUri, type DestinationPhoto, PREVIEW_WIDTH } from './cover';
+import { cardPhotoWidth, coverUri, PREVIEW_WIDTH } from './cover';
 
 /**
  * Saves the trip card's photo to disk alongside the trip pack, so Today opens on the real photo

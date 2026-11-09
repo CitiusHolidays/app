@@ -45,12 +45,18 @@ export interface JobCardRow {
   updatedAt: string;
 }
 
+/** A destination photo on the website: its path and the BlurHash shown before any byte loads. */
+export interface DestinationPhoto {
+  path: string;
+  placeholder: string;
+}
+
 export interface CommandCenter {
   /**
-   * The trip's destination photo on the website (path and BlurHash), or null when none matches.
-   * Optional so a client still reads a server from before the field existed.
+   * The trip's destination photo on the website, or null when none matches. Optional so a client
+   * still reads a server from before the field existed.
    */
-  destinationCover?: { path: string; placeholder: string } | null;
+  destinationCover?: DestinationPhoto | null;
   jobCard: JobCardRow;
   proposal: {
     itinerarySummary: string;
@@ -196,7 +202,6 @@ export interface FieldPassports {
   travellers: FieldPassportRow[];
 }
 
-/** A decrypted passport scan. Kept in memory for display only; never stored. */
 /**
  * One read of a traveller's passport scan. Asked for `variant: "preview"`, an image comes back as a
  * small JPEG (about 900 px, tens of KB) to show at once; a PDF or unreadable file answers

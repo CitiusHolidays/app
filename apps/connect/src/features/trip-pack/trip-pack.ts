@@ -1,6 +1,4 @@
-import type { CommandCenter, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
-
-import type { DestinationPhoto } from '@/features/trips/cover';
+import type { CommandCenter, DestinationPhoto, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
 
 /**
  * Version 2 added `complete`; version 3 keeps only the tour manager's own group (the server
