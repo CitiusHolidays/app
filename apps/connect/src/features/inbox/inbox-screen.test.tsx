@@ -25,20 +25,34 @@ const mockState = {
   cacheRead: true,
   gate: { kind: 'staff', offline: false } as { kind: 'staff'; offline: boolean },
   jobCard: undefined as unknown,
+  /** When set, the job card query fails with this, the way Convex reports a server refusal. */
+  jobCardError: null as Error | null,
   online: true,
   rows: undefined as NotificationRow[] | undefined,
 };
 const mockMarkRead = jest.fn(async () => ({ id: 'note_1' }));
 const mockQueryArgs: { ref: unknown; args: unknown }[] = [];
 
-function mockAnswer(ref: unknown, args: unknown) {
+/** A query's answer, or the error Convex would report for it. */
+function mockResult(ref: unknown, args: unknown): unknown {
   mockQueryArgs.push({ args, ref });
   if (args === 'skip') return undefined;
-  return ref === staffApi.listNotifications.ref ? mockState.rows : mockState.jobCard;
+  if (ref === staffApi.listNotifications.ref) return mockState.rows;
+  return mockState.jobCardError ?? mockState.jobCard;
+}
+
+/** `useQuery` throws a failed query's error during render, as Convex does. */
+function mockAnswer(ref: unknown, args: unknown) {
+  const result = mockResult(ref, args);
+  if (result instanceof Error) throw result;
+  return result;
 }
 
 jest.mock('convex/react', () => ({
   useMutation: () => mockMarkRead,
+  /** `useQueries` hands a failed query's error back instead of throwing it, as Convex does. */
+  useQueries: (queries: Record<string, { query: unknown; args: unknown }>) =>
+    Object.fromEntries(Object.entries(queries).map(([key, { args, query }]) => [key, mockResult(query, args)])),
   useQuery: (ref: unknown, args: unknown) => mockAnswer(ref, args),
 }));
 jest.mock('@/lib/app-store', () => ({
@@ -66,6 +80,7 @@ beforeEach(() => {
   mockState.cacheRead = true;
   mockState.gate = { kind: 'staff', offline: false };
   mockState.jobCard = undefined;
+  mockState.jobCardError = null;
   mockState.online = true;
   mockState.rows = undefined;
   mockMarkRead.mockClear();
@@ -136,5 +151,21 @@ describe('notification detail', () => {
     const loading = screen.getByLabelText('Loading');
     expect(within(loading).getByText('Dates')).toBeOnTheScreen();
     expect(screen.queryByText(/Open Citius Connect on the web portal/)).not.toBeOnTheScreen();
+  });
+
+  it('says the job card is not shown when its trip is not live in the app, instead of failing the whole app', async () => {
+    mockState.rows = [unreadRow];
+    mockState.jobCardError = Object.assign(new Error('[CONVEX Q] Server Error'), { data: 'APP_PILOT_OFF' });
+    await renderWithTheme(<NotificationDetail />);
+    expect(screen.getByText('Departure moved')).toBeOnTheScreen();
+    expect(screen.getByText('This Job Card is not visible to you.')).toBeOnTheScreen();
+  });
+
+  it('still lets any other job card failure reach the error screen', async () => {
+    mockState.rows = [unreadRow];
+    mockState.jobCardError = Object.assign(new Error('[CONVEX Q] Server Error'), { data: 'FORBIDDEN' });
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(renderWithTheme(<NotificationDetail />)).rejects.toThrow('[CONVEX Q] Server Error');
+    spy.mockRestore();
   });
 });
