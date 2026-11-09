@@ -6,7 +6,7 @@ import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { Avatar, Chip, ChipRow, EveryoneSeal, Icon, ListCard, QuietState, Screen, Segmented, StepNumber, TickStrip } from '@/components/kit';
 import { useFieldSync } from '@/features/field-sync/field-sync-context';
 import { headcountStopPush } from '@/features/field-sync/pushes';
-import { syncKey } from '@/features/field-sync/queue';
+import { type SyncItem, syncKey } from '@/features/field-sync/queue';
 import { SyncLine } from '@/features/field-sync/sync-line';
 import {
   earlierStops,
@@ -23,6 +23,7 @@ import { EarlierStops, NextStop } from '@/features/headcount/next-stop';
 import { useHeadcount } from '@/features/headcount/use-headcount';
 import type { RosterEntry, TripPack } from '@/features/trip-pack/trip-pack';
 import { useTrips } from '@/features/trips/trips-context';
+import { DAY_MONTH, parseDay } from '@/lib/dates';
 import { haptic, tick } from '@/lib/haptics';
 import { useAnnounce } from '@/lib/use-announce';
 import { useLingering } from '@/lib/use-lingering';
@@ -36,6 +37,14 @@ const SHOW_OPTIONS: { label: string; value: Show }[] = [
 
 const ignoredNote = (count: number) =>
   `${count} marked ${count === 1 ? 'traveller is' : 'travellers are'} not in your group on the office list, so the office did not count them. Refresh the trip pack.`;
+
+/** "Start of day, 5 Nov" or "2 stops from earlier days": refused stops that are not today's. */
+function earlierRefusedTitle(items: SyncItem[]) {
+  const [first] = items;
+  if (items.length !== 1 || first?.kind !== 'headcountStop') return `${items.length} stops from earlier days`;
+  const day = parseDay(first.args.day);
+  return day ? `${first.args.label}, ${DAY_MONTH.format(day)}` : first.args.label;
+}
 
 /** The answer at the top: how many are here at this stop, out of how many. */
 function HeadcountHero({ answer, summary }: { answer: string; summary: HeadcountSummary }) {
@@ -159,6 +168,11 @@ function Count({
   // A large group draws its first screens at once and fills in over the next few frames.
   const shown = useProgressiveCount(pack.roster.length);
   const todaysKeys = new Set(current.stops.map((stop) => syncKey(headcountStopPush(current, stop))));
+  // A stop the office refused on an earlier day is not on this screen any more, but still waits
+  // for the tour manager (the Today pill counts it), so it is offered here too.
+  const earlierRefused = sync.items.filter(
+    (item) => item.kind === 'headcountStop' && item.args.jobCardId === pack.jobCardId && item.status === 'needsAttention' && !todaysKeys.has(item.key)
+  );
   const whole = summarize(current, pack.roster);
 
   const mark = (entry: RosterEntry) => {
@@ -179,6 +193,14 @@ function Count({
           onDiscard={sync.discard}
           onRetry={sync.retry}
         />
+      ) : null}
+      {earlierRefused.length > 0 ? (
+        <View style={{ gap: space.xs + 2 }}>
+          <Text tone="muted" variant="label">
+            {earlierRefusedTitle(earlierRefused)}
+          </Text>
+          <SyncLine ignoredNote={ignoredNote} items={earlierRefused} onDiscard={sync.discard} onRetry={sync.retry} />
+        </View>
       ) : null}
       {pack.complete ? null : <PartialNotice />}
       <BatchChips

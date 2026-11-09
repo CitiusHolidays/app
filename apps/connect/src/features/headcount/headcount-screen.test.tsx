@@ -199,4 +199,25 @@ describe('headcount screen', () => {
     await answerAlert(alert, 'Stop sending');
     expect(mockSync.discard).toHaveBeenCalledWith([queued.key]);
   });
+  it("offers a stop the office refused on an earlier day, which today's record no longer shows", async () => {
+    const earlier = (jobCardId: string, clientStopId: string): FieldPush => ({
+      args: { clientStopId, clientUpdatedAt: 1, day: '2026-11-05', jobCardId, label: 'Hotel lobby', presentTravellerIds: [], startedAt: 1 },
+      kind: 'headcountStop',
+    });
+    const [refused] = enqueuePush([], earlier(fullPack.jobCardId, 'stop-yesterday'), 'staff_1', 1);
+    const [otherTrip] = enqueuePush([], earlier('jc_other', 'stop-other'), 'staff_1', 1);
+    if (!refused || !otherTrip) throw new Error('no item');
+    mockSync.items = [refusedWith(refused, 'This trip is no longer assigned to you.'), refusedWith(otherTrip, 'No.')];
+    await renderHeadcount();
+    expect(await screen.findByText('Hotel lobby, 5 Nov')).toBeOnTheScreen();
+    expect(screen.getByText('This trip is no longer assigned to you.')).toBeOnTheScreen();
+    // Only this trip's: the other trip's refusal is offered when that trip is chosen.
+    expect(screen.queryByText('No.')).not.toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockSync.retry).toHaveBeenCalledWith([refused.key]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Stop sending' }));
+    await answerAlert(alert, 'Stop sending');
+    expect(mockSync.discard).toHaveBeenCalledWith([refused.key]);
+  });
 });

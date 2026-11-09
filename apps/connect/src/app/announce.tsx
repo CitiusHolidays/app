@@ -1,4 +1,4 @@
-import { Button, space, Surface, Text, useAppTheme } from '@citius/ui';
+import { Button, space, StatusPill, Surface, Text, useAppTheme } from '@citius/ui';
 import { router, usePreventRemove } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Share, View } from 'react-native';
@@ -16,6 +16,9 @@ import {
 } from '@/features/announcements/announcements';
 import { wasSent } from '@/features/announcements/confirm-sent';
 import { useAnnouncements } from '@/features/announcements/use-announcements';
+import { useFieldSync } from '@/features/field-sync/field-sync-context';
+import { announcementPush } from '@/features/field-sync/pushes';
+import { syncKey } from '@/features/field-sync/queue';
 import { useStaff } from '@/features/gate/session';
 import { useTrips } from '@/features/trips/trips-context';
 import { localId } from '@/lib/ids';
@@ -31,6 +34,9 @@ export default function Announce() {
   const staff = useStaff();
   const { pack, selected } = useTrips();
   const { add, log } = useAnnouncements(selected?.id ?? null);
+  const sync = useFieldSync();
+  // Announcements the office refused: each row says so, so the one to open is easy to find.
+  const refused = new Set(sync.items.filter((item) => item.status === 'needsAttention').map((item) => item.key));
   const [audience, setAudience] = useState<Audience>({ kind: 'trip' });
   const [body, setBody] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -148,10 +154,12 @@ export default function Announce() {
           <ListCard>
             {log.map((item, index) => {
               const acks = ackSummary(item);
+              const notSynced = refused.has(syncKey(announcementPush(item)));
               return (
                 <Row
-                  accessibilityLabel={`${item.body}. To ${item.audienceLabel}, ${acks.acknowledged} of ${acks.total} have seen it`}
+                  accessibilityLabel={`${item.body}. To ${item.audienceLabel}, ${acks.acknowledged} of ${acks.total} have seen it${notSynced ? '. Not synced to the office' : ''}`}
                   chevron
+                  detail={notSynced ? <StatusPill kind="danger" label="Not synced to the office" /> : undefined}
                   key={item.id}
                   last={index === log.length - 1}
                   onPress={() => router.push(announcementHref(item))}
