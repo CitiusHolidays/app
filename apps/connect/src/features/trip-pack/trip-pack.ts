@@ -1,5 +1,7 @@
 import type { CommandCenter, DestinationPhoto, TourManagerRow, TravelBatchRow, TravellerRow } from '@citius/backend';
 
+import { parseDay } from '@/lib/dates';
+
 /**
  * Version 2 added `complete`; version 3 keeps only the tour manager's own group (the server
  * narrows the roster; batches follow it). Older packs are ignored and fetched again.
@@ -95,19 +97,9 @@ function batchLabel(batch: Pick<TravelBatchRow, 'batchCode' | 'batchReference'>,
 
 const byText = (left: string, right: string) => left.localeCompare(right, undefined, { sensitivity: 'base' });
 
-/** Local midnight at the start of a YYYY-MM-DD date, or null when the text is not that shape. */
-function localDayStart(date: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
-  if (!match) {
-    return null;
-  }
-  const value = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(value.getTime()) ? null : value;
-}
-
 /** The pack expires 7 days after the trip's last day ends; without an end date, 7 days after saving. */
 export function packExpiresAt({ savedAt, travelEndDate }: { savedAt: number; travelEndDate: string }) {
-  const end = localDayStart(travelEndDate);
+  const end = parseDay(travelEndDate.trim());
   if (!end) {
     return savedAt + TRIP_PACK_TTL_DAYS * DAY_MS;
   }

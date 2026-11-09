@@ -1,4 +1,4 @@
-import { APP_LOCALE, CLOCK_OPTIONS, DAY_MONTH } from '@/lib/dates';
+import { APP_LOCALE, CLOCK_OPTIONS, DAY_MONTH, midnightOf } from '@/lib/dates';
 
 const MINUTE = 60_000;
 // Built once: an Intl formatter is slow to construct.
@@ -6,11 +6,6 @@ const WEEKDAY = new Intl.DateTimeFormat(APP_LOCALE, { weekday: 'short' });
 const DAY_MONTH_YEAR = new Intl.DateTimeFormat(APP_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 const FULL_TIME = new Intl.DateTimeFormat(APP_LOCALE, { ...CLOCK_OPTIONS, day: 'numeric', month: 'short', weekday: 'short' });
 const HOUR = 60 * MINUTE;
-
-function dayStart(time: number) {
-  const date = new Date(time);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
 
 /**
  * When a notification arrived, said briefly: "Now", "5 min", "3 h", "Yesterday", "Tue", then
@@ -22,7 +17,7 @@ export function relativeTime(iso: string, now: number) {
   const elapsed = now - value;
   if (elapsed < MINUTE) return 'Now';
   if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} min`;
-  const days = Math.round((dayStart(now) - dayStart(value)) / (24 * HOUR));
+  const days = Math.round((midnightOf(now) - midnightOf(value)) / (24 * HOUR));
   if (days === 0) return `${Math.floor(elapsed / HOUR)} h`;
   if (days === 1) return 'Yesterday';
   if (days < 7) return WEEKDAY.format(value);
