@@ -8,5 +8,6 @@ web-build/
 *.log
 .env*.local
 
-# Local agent launch config
-/.claude/
+# Local agent launch config stays local; the project's agent skills are shared.
+/.claude/*
+!/.claude/skills/
