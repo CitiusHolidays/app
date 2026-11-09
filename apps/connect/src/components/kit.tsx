@@ -149,11 +149,11 @@ export function PageTitle({ kicker, meta, title }: { kicker?: string; meta?: str
  * bands stand in for a gradient (no gradient library is installed); at these opacities the steps
  * do not show.
  */
-function TopTint({ height = 360 }: { height?: number }) {
+function TopTint() {
   const theme = useAppTheme();
   const bands = 18;
   return (
-    <View importantForAccessibility="no-hide-descendants" pointerEvents="none" style={{ height, left: 0, position: 'absolute', right: 0, top: 0 }}>
+    <View importantForAccessibility="no-hide-descendants" pointerEvents="none" style={{ height: 360, left: 0, position: 'absolute', right: 0, top: 0 }}>
       {Array.from({ length: bands }, (_, index) => (
         <View
           key={index}
@@ -172,14 +172,12 @@ export function MessageScreen({
   actions,
   detail,
   icon,
-  kicker,
   text,
   title,
 }: {
   actions: ReactNode;
   detail?: string;
   icon: IconNames;
-  kicker?: string;
   text: string;
   title: string;
 }) {
@@ -209,16 +207,9 @@ export function MessageScreen({
             >
               <Icon ios={icon.ios} md={icon.md} size={24} />
             </View>
-            <View accessible accessibilityRole="header" style={{ alignItems: 'center', gap: space.xs + 2 }}>
-              {kicker ? (
-                <Text tone="muted" variant="mono">
-                  {kicker}
-                </Text>
-              ) : null}
-              <Text style={{ textAlign: 'center' }} variant="display">
-                {title}
-              </Text>
-            </View>
+            <Text accessibilityRole="header" style={{ textAlign: 'center' }} variant="display">
+              {title}
+            </Text>
             <Text style={{ maxWidth: 340, textAlign: 'center' }}>{text}</Text>
             {detail ? (
               <Text style={{ maxWidth: 340, textAlign: 'center' }} tone="muted" variant="secondary">
@@ -235,7 +226,7 @@ export function MessageScreen({
 }
 
 /** A 36pt square tile with an ink glyph on the inset fill: the leading mark of an expense row. */
-export function IconTile({ icon, size = 36 }: { icon: IconNames; size?: number }) {
+export function IconTile({ icon }: { icon: IconNames }) {
   const theme = useAppTheme();
   return (
     <View
@@ -246,12 +237,12 @@ export function IconTile({ icon, size = 36 }: { icon: IconNames; size?: number }
         borderColor: theme.color.rule,
         borderRadius: 11,
         borderWidth: StyleSheet.hairlineWidth,
-        height: size,
+        height: 36,
         justifyContent: 'center',
-        width: size,
+        width: 36,
       }}
     >
-      <Icon ios={icon.ios} md={icon.md} size={Math.round(size * 0.47)} />
+      <Icon ios={icon.ios} md={icon.md} size={17} />
     </View>
   );
 }
@@ -296,7 +287,7 @@ export function Icon({ color, ios, md, size = 20 }: IconNames & { color?: string
 }
 
 /** A read-only outlined pill: trip facts in the header chip row, roles on the dark profile card. */
-export function Tag({ icon, label, tone = 'light' }: { icon?: ReactNode; label: string; tone?: 'light' | 'dark' }) {
+export function Tag({ label, tone = 'light' }: { label: string; tone?: 'light' | 'dark' }) {
   const theme = useAppTheme();
   const dark = tone === 'dark';
   return (
@@ -308,12 +299,10 @@ export function Tag({ icon, label, tone = 'light' }: { icon?: ReactNode; label: 
         borderWidth: 1,
         flexDirection: 'row',
         flexShrink: 0,
-        gap: 6,
         minHeight: 30,
         paddingHorizontal: 12,
       }}
     >
-      {icon}
       <Text numberOfLines={1} tone={dark ? 'onDarkMuted' : 'ink'} variant="label">
         {label}
       </Text>
