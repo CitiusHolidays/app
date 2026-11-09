@@ -1,6 +1,6 @@
 import { type FieldPassportFile, staffApi } from '@citius/backend';
 import { useConvex } from 'convex/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { AppState } from 'react-native';
 
 import { logEvent } from '@/lib/safe-log';
@@ -8,65 +8,50 @@ import { logEvent } from '@/lib/safe-log';
 import { deleteAllPassportPdfs, deletePassportPdf, writePassportPdf } from './passport-pdf-file';
 import { base64FromBytes, passportProblem, passportViewKind } from './passport-window';
 import { canShowPdf } from './pdf-support';
+import { initialScan, scanReducer, type ScanState, scanView } from './scan-machine';
 
-export type ScanState =
-  | { kind: 'loading' }
-  // `quality`: a small preview on screen while the full scan loads ('preview'), the full scan
-  // ('full'), or the preview kept because the full scan failed ('previewOnly').
-  | { aspect?: number; kind: 'image'; previewUri?: string; quality: 'full' | 'preview' | 'previewOnly'; uri: string }
-  | { kind: 'pdf'; uri: string }
-  | { kind: 'other' | 'pdfUnsupported' }
-  | { kind: 'hidden' }
-  | { kind: 'problem'; problem: string };
+export type { ScanState } from './scan-machine';
 
 const dataUri = (mimeType: string, bytes: ArrayBuffer) => `data:${mimeType};base64,${base64FromBytes(bytes)}`;
 
 /**
  * One open of a scan. On 3G a full scan takes many seconds: an image shows a ~60 KB preview
  * first, then the full scan. A PDF (or a file the server cannot preview) is read in full.
- * Nothing is shown once the open is over (`isActive`) or while the app is in the background.
+ * Nothing more is read, written or shown once the open is over (`isCurrent`), which includes
+ * the app leaving the foreground.
  */
 async function openScan(open: {
-  isActive: () => boolean;
-  isForeground: () => boolean;
+  isCurrent: () => boolean;
   read: (variant: 'full' | 'preview') => Promise<FieldPassportFile>;
-  show: (view: ScanState) => void;
+  show: (view: ScanState, final: boolean) => void;
 }) {
-  /** False when the open is over; hides the scan if the app went to the background meanwhile. */
-  const stillShowing = () => {
-    if (!open.isActive()) return false;
-    if (open.isForeground()) return true;
-    open.show({ kind: 'hidden' });
-    return false;
-  };
-
   const first = await open.read('preview');
-  if (!stillShowing()) return;
+  if (!open.isCurrent()) return;
   if ('variant' in first && first.variant === 'preview') {
     const previewUri = dataUri(first.mimeType, first.bytes);
     const aspect = first.width > 0 && first.height > 0 ? first.width / first.height : undefined;
-    open.show({ aspect, kind: 'image', quality: 'preview', uri: previewUri });
+    open.show({ aspect, kind: 'image', quality: 'preview', uri: previewUri }, false);
     try {
       const full = await open.read('full');
-      if (!stillShowing()) return;
+      if (!open.isCurrent()) return;
       if (!('bytes' in full)) throw new Error('Full scan missing');
-      open.show({ aspect, kind: 'image', previewUri, quality: 'full', uri: dataUri(full.mimeType, full.bytes) });
+      open.show({ aspect, kind: 'image', previewUri, quality: 'full', uri: dataUri(full.mimeType, full.bytes) }, true);
     } catch (error) {
       logEvent('passport.full-failed', error);
-      if (open.isActive() && open.isForeground()) open.show({ aspect, kind: 'image', quality: 'previewOnly', uri: previewUri });
+      if (open.isCurrent()) open.show({ aspect, kind: 'image', quality: 'previewOnly', uri: previewUri }, true);
     }
     return;
   }
   const file = 'bytes' in first ? first : await open.read('full');
-  if (!stillShowing()) return;
+  if (!open.isCurrent()) return;
   if (!('bytes' in file)) throw new Error('Passport file missing');
   const kind = passportViewKind(file.mimeType);
   if (kind === 'image') {
-    open.show({ kind, quality: 'full', uri: dataUri(file.mimeType, file.bytes) });
+    open.show({ kind, quality: 'full', uri: dataUri(file.mimeType, file.bytes) }, true);
   } else if (kind === 'pdf') {
-    open.show(canShowPdf() ? { kind, uri: writePassportPdf(file.bytes) } : { kind: 'pdfUnsupported' });
+    open.show(canShowPdf() ? { kind, uri: writePassportPdf(file.bytes) } : { kind: 'pdfUnsupported' }, true);
   } else {
-    open.show({ kind });
+    open.show({ kind }, true);
   }
 }
 
@@ -77,35 +62,34 @@ async function openScan(open: {
  */
 export function usePassportScan(travellerId: string | undefined, canReachServer: boolean) {
   const convex = useConvex();
-  const [view, setView] = useState<ScanState>({ kind: 'loading' });
-  const [attempt, setAttempt] = useState(0);
-  const fetched = useRef<number | null>(null);
-  // False while the app is in the background: a read that lands then is not shown or written.
-  const foreground = useRef(true);
+  const [scan, dispatch] = useReducer(scanReducer, initialScan);
+  // The open to read now, if any. It stays the same from `waiting` through `reading`, so the read
+  // is not cut short by the start itself or by the connection dropping; it ends when the open does.
+  const readOpen = scan.phase === 'reading' || (scan.phase === 'waiting' && canReachServer) ? scan.open : null;
 
   useEffect(() => {
-    // One read per open: losing and regaining the connection does not read it again.
-    if (!(canReachServer && travellerId) || fetched.current === attempt) {
-      return;
-    }
-    fetched.current = attempt;
+    if (readOpen === null || !travellerId) return;
+    const open = readOpen;
+    dispatch({ open, type: 'start' });
     let active = true;
     // Both reads of this open share one audit row and one rate-limit count on the server.
     const openId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
     openScan({
-      isActive: () => active,
-      isForeground: () => foreground.current,
+      // AppState rather than the reducer: the app may go to the background before React renders
+      // again, and nothing may be read or written for the screen from then on.
+      isCurrent: () => active && AppState.currentState === 'active',
       read: (variant) => convex.action(staffApi.getFieldPassportFile.ref, { openId, travellerId, variant }),
-      show: setView,
+      show: (view, final) => dispatch({ final, open, type: 'show', view }),
     }).catch((error: unknown) => {
       logEvent('passport.open-failed', error);
-      if (active) setView({ kind: 'problem', problem: passportProblem(error) });
+      if (active) dispatch({ final: true, open, type: 'show', view: { kind: 'problem', problem: passportProblem(error) } });
     });
     return () => {
       active = false;
     };
-  }, [attempt, canReachServer, convex, travellerId]);
+  }, [convex, readOpen, travellerId]);
 
+  const view = scanView(scan);
   // The PDF's file lives exactly as long as it is on screen: any change of view, or closing the
   // screen, deletes it.
   const pdfUri = view.kind === 'pdf' ? view.uri : null;
@@ -118,20 +102,17 @@ export function usePassportScan(travellerId: string | undefined, canReachServer:
     // Leaving the app (or the app switcher, which snapshots the screen) drops the scan. The file
     // goes at once, without waiting for a render the OS may not allow in the background.
     const subscription = AppState.addEventListener('change', (state) => {
-      foreground.current = state === 'active';
       if (state !== 'active') {
         deleteAllPassportPdfs();
-        setView({ kind: 'hidden' });
+        dispatch({ type: 'left' });
       }
     });
     return () => subscription.remove();
   }, []);
 
-  const again = () => {
-    foreground.current = true;
-    setView({ kind: 'loading' });
-    setAttempt((value) => value + 1);
+  return {
+    again: () => dispatch({ type: 'again' }),
+    pdfFailed: (problem: string) => dispatch({ problem, type: 'pdfFailed' }),
+    view,
   };
-
-  return { again, setView, view };
 }

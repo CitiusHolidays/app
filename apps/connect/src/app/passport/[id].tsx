@@ -147,7 +147,7 @@ export default function PassportViewer() {
   const canReachServer = useCanReachServer();
   const { pack } = useTrips();
   const name = pack?.roster.find((entry) => entry.id === id)?.name ?? 'Traveller';
-  const { again, setView, view } = usePassportScan(id, canReachServer);
+  const { again, pdfFailed, view } = usePassportScan(id, canReachServer);
   // The scan's own shape once it has loaded, so a landscape data page is not boxed as portrait.
   const [imageAspect, setImageAspect] = useState(1.42);
 
@@ -172,7 +172,7 @@ export default function PassportViewer() {
         <View style={{ flex: 1, paddingBottom: insets.bottom + space.md, paddingHorizontal: theme.frame }}>
           <PassportPdf
             name={name}
-            onError={() => setView({ kind: 'problem', problem: 'This passport PDF could not be opened. Ask Operations for it.' })}
+            onError={() => pdfFailed('This passport PDF could not be opened. Ask Operations for it.')}
             uri={view.uri}
           />
         </View>

@@ -5,10 +5,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const metrics = { frame: { height: 844, width: 390, x: 0, y: 0 }, insets: { bottom: 34, left: 0, right: 0, top: 47 } };
 
-export async function renderWithTheme(element: ReactElement) {
-  return render(
+/** The element inside the providers every screen needs; also for `rerender`. */
+export function withTheme(element: ReactElement) {
+  return (
     <SafeAreaProvider initialMetrics={metrics}>
       <ThemeProvider theme={staffTheme}>{element}</ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+export async function renderWithTheme(element: ReactElement) {
+  return render(withTheme(element));
 }
