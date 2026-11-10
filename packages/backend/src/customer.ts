@@ -19,6 +19,8 @@ export interface TripSummary {
   /** The destination's photo, or null when Citius has no sharp enough photo of it yet. */
   cover: DestinationPhoto | null;
   destination: string;
+  /** The traveller's own Travel Batch code. Missing from trips an older build saved on the phone. */
+  groupCode?: string | null;
   groupName: string;
   jobCode: string;
   minorCount: number;
